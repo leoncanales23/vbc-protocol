@@ -1,0 +1,30 @@
+{
+  "name": "vbc-protocol",
+  "version": "0.1.0",
+  "description": "Proof-of-Strength Protocol SDK — Convert physical effort into digital value",
+  "main": "sdk/index.js",
+  "scripts": {
+    "test": "node examples/test-score.js"
+  },
+  "keywords": [
+    "proof-of-strength",
+    "fitness",
+    "blockchain",
+    "base-l2",
+    "powerlifting",
+    "defi",
+    "whatsapp",
+    "condor",
+    "vbc"
+  ],
+  "author": "León Canales <leon@vibraalto.cl>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/leoncanales23/vbc-protocol"
+  },
+  "homepage": "https://vibraalto.cl/vbc",
+  "bugs": {
+    "url": "https://github.com/leoncanales23/vbc-protocol/issues"
+  }
+}
