@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VBC · Proof-of-Strength · Tu fuerza es tu firma</title>
 <meta name="description" content="Convierte tu esfuerzo físico en valor digital. Graba tu ejercicio, sube el video, gana CONDOR tokens. Open source.">
-<link rel="canonical" href="https://vibraalto.cl/vbc">
-<meta property="og:url" content="https://vibraalto.cl/vbc">
 <meta property="og:title" content="VBC · Proof-of-Strength Protocol">
 <meta property="og:description" content="Tu fuerza es tu firma. El primer protocolo donde el valor se genera con músculo real.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -174,7 +172,7 @@ a{color:var(--cyan);text-decoration:none}
   <div class="hero-sub">
     <strong>Tu fuerza es tu firma.</strong> Graba tu ejercicio, sube el video, y el sistema convierte tu esfuerzo físico en valor digital real. Sin apps complicadas. Sin crypto knowledge.
   </div>
-  <a href="https://vibraalto.cl/vbc" class="hero-cta" target="_blank" rel="noopener noreferrer">Abrir vibraalto.cl/vbc →</a>
+  <a href="#upload" class="hero-cta">Subir mi ejercicio →</a>
 </div>
 
 <!-- 3 PASOS -->
@@ -213,9 +211,9 @@ a{color:var(--cyan);text-decoration:none}
 <!-- UPLOAD -->
 <div class="upload-section" id="upload">
   <div class="steps-title">SUBE TU EJERCICIO</div>
-  <div class="steps-sub" style="margin-bottom:16px">Arrastra tu video o pega un link. Te conectamos directo con vibraalto.cl/vbc.</div>
+  <div class="steps-sub" style="margin-bottom:16px">Arrastra tu video o pega un link. Nada más.</div>
 
-  <div class="upload-box" id="dropZone" onclick="goToLive('upload-box')">
+  <div class="upload-box" id="dropZone" onclick="document.getElementById('fileInput').click()">
     <input type="file" id="fileInput" accept="video/*" style="display:none">
     <div class="upload-icon">📹</div>
     <div class="upload-title">ARRASTRA TU VIDEO AQUÍ</div>
@@ -392,12 +390,6 @@ a{color:var(--cyan);text-decoration:none}
 var dz=document.getElementById('dropZone');
 var fi=document.getElementById('fileInput');
 var ef=document.getElementById('exerciseForm');
-var LIVE_URL='https://vibraalto.cl/vbc';
-
-function goToLive(source){
-  var q='?ref=repo-public-html&source='+encodeURIComponent(source||'landing');
-  window.open(LIVE_URL+q,'_blank','noopener,noreferrer');
-}
 
 ['dragenter','dragover'].forEach(function(ev){dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.add('dragging')})});
 ['dragleave','drop'].forEach(function(ev){dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.remove('dragging')})});
@@ -412,8 +404,8 @@ document.getElementById('videoUrl').addEventListener('input',function(){
 function handleFile(f){
   if(!f.type.startsWith('video/')){alert('Solo videos (MP4, MOV, AVI)');return}
   dz.querySelector('.upload-title').textContent='✓ '+f.name;
-  dz.querySelector('.upload-desc').textContent='Conectando con vibraalto.cl/vbc...';
-  goToLive('file-upload');
+  dz.querySelector('.upload-desc').textContent=Math.round(f.size/1024/1024)+'MB · Listo';
+  ef.style.display='block';
 }
 
 // ── POWER SCORE CALC ──
@@ -423,7 +415,6 @@ function submitLift(){
   var w=parseFloat(document.getElementById('weight').value);
   var r=parseInt(document.getElementById('reps').value);
   if(!d||!w||!r){alert('Completa disciplina, peso y reps');return}
-  goToLive('power-score-calculator');
   var est=w*(1+r/30);
   var pct=est/WR[d];
   if(pct>.9){document.getElementById('resultBox').style.display='block';document.getElementById('scoreResult').textContent='⚠️';document.getElementById('scoreDetail').textContent='Supera el 90% del récord mundial. Verifica tus datos.';return}
@@ -441,8 +432,7 @@ function register(){
   var phone=document.getElementById('regPhone').value.trim();
   var city=document.getElementById('regCity').value.trim();
   if(!name||!phone){alert('Nombre y WhatsApp son obligatorios');return}
-  goToLive('register-form');
-  alert('Te abrimos vibraalto.cl/vbc para continuar tu registro.\n\n'+name+' de '+city+'\nWhatsApp: '+phone);
+  alert('✅ Registro recibido.\n\n'+name+' de '+city+'\n007 te contactará por WhatsApp al '+phone+'\n\nBienvenido al protocolo.');
 }
 
 // ── ENTRANCE ANIMS ──
