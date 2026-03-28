@@ -1,0 +1,47 @@
+{
+  "name": "VBC Protocol",
+  "short_name": "VBC",
+  "description": "Compite. Aprende. Gana. Ranking oficial VBC Protocol — VibraAlto.",
+  "start_url": "/vbc-protocol/",
+  "scope": "/vbc-protocol/",
+  "display": "standalone",
+  "background_color": "#080810",
+  "theme_color": "#080810",
+  "orientation": "portrait-primary",
+  "lang": "es",
+  "categories": ["education", "sports", "social"],
+  "icons": [
+    {
+      "src": "/vbc-protocol/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/vbc-protocol/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/vbc-protocol/screenshot-ranking.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Ranking VBC Protocol"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Ver Ranking",
+      "short_name": "Ranking",
+      "description": "Ir al ranking VBC",
+      "url": "/vbc-protocol/?shortcut=ranking",
+      "icons": [{"src": "/vbc-protocol/icon-192.png", "sizes": "192x192"}]
+    }
+  ],
+  "prefer_related_applications": false,
+  "related_applications": []
+}

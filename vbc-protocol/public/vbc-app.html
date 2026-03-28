@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#080810">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VBC Protocol">
+<meta name="description" content="VBC Protocol — Compite. Aprende. Gana. Powered by VibraAlto.">
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="/vbc-protocol/manifest.json">
+
+<!-- iOS icons -->
+<link rel="apple-touch-icon" href="/vbc-protocol/icon-192.png">
+
+<title>VBC Protocol · VibraAlto</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<!-- face-api para NERHIA +18 -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+<style>
+/* ══════════════════════════════════════════════════════════
+   VBC PROTOCOL · PWA
+   Sistema de diseño VibraOS
+   Flujo vendedor: 45 segundos de QR a inscrito
+   ══════════════════════════════════════════════════════════ */
+:root {
+  --bg:      #080810;
+  --surface: #111120;
+  --s2:      #191930;
+  --border:  rgba(255,255,255,.06);
+  --b2:      rgba(0,217,255,.18);
+  --text:    #e4e4f0;
+  --muted:   rgba(255,255,255,.38);
+  --cyan:    #00d9ff;
+  --green:   #00e676;
+  --gold:    #ffd700;
+  --orange:  #ff8c00;
+  --red:     #ff4757;
+  --violet:  #a855f7;
+  --sans:    'DM Sans', system-ui, sans-serif;
+  --mono:    'DM Mono', monospace;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bot: env(safe-area-inset-bottom, 0px);
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { font-size:16px; -webkit-text-size-adjust:100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  padding-top: var(--safe-top);
+}
+
+/* Noise texture VibraOS */
+body::after {
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+}
+
+/* ── SCREENS ── */
+.screen { display:none; min-height:100vh; min-height:100dvh; flex-direction:column; }
+.screen.active { display:flex; }
+
+/* ══ SCREEN: SPLASH ════════════════════════════════════════ */
+#screen-splash {
+  align-items:center; justify-content:center;
+  background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(0,217,255,.07) 0%, transparent 70%), var(--bg);
+  padding: 2rem;
+  text-align: center;
+  gap: 2rem;
+}
+
+.splash-logo {
+  display:flex; flex-direction:column; align-items:center; gap:.6rem;
+}
+.splash-dot {
+  width:14px; height:14px; border-radius:50%;
+  background: var(--cyan);
+  box-shadow: 0 0 20px var(--cyan), 0 0 40px rgba(0,217,255,.3);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100%{transform:scale(1);box-shadow:0 0 20px var(--cyan),0 0 40px rgba(0,217,255,.3)}
+  50%{transform:scale(1.15);box-shadow:0 0 30px var(--cyan),0 0 60px rgba(0,217,255,.4)}
+}
+.splash-brand {
+  font-family: var(--sans); font-size: 2.4rem; font-weight:800;
+  letter-spacing:-.02em; line-height:1;
+}
+.splash-brand .vbc { color: var(--cyan); }
+.splash-brand .protocol { color: var(--text); }
+
+.splash-tag {
+  font-family: var(--mono); font-size:.65rem; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--muted);
+  display:flex; align-items:center; gap:.5rem;
+}
+.splash-tag::before,.splash-tag::after { content:''; width:24px; height:1px; background:rgba(0,217,255,.3); }
+
+.splash-claim {
+  font-size:1.05rem; font-weight:500; color:var(--muted); line-height:1.5;
+  max-width:300px;
+}
+.splash-claim strong { color:var(--text); }
+
+/* Botón Google Sign-In */
+.btn-google {
+  display:flex; align-items:center; justify-content:center; gap:.75rem;
+  width:100%; max-width:320px; padding:1rem 1.5rem;
+  background: #fff; border:none; border-radius:12px;
+  font-family:var(--sans); font-size:1rem; font-weight:700;
+  color:#1f1f1f; cursor:pointer;
+  box-shadow: 0 4px 24px rgba(0,0,0,.4);
+  transition:.2s;
+  -webkit-tap-highlight-color:transparent;
+}
+.btn-google:active { transform:scale(.97); }
+.google-icon { width:22px; height:22px; flex-shrink:0; }
+
+.splash-install-hint {
+  font-family:var(--mono); font-size:.6rem; letter-spacing:.1em;
+  color:rgba(0,217,255,.5); text-align:center; line-height:1.7;
+}
+.install-btn {
+  display:none; /* se muestra cuando el browser soporta install */
+  align-items:center; gap:.5rem;
+  font-family:var(--mono); font-size:.65rem; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--cyan);
+  background:rgba(0,217,255,.06); border:1px solid rgba(0,217,255,.2);
+  padding:.5rem 1.2rem; cursor:pointer; margin-top:.5rem;
+  transition:.2s;
+}
+.install-btn:hover { background:rgba(0,217,255,.1); }
+.install-btn.show { display:flex; }
+
+/* ══ SCREEN: NERHIA +18 (Portón cerebral) ══════════════════ */
+#screen-age {
+  align-items:center; justify-content:center;
+  background: var(--bg); padding:1.5rem;
+  gap:1.2rem;
+}
+.age-header {
+  text-align:center;
+}
+.age-header .tag {
+  font-family:var(--mono); font-size:.58rem; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--cyan);
+  padding:.25rem .7rem; border:1px solid rgba(0,217,255,.25);
+  background:rgba(0,217,255,.05); display:inline-block; margin-bottom:.8rem;
+}
+.age-title {
+  font-size:1.6rem; font-weight:800; letter-spacing:-.02em; line-height:1.1;
+}
+.age-sub { font-size:.85rem; color:var(--muted); margin-top:.4rem; }
+
+.age-cam-wrap {
+  position:relative; width:100%; max-width:340px;
+  aspect-ratio:4/3; border-radius:16px; overflow:hidden;
+  border:1px solid rgba(0,217,255,.15);
+  background:#000;
+}
+#age-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+#age-canvas { position:absolute; inset:0; width:100%; height:100%; transform:scaleX(-1); }
+
+/* Corner brackets */
+.age-cam-wrap::before,.age-cam-wrap::after {
+  content:''; position:absolute; width:24px; height:24px; z-index:10;
+}
+.age-cam-wrap::before { top:10px; left:10px; border-top:2px solid var(--cyan); border-left:2px solid var(--cyan); }
+.age-cam-wrap::after  { bottom:10px; right:10px; border-bottom:2px solid var(--cyan); border-right:2px solid var(--cyan); }
+
+.age-scanline {
+  position:absolute; left:0; right:0; height:2px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  box-shadow:0 0 8px var(--cyan); animation:scan 2.4s ease-in-out infinite;
+  opacity:0; z-index:11; pointer-events:none;
+}
+.age-scanline.active { opacity:1; }
+@keyframes scan { 0%{top:0%;opacity:0}5%{opacity:1}95%{opacity:1}100%{top:100%;opacity:0} }
+
+.age-result-overlay {
+  position:absolute; inset:0; z-index:20;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.5rem;
+  opacity:0; pointer-events:none; transition:opacity .3s;
+  border-radius:14px;
+}
+.age-result-overlay.granted { background:rgba(0,10,5,.88); opacity:1; pointer-events:auto; }
+.age-result-overlay.denied  { background:rgba(10,2,2,.88); opacity:1; pointer-events:auto; }
+.aro-icon { font-size:2.5rem; }
+.aro-age { font-family:var(--sans); font-size:3rem; font-weight:800; line-height:1; }
+.aro-label { font-size:.8rem; letter-spacing:.1em; text-transform:uppercase; font-weight:700; }
+.age-result-overlay.granted .aro-age,.age-result-overlay.granted .aro-label { color:var(--green); }
+.age-result-overlay.denied  .aro-age,.age-result-overlay.denied  .aro-label { color:var(--red); }
+.aro-note { font-size:.62rem; color:var(--muted); text-align:center; line-height:1.5; padding:0 1rem; }
+.aro-btn {
+  font-family:var(--mono); font-size:.65rem; letter-spacing:.1em;
+  padding:.5rem 1.4rem; border:1px solid rgba(0,217,255,.3);
+  background:transparent; color:var(--cyan); cursor:pointer; margin-top:.2rem;
+}
+
+/* Loading models */
+.age-loading {
+  position:absolute; inset:0; z-index:30;
+  background:var(--bg); display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:.8rem;
+  border-radius:14px;
+}
+.age-loading.gone { display:none; }
+.spin { width:28px; height:28px; border-radius:50%; border:2px solid rgba(0,217,255,.15); border-top-color:var(--cyan); animation:spin .8s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.age-loading-text { font-family:var(--mono); font-size:.62rem; letter-spacing:.12em; color:var(--muted); }
+
+.age-status {
+  font-family:var(--mono); font-size:.7rem; letter-spacing:.08em;
+  color:var(--muted); text-align:center;
+  display:flex; align-items:center; gap:.5rem;
+}
+.age-status-dot { width:6px; height:6px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+.age-status-dot.scanning { background:var(--cyan); box-shadow:0 0 6px var(--cyan); animation:pulse-dot 1s ease-in-out infinite; }
+.age-status-dot.ok { background:var(--green); box-shadow:0 0 6px var(--green); }
+.age-status-dot.deny { background:var(--red); box-shadow:0 0 6px var(--red); }
+
+.age-privacy {
+  font-family:var(--mono); font-size:.58rem; color:rgba(0,217,255,.4);
+  text-align:center; letter-spacing:.06em; line-height:1.6;
+}
+
+.btn-skip {
+  font-family:var(--mono); font-size:.6rem; letter-spacing:.1em;
+  color:rgba(255,255,255,.25); background:transparent; border:none; cursor:pointer; padding:.4rem;
+  text-decoration:underline;
+}
+
+/* ══ SCREEN: ONBOARDING (datos) ════════════════════════════ */
+#screen-onboard {
+  padding:1.5rem 1.5rem calc(1.5rem + var(--safe-bot));
+  gap:1.2rem;
+}
+.onboard-header {
+  display:flex; align-items:center; gap:.75rem; padding-top:.5rem;
+}
+.oh-avatar {
+  width:44px; height:44px; border-radius:50%;
+  object-fit:cover; border:2px solid rgba(0,217,255,.3);
+}
+.oh-avatar-placeholder {
+  width:44px; height:44px; border-radius:50%;
+  background:var(--surface); border:2px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.2rem;
+}
+.oh-name { font-size:1rem; font-weight:700; }
+.oh-email { font-size:.72rem; color:var(--muted); }
+
+.onboard-title { font-size:1.5rem; font-weight:800; letter-spacing:-.02em; line-height:1.2; }
+.onboard-title span { color:var(--cyan); }
+
+.form-group { display:flex; flex-direction:column; gap:.4rem; }
+.form-label { font-family:var(--mono); font-size:.65rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+.form-input {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:.85rem 1rem;
+  color:var(--text); font-family:var(--sans); font-size:1rem;
+  outline:none; transition:border-color .2s; -webkit-appearance:none;
+}
+.form-input:focus { border-color:rgba(0,217,255,.4); }
+.form-input::placeholder { color:var(--muted); }
+
+.form-select {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:.85rem 1rem;
+  color:var(--text); font-family:var(--sans); font-size:1rem;
+  outline:none; transition:border-color .2s; -webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,.3)' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 1rem center;
+  cursor:pointer;
+}
+
+.nerhia-badge-inline {
+  display:flex; align-items:center; gap:.5rem;
+  padding:.5rem .8rem; border:1px solid rgba(0,217,255,.18);
+  background:rgba(0,217,255,.04); font-family:var(--mono); font-size:.6rem;
+  letter-spacing:.1em; color:rgba(0,217,255,.7);
+}
+.nbi-dot { width:5px; height:5px; border-radius:50%; background:var(--green); box-shadow:0 0 6px var(--green); animation:pulse-dot 2s ease-in-out infinite; }
+
+.btn-primary {
+  display:flex; align-items:center; justify-content:center; gap:.5rem;
+  width:100%; padding:1.05rem; background:var(--cyan);
+  border:none; border-radius:12px;
+  font-family:var(--sans); font-size:1rem; font-weight:800;
+  color:#020810; cursor:pointer; letter-spacing:.02em;
+  transition:.15s; margin-top:.4rem;
+}
+.btn-primary:active { transform:scale(.97); }
+
+/* ══ SCREEN: RANKING ══════════════════════════════════════ */
+#screen-ranking {
+  padding-bottom: calc(80px + var(--safe-bot));
+}
+
+.ranking-topbar {
+  position:sticky; top:0; z-index:50;
+  background:rgba(8,8,16,.94); backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  padding:.85rem 1.2rem;
+  display:flex; align-items:center; justify-content:space-between;
+  padding-top:calc(.85rem + var(--safe-top));
+}
+.rtb-brand {
+  display:flex; align-items:center; gap:.5rem;
+  font-family:var(--sans); font-size:1rem; font-weight:800;
+}
+.rtb-dot {
+  width:8px; height:8px; border-radius:50%;
+  background:var(--green); box-shadow:0 0 10px var(--green);
+  animation:pulse-dot 2s ease-in-out infinite;
+}
+.rtb-right { display:flex; align-items:center; gap:.6rem; }
+.rtb-avatar {
+  width:32px; height:32px; border-radius:50%;
+  object-fit:cover; border:2px solid rgba(0,217,255,.3);
+}
+.rtb-avatar-ph {
+  width:32px; height:32px; border-radius:50%;
+  background:var(--surface); border:2px solid var(--border);
+  display:flex; align-items:center; justify-content:center; font-size:.9rem;
+}
+
+/* Hero del usuario */
+.user-hero {
+  background: linear-gradient(180deg, rgba(0,217,255,.08) 0%, transparent 100%);
+  border-bottom:1px solid var(--border);
+  padding:1.4rem 1.2rem;
+  display:flex; align-items:center; gap:1rem;
+}
+.uh-rank {
+  font-family:var(--sans); font-size:2.8rem; font-weight:800;
+  color:var(--cyan); line-height:1; min-width:48px;
+}
+.uh-rank.gold { color:var(--gold); }
+.uh-rank.silver { color:#c0c0c0; }
+.uh-rank.bronze { color:#cd7f32; }
+.uh-info { flex:1; }
+.uh-name { font-size:1.1rem; font-weight:700; }
+.uh-sub { font-size:.72rem; color:var(--muted); margin-top:.15rem; }
+.uh-pts {
+  text-align:right;
+}
+.uh-pts-val { font-family:var(--mono); font-size:1.4rem; font-weight:500; color:var(--cyan); }
+.uh-pts-label { font-family:var(--mono); font-size:.55rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+
+/* NERHIA pulse strip */
+.nerhia-strip {
+  background:var(--surface); border-bottom:1px solid var(--border);
+  padding:.75rem 1.2rem;
+  display:flex; align-items:center; gap:1rem; overflow-x:auto;
+  scrollbar-width:none;
+}
+.nerhia-strip::-webkit-scrollbar { display:none; }
+.ns-item { flex-shrink:0; text-align:center; }
+.ns-val { font-family:var(--mono); font-size:.95rem; font-weight:500; }
+.ns-lbl { font-family:var(--mono); font-size:.5rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-top:.1rem; }
+.ns-div { width:1px; height:32px; background:var(--border); flex-shrink:0; }
+
+/* Ranking list */
+.ranking-section-title {
+  font-family:var(--mono); font-size:.6rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--muted);
+  padding:.75rem 1.2rem .4rem;
+}
+
+.ranking-list { padding:0 1rem; display:flex; flex-direction:column; gap:.5rem; }
+.rank-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:.9rem 1rem;
+  display:flex; align-items:center; gap:.85rem;
+  transition:.2s; position:relative; overflow:hidden;
+}
+.rank-card.is-me {
+  background:rgba(0,217,255,.06); border-color:rgba(0,217,255,.2);
+}
+.rank-card.is-me::before {
+  content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:var(--cyan);
+}
+.rank-card.rank-1 { border-color:rgba(255,215,0,.25); background:rgba(255,215,0,.04); }
+.rank-card.rank-2 { border-color:rgba(192,192,192,.2); }
+.rank-card.rank-3 { border-color:rgba(205,127,50,.2); }
+
+.rc-pos {
+  font-family:var(--mono); font-size:.85rem; font-weight:500;
+  width:28px; text-align:center; flex-shrink:0;
+}
+.rank-1 .rc-pos { color:var(--gold); font-size:1.1rem; }
+.rank-2 .rc-pos { color:#c0c0c0; }
+.rank-3 .rc-pos { color:#cd7f32; }
+
+.rc-avatar {
+  width:36px; height:36px; border-radius:50%;
+  object-fit:cover; flex-shrink:0; border:1px solid var(--border);
+}
+.rc-avatar-ph {
+  width:36px; height:36px; border-radius:50%;
+  background:var(--s2); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:1rem; flex-shrink:0;
+}
+
+.rc-info { flex:1; min-width:0; }
+.rc-name { font-size:.9rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rc-meta { font-family:var(--mono); font-size:.58rem; color:var(--muted); margin-top:.15rem; }
+
+.rc-pts {
+  text-align:right; flex-shrink:0;
+}
+.rc-pts-val { font-family:var(--mono); font-size:1rem; font-weight:500; color:var(--cyan); }
+.rc-pts-lbl { font-family:var(--mono); font-size:.52rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+
+/* Bottom actions */
+.bottom-actions {
+  position:fixed; bottom:0; left:0; right:0; z-index:50;
+  background:rgba(8,8,16,.96); backdrop-filter:blur(20px);
+  border-top:1px solid var(--border);
+  padding:.8rem 1.2rem calc(.8rem + var(--safe-bot));
+  display:flex; gap:.6rem;
+}
+.ba-btn {
+  flex:1; padding:.85rem; border-radius:10px;
+  font-family:var(--sans); font-size:.85rem; font-weight:700;
+  border:none; cursor:pointer; transition:.15s;
+  display:flex; align-items:center; justify-content:center; gap:.4rem;
+}
+.ba-btn:active { transform:scale(.96); }
+.ba-primary { background:var(--cyan); color:#020810; }
+.ba-secondary { background:var(--surface); color:var(--text); border:1px solid var(--border); }
+
+/* Splash install banner (iOS) */
+.ios-install-banner {
+  display:none; position:fixed; bottom:0; left:0; right:0; z-index:200;
+  background:var(--surface); border-top:1px solid var(--b2);
+  padding:1rem 1.2rem calc(1rem + var(--safe-bot));
+  gap:.6rem; flex-direction:column;
+}
+.ios-install-banner.show { display:flex; }
+.iib-title { font-size:.9rem; font-weight:700; }
+.iib-sub { font-size:.72rem; color:var(--muted); line-height:1.5; }
+.iib-close { position:absolute; top:.8rem; right:1rem; font-size:1.2rem; cursor:pointer; color:var(--muted); }
+
+/* Toast */
+.toast {
+  position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:.6rem 1.2rem;
+  font-size:.78rem; color:var(--text); opacity:0;
+  transition:all .3s; pointer-events:none; white-space:nowrap;
+  z-index:300;
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* Loader full */
+.full-loader {
+  position:fixed; inset:0; z-index:500;
+  background:var(--bg); display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:1rem;
+}
+.full-loader.gone { display:none; }
+.fl-logo { font-family:var(--sans); font-size:1.6rem; font-weight:800; color:var(--cyan); }
+.fl-sub { font-family:var(--mono); font-size:.62rem; letter-spacing:.14em; color:var(--muted); text-transform:uppercase; }
+
+/* Animaciones de entrada */
+@keyframes slideUp {
+  from { opacity:0; transform:translateY(24px); }
+  to   { opacity:1; transform:none; }
+}
+.anim-in { animation: slideUp .45s cubic-bezier(.2,0,.1,1) both; }
+.anim-in-2 { animation: slideUp .45s .1s cubic-bezier(.2,0,.1,1) both; }
+.anim-in-3 { animation: slideUp .45s .2s cubic-bezier(.2,0,.1,1) both; }
+.anim-in-4 { animation: slideUp .45s .3s cubic-bezier(.2,0,.1,1) both; }
+</style>
+</head>
+<body>
+
+<!-- FULL PAGE LOADER -->
+<div class="full-loader" id="fullLoader">
+  <div class="fl-logo">VBC</div>
+  <div class="spin"></div>
+  <div class="fl-sub">cargando protocolo…</div>
+</div>
+
+<!-- ══ SCREEN: SPLASH / LOGIN ═══════════════════════════════ -->
+<div class="screen" id="screen-splash">
+
+  <div class="splash-logo anim-in">
+    <div class="splash-dot"></div>
+    <div class="splash-brand">
+      <span class="vbc">VBC </span><span class="protocol">Protocol</span>
+    </div>
+    <div class="splash-tag">VibraAlto · Powered by NERHIA</div>
+  </div>
+
+  <div class="splash-claim anim-in-2">
+    <strong>Compite. Aprende. Gana.</strong><br>
+    El ranking que te lleva a octubre.
+  </div>
+
+  <button class="btn-google anim-in-3" id="btnGoogleLogin">
+    <svg class="google-icon" viewBox="0 0 24 24">
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+    </svg>
+    Entrar con Google
+  </button>
+
+  <button class="install-btn" id="btnInstall">
+    ⬇ Instalar app
+  </button>
+
+  <div class="splash-install-hint anim-in-4">
+    Sin App Store · Sin registro · Solo Google<br>
+    Funciona offline · Se instala en 1 tap
+  </div>
+
+</div>
+
+<!-- ══ SCREEN: NERHIA +18 ════════════════════════════════════ -->
+<div class="screen" id="screen-age">
+
+  <div class="age-header anim-in">
+    <div class="tag">NERHIA · Portón +18</div>
+    <div class="age-title">Verificación de edad</div>
+    <div class="age-sub">Mira la cámara · listo en 3 seg</div>
+  </div>
+
+  <div class="age-cam-wrap anim-in-2">
+    <video id="age-video" autoplay muted playsinline></video>
+    <canvas id="age-canvas"></canvas>
+    <div class="age-scanline" id="ageScanline"></div>
+
+    <!-- Loading -->
+    <div class="age-loading" id="ageLoading">
+      <div class="spin"></div>
+      <div class="age-loading-text" id="ageLoadingText">Cargando IA…</div>
+    </div>
+
+    <!-- Result overlay -->
+    <div class="age-result-overlay" id="ageResult">
+      <div class="aro-icon" id="aroIcon"></div>
+      <div class="aro-age" id="aroAge"></div>
+      <div class="aro-label" id="aroLabel"></div>
+      <div class="aro-note" id="aroNote"></div>
+      <button class="aro-btn" id="aroBtn">Continuar →</button>
+    </div>
+  </div>
+
+  <div class="age-status">
+    <div class="age-status-dot" id="ageStatusDot"></div>
+    <span id="ageStatusText">Iniciando cámara…</span>
+  </div>
+
+  <div class="age-privacy">
+    0 imágenes al servidor · Edge AI · Privacy by Design<br>
+    NERHIA · VibraAlto.cl
+  </div>
+
+  <button class="btn-skip" id="ageSkip">Omitir verificación →</button>
+
+</div>
+
+<!-- ══ SCREEN: ONBOARDING ════════════════════════════════════ -->
+<div class="screen" id="screen-onboard">
+
+  <div class="onboard-header anim-in">
+    <div class="oh-avatar-placeholder" id="onboardAvatarPh">👤</div>
+    <div>
+      <div class="oh-name" id="onboardName">Bienvenido</div>
+      <div class="oh-email" id="onboardEmail">—</div>
+    </div>
+  </div>
+
+  <div class="onboard-title anim-in-2">
+    Último paso.<br>
+    <span>Completa tu perfil.</span>
+  </div>
+
+  <div class="nerhia-badge-inline anim-in-2">
+    <div class="nbi-dot"></div>
+    NERHIA confirma: mayor de 18 · acceso autorizado
+  </div>
+
+  <div class="form-group anim-in-3">
+    <label class="form-label">Nombre completo</label>
+    <input type="text" class="form-input" id="inputNombre" placeholder="Tu nombre" autocomplete="name">
+  </div>
+
+  <div class="form-group anim-in-3">
+    <label class="form-label">Teléfono</label>
+    <input type="tel" class="form-input" id="inputTel" placeholder="+56 9 xxxx xxxx" autocomplete="tel">
+  </div>
+
+  <div class="form-group anim-in-3">
+    <label class="form-label">¿Cómo te enteraste?</label>
+    <select class="form-select" id="inputSource">
+      <option value="">Seleccionar…</option>
+      <option value="gym">En el gym</option>
+      <option value="qr">Escaneé un QR</option>
+      <option value="leon">Me lo contó León</option>
+      <option value="rrss">Redes sociales</option>
+      <option value="otro">Otro</option>
+    </select>
+  </div>
+
+  <button class="btn-primary anim-in-4" id="btnConfirmar">
+    ENTRAR AL RANKING →
+  </button>
+
+</div>
+
+<!-- ══ SCREEN: RANKING ════════════════════════════════════════ -->
+<div class="screen" id="screen-ranking">
+
+  <div class="ranking-topbar">
+    <div class="rtb-brand">
+      <div class="rtb-dot"></div>
+      VBC Protocol
+    </div>
+    <div class="rtb-right">
+      <div id="rankingUserAvatarWrap">
+        <div class="rtb-avatar-ph">👤</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mi posición -->
+  <div class="user-hero" id="userHero">
+    <div class="uh-rank" id="userRankNum">#—</div>
+    <div class="uh-info">
+      <div class="uh-name" id="userHeroName">—</div>
+      <div class="uh-sub" id="userHeroSub">0 participaciones · inscrito hoy</div>
+    </div>
+    <div class="uh-pts">
+      <div class="uh-pts-val" id="userHeroPts">0</div>
+      <div class="uh-pts-label">pts</div>
+    </div>
+  </div>
+
+  <!-- NERHIA strip -->
+  <div class="nerhia-strip">
+    <div class="ns-item">
+      <div class="ns-val" id="strip-uvx" style="color:var(--cyan)">—</div>
+      <div class="ns-lbl">UVX</div>
+    </div>
+    <div class="ns-div"></div>
+    <div class="ns-item">
+      <div class="ns-val" id="strip-cai" style="color:var(--violet)">—</div>
+      <div class="ns-lbl">CAI</div>
+    </div>
+    <div class="ns-div"></div>
+    <div class="ns-item">
+      <div class="ns-val" id="strip-uei" style="color:var(--green)">—</div>
+      <div class="ns-lbl">UEI</div>
+    </div>
+    <div class="ns-div"></div>
+    <div class="ns-item">
+      <div class="ns-val" id="strip-health" style="color:var(--green);font-size:.72rem">Healthy</div>
+      <div class="ns-lbl">Estado</div>
+    </div>
+    <div class="ns-div"></div>
+    <div class="ns-item">
+      <div class="ns-val" id="strip-inscritos" style="color:var(--gold)">—</div>
+      <div class="ns-lbl">Inscritos</div>
+    </div>
+  </div>
+
+  <div class="ranking-section-title">Ranking global · VBC Protocol</div>
+  <div class="ranking-list" id="rankingList">
+    <!-- generado por JS -->
+  </div>
+
+  <!-- Bottom actions -->
+  <div class="bottom-actions">
+    <button class="ba-btn ba-primary" id="btnShareApp">
+      ↗ Compartir app
+    </button>
+    <button class="ba-btn ba-secondary" id="btnInvitar">
+      + Invitar
+    </button>
+  </div>
+
+</div>
+
+<!-- iOS Install Banner -->
+<div class="ios-install-banner" id="iosBanner">
+  <div class="iib-close" id="iosBannerClose">✕</div>
+  <div class="iib-title">📲 Instala VBC Protocol</div>
+  <div class="iib-sub">Toca <strong>Compartir</strong> → "<strong>Agregar a inicio</strong>" para instalar sin App Store.</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+void function VBCProtocol() { "use strict";
+
+  /* ══ FIREBASE CONFIG ════════════════════════════════════════ */
+  /* Reemplazar con tu config real de Firebase */
+  var _FC = {
+    apiKey:            "AIzaSyA-PBjiR6uJtXg00JZnsC78Aqy4yUK__g8",
+    authDomain:        "vibraaltoai-11f55.firebaseapp.com",
+    projectId:         "vibraaltoai-11f55",
+    storageBucket:     "vibraaltoai-11f55.appspot.com",
+    messagingSenderId: "482078525826",
+    appId:             "1:482078525826:web:6a1a3e2f4f1a3e2f"
+  };
+
+  var app = null, db = null, auth = null;
+  try {
+    app  = firebase.initializeApp(_FC);
+    db   = firebase.firestore();
+    auth = firebase.auth();
+    db.enablePersistence({synchronizeTabs:false}).catch(function(){});
+  } catch(e) {
+    console.warn("[VBC] Firebase init:", e.message);
+  }
+
+  /* ══ STATE ══════════════════════════════════════════════════ */
+  var state = {
+    user:       null,
+    profile:    null,
+    ageVerified:false,
+    ageValue:   null,
+    screen:     "splash",
+  };
+
+  var nerhia = { uvx:73, mpi:71, cai:64, iei:61, uei:76, health:"Healthy" };
+
+  /* ══ HELPERS ════════════════════════════════════════════════ */
+  function $$(id){ return document.getElementById(id); }
+
+  function showScreen(name) {
+    document.querySelectorAll(".screen").forEach(function(s){
+      s.classList.remove("active");
+    });
+    var el = $$("screen-" + name);
+    if(el) el.classList.add("active");
+    state.screen = name;
+    $$("fullLoader").classList.add("gone");
+  }
+
+  function toast(msg, ms) {
+    var el = $$("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    setTimeout(function(){ el.classList.remove("show"); }, ms || 2500);
+  }
+
+  /* ══ NERHIA ENGINE ══════════════════════════════════════════ */
+  function computeNerhia() {
+    var j = function(v){ return Math.min(99,Math.max(20,v+Math.floor((Math.random()-.5)*10))); };
+    nerhia.uvx=j(73); nerhia.mpi=j(71); nerhia.cai=j(64);
+    nerhia.iei=j(61); nerhia.uei=j(76);
+    nerhia.health = nerhia.uvx>=80?"⚡ Hyperactive"
+                  : nerhia.uvx>=60?"● Healthy"
+                  : nerhia.uvx>=40?"◌ Slow":"⚠ Critical";
+  }
+
+  function updateNerhiaStrip() {
+    function s(id,v){ var el=$$(id); if(el) el.textContent=v; }
+    s("strip-uvx", nerhia.uvx);
+    s("strip-cai", nerhia.cai);
+    s("strip-uei", nerhia.uei);
+    s("strip-health", nerhia.health);
+  }
+
+  computeNerhia();
+  setInterval(function(){ computeNerhia(); updateNerhiaStrip(); }, 8000);
+
+  /* ══ PWA INSTALL ════════════════════════════════════════════ */
+  var deferredInstallPrompt = null;
+
+  window.addEventListener("beforeinstallprompt", function(e) {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    var btn = $$("btnInstall");
+    if(btn) btn.classList.add("show");
+  });
+
+  var btnInstall = $$("btnInstall");
+  if(btnInstall) {
+    btnInstall.addEventListener("click", function() {
+      if(!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      deferredInstallPrompt.userChoice.then(function(r){
+        if(r.outcome === "accepted") toast("✓ App instalada");
+        deferredInstallPrompt = null;
+        btnInstall.classList.remove("show");
+      });
+    });
+  }
+
+  /* iOS: mostrar banner al llegar al ranking */
+  var isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+  var isInStandaloneMode = window.navigator.standalone === true;
+  if(isIOS && !isInStandaloneMode) {
+    setTimeout(function(){
+      var b = $$("iosBanner");
+      if(b) b.classList.add("show");
+    }, 3000);
+  }
+  var iosBannerClose = $$("iosBannerClose");
+  if(iosBannerClose) {
+    iosBannerClose.addEventListener("click",function(){
+      var b = $$("iosBanner"); if(b) b.classList.remove("show");
+    });
+  }
+
+  /* ══ GOOGLE AUTH ════════════════════════════════════════════ */
+  var btnGoogle = $$("btnGoogleLogin");
+  if(btnGoogle) {
+    btnGoogle.addEventListener("click", function() {
+      if(!auth) { toast("Error de conexión"); return; }
+      btnGoogle.textContent = "Conectando…";
+      var provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider)
+        .then(function(result) {
+          state.user = result.user;
+          updateUserUI();
+          checkUserProfile(result.user);
+        })
+        .catch(function(e) {
+          console.error("[VBC] Auth error:", e);
+          btnGoogle.innerHTML = '<svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Entrar con Google';
+          toast("Error al iniciar sesión");
+        });
+    });
+  }
+
+  /* Auth state listener */
+  if(auth) {
+    auth.onAuthStateChanged(function(user) {
+      if(user) {
+        state.user = user;
+        updateUserUI();
+        checkUserProfile(user);
+      } else {
+        $$("fullLoader").classList.add("gone");
+        showScreen("splash");
+      }
+    });
+  } else {
+    $$("fullLoader").classList.add("gone");
+    showScreen("splash");
+  }
+
+  function updateUserUI() {
+    var u = state.user; if(!u) return;
+    /* Onboarding header */
+    var ph = $$("onboardAvatarPh");
+    if(ph && u.photoURL) {
+      ph.outerHTML = '<img class="oh-avatar" src="'+u.photoURL+'" id="onboardAvatarPh">';
+    }
+    var nm = $$("onboardName"); if(nm) nm.textContent = u.displayName || "Bienvenido";
+    var em = $$("onboardEmail"); if(em) em.textContent = u.email || "";
+    var ni = $$("inputNombre"); if(ni && !ni.value) ni.value = u.displayName || "";
+
+    /* Ranking avatar */
+    var rawWrap = $$("rankingUserAvatarWrap");
+    if(rawWrap && u.photoURL) {
+      rawWrap.innerHTML = '<img class="rtb-avatar" src="'+u.photoURL+'">';
+    }
+  }
+
+  function checkUserProfile(user) {
+    if(!db) { showScreen("age"); return; }
+    db.collection("vbc_participants").doc(user.uid).get()
+      .then(function(doc) {
+        if(doc.exists) {
+          state.profile = doc.data();
+          state.ageVerified = true;
+          showRanking();
+        } else {
+          showScreen("age");
+        }
+      })
+      .catch(function() {
+        showScreen("age");
+      });
+  }
+
+  /* ══ NERHIA +18 (Portón cerebral) ══════════════════════════ */
+  var modelsLoaded = false;
+  var detecting = false;
+  var detectTimer = null;
+  var trackId = 1;
+
+  var MODEL_URL = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights";
+
+  function startAgeScreen() {
+    $$("ageScanline").classList.add("active");
+    setAgeStatus("Cargando modelos IA…","");
+
+    if(typeof faceapi === "undefined") {
+      setAgeStatus("Sin conexión — omitir verificación","deny");
+      $$("ageSkip").style.display="block";
+      $$("ageLoading").classList.add("gone");
+      return;
+    }
+
+    Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL)
+    ]).then(function() {
+      modelsLoaded = true;
+      $$("ageLoading").classList.add("gone");
+      setAgeStatus("Mira la cámara…","scanning");
+      startAgeCam();
+    }).catch(function(e) {
+      $$("ageLoading").classList.add("gone");
+      setAgeStatus("Error — usa omitir","deny");
+      $$("ageSkip").style.display="block";
+    });
+  }
+
+  function startAgeCam() {
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setAgeStatus("Cámara no disponible","deny");
+      $$("ageSkip").style.display="block"; return;
+    }
+    navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:320},height:{ideal:240}},audio:false})
+      .then(function(stream) {
+        var video = $$("age-video");
+        video.srcObject = stream;
+        video.onloadedmetadata = function() {
+          video.play().then(function() {
+            var cv = $$("age-canvas");
+            cv.width = video.videoWidth||320; cv.height = video.videoHeight||240;
+            setAgeStatus("Acerca tu rostro…","scanning");
+            detecting = true;
+            detectTimer = setInterval(runAgeDetect, 700);
+          });
+        };
+      })
+      .catch(function(e) {
+        setAgeStatus("Cámara bloqueada — omitir","deny");
+        $$("ageSkip").style.display="block";
+        $$("ageLoading").classList.add("gone");
+      });
+  }
+
+  function runAgeDetect() {
+    if(!modelsLoaded||!detecting) return;
+    var video = $$("age-video");
+    if(!video||video.readyState<2) return;
+    var t0 = performance.now();
+    faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:.4}))
+      .withAgeAndGender()
+      .then(function(detections) {
+        if(!detections||!detections.length) {
+          setAgeStatus("No te veo — acércate un poco…","scanning"); return;
+        }
+        var primary = detections.reduce(function(a,b){ return a.detection.box.area>b.detection.box.area?a:b; });
+        var age  = Math.round(primary.age);
+        var conf = Math.round(primary.detection.score*100);
+        if(conf < 60) { setAgeStatus("Mantén la posición ("+conf+"%)…","scanning"); return; }
+        detecting = false; clearInterval(detectTimer);
+        showAgeResult(age, conf);
+      }).catch(function(){});
+  }
+
+  function showAgeResult(age, conf) {
+    var overlay = $$("ageResult");
+    var granted = age >= 18;
+    $$("aroIcon").textContent  = granted ? "✓" : "✗";
+    $$("aroAge").textContent   = age;
+    $$("aroLabel").textContent = granted ? "ACCESO AUTORIZADO" : "ACCESO DENEGADO";
+    $$("aroNote").textContent  = granted
+      ? "Edad: "+age+" años · Confianza: "+conf+"% · Imagen: nunca almacenada"
+      : "Debes ser mayor de 18 años para participar.";
+    overlay.className = "age-result-overlay " + (granted?"granted":"denied");
+
+    if(granted) {
+      state.ageVerified = true; state.ageValue = age;
+      setAgeStatus("✓ Verificado · "+age+" años","ok");
+      $$("ageResultBtn")||0; // handled below
+    } else {
+      $$("aroBtn").style.display="none";
+      setTimeout(function(){ resetAgeScreen(); },4000);
+    }
+  }
+
+  var aroBtn = $$("aroBtn");
+  if(aroBtn) {
+    aroBtn.addEventListener("click", function(){
+      stopAgeCam();
+      showScreen("onboard");
+    });
+  }
+
+  var ageSkip = $$("ageSkip");
+  if(ageSkip) {
+    ageSkip.addEventListener("click",function(){
+      state.ageVerified = true; state.ageValue = 0;
+      stopAgeCam(); showScreen("onboard");
+    });
+  }
+
+  function resetAgeScreen() {
+    $$("ageResult").className = "age-result-overlay";
+    setAgeStatus("Inténtalo de nuevo…","scanning");
+    detecting = true;
+    detectTimer = setInterval(runAgeDetect, 700);
+  }
+
+  function stopAgeCam() {
+    detecting = false; clearInterval(detectTimer);
+    var v = $$("age-video");
+    if(v&&v.srcObject) v.srcObject.getTracks().forEach(function(t){t.stop();});
+  }
+
+  function setAgeStatus(text, state2) {
+    var dot = $$("ageStatusDot"), txt = $$("ageStatusText");
+    if(txt) txt.textContent = text;
+    if(dot) { dot.className = "age-status-dot"+(state2?" "+state2:""); }
+  }
+
+  /* ══ ONBOARDING ═════════════════════════════════════════════ */
+  var btnConfirmar = $$("btnConfirmar");
+  if(btnConfirmar) {
+    btnConfirmar.addEventListener("click", function() {
+      var u      = state.user;
+      var nombre = $$("inputNombre").value.trim();
+      var tel    = $$("inputTel").value.trim();
+      var source = $$("inputSource").value;
+      if(!nombre) { toast("Escribe tu nombre"); return; }
+      btnConfirmar.textContent = "Guardando…";
+      var profile = {
+        uid:          u ? u.uid    : "anon-"+Date.now(),
+        name:         nombre,
+        email:        u ? u.email  : "anon",
+        photoURL:     u ? (u.photoURL||null) : null,
+        tel:          tel,
+        source:       source,
+        ageVerified:  state.ageVerified,
+        ageValue:     state.ageValue,
+        nerhiaUVX:    nerhia.uvx,
+        pts:          10,
+        participaciones: 1,
+        createdAt:    new Date().toISOString(),
+        updatedAt:    new Date().toISOString(),
+      };
+      state.profile = profile;
+      var saveAndShow = function() {
+        showRanking();
+        toast("¡Bienvenido " + nombre + "! +10 pts por inscribirse 🎉");
+      };
+      if(db && u) {
+        db.collection("vbc_participants").doc(u.uid).set(profile)
+          .then(saveAndShow)
+          .catch(saveAndShow);
+      } else {
+        saveAndShow();
+      }
+    });
+  }
+
+  /* ══ RANKING ════════════════════════════════════════════════ */
+  var DEMO_RANKING = [
+    {name:"Carlos M.",   pts:520, participaciones:12, photoURL:null, isDemo:true},
+    {name:"Valentina R.",pts:480, participaciones:11, photoURL:null, isDemo:true},
+    {name:"Rodrigo T.",  pts:410, participaciones:9,  photoURL:null, isDemo:true},
+    {name:"Camila L.",   pts:380, participaciones:8,  photoURL:null, isDemo:true},
+    {name:"Felipe S.",   pts:310, participaciones:7,  photoURL:null, isDemo:true},
+    {name:"Javiera P.",  pts:290, participaciones:6,  photoURL:null, isDemo:true},
+    {name:"Diego F.",    pts:240, participaciones:5,  photoURL:null, isDemo:true},
+  ];
+
+  var rankingData = [];
+  var rankingUnsub = null;
+
+  function showRanking() {
+    showScreen("ranking");
+    updateNerhiaStrip();
+    loadRanking();
+    updateUserHero();
+  }
+
+  function updateUserHero() {
+    var p = state.profile; if(!p) return;
+    var n = $$("userHeroName"); if(n) n.textContent = p.name || "—";
+    var s = $$("userHeroSub");  if(s) s.textContent = (p.participaciones||1) + " participaciones · inscrito hoy";
+    var pv = $$("userHeroPts"); if(pv) pv.textContent = p.pts || 10;
+  }
+
+  function loadRanking() {
+    if(!db) {
+      renderRanking(DEMO_RANKING);
+      $$("strip-inscritos").textContent = DEMO_RANKING.length;
+      return;
+    }
+    if(rankingUnsub) rankingUnsub();
+    rankingUnsub = db.collection("vbc_participants")
+      .orderBy("pts","desc")
+      .limit(50)
+      .onSnapshot(function(snap) {
+        rankingData = snap.docs.map(function(d){ return d.data(); });
+        if(!rankingData.length) rankingData = DEMO_RANKING;
+        renderRanking(rankingData);
+        $$("strip-inscritos").textContent = snap.size || rankingData.length;
+        updateUserPosition(rankingData);
+      }, function() {
+        renderRanking(DEMO_RANKING);
+        $$("strip-inscritos").textContent = DEMO_RANKING.length;
+      });
+  }
+
+  function updateUserPosition(list) {
+    if(!state.profile) return;
+    var myUid = state.profile.uid;
+    var pos = list.findIndex(function(x){ return x.uid===myUid; });
+    var rn = $$("userRankNum");
+    if(!rn) return;
+    if(pos >= 0) {
+      rn.textContent = "#" + (pos+1);
+      rn.className = "uh-rank" + (pos===0?" gold":pos===1?" silver":pos===2?" bronze":"");
+    } else {
+      rn.textContent = "#" + (list.length+1);
+    }
+    var pv = $$("userHeroPts");
+    if(pv && state.profile.pts) pv.textContent = state.profile.pts;
+  }
+
+  function renderRanking(list) {
+    var container = $$("rankingList"); if(!container) return;
+    var myUid = state.profile ? state.profile.uid : null;
+    var html = list.slice(0,30).map(function(p, i) {
+      var pos = i+1;
+      var isMe = (p.uid && p.uid===myUid);
+      var posEmoji = pos===1?"🥇":pos===2?"🥈":pos===3?"🥉":"#"+pos;
+      var avatar = p.photoURL
+        ? '<img class="rc-avatar" src="'+p.photoURL+'" onerror="this.style.display=\'none\'">'
+        : '<div class="rc-avatar-ph">👤</div>';
+      return '<div class="rank-card rank-'+(pos<=3?pos:"x")+(isMe?" is-me":"")+'">'
+        + '<div class="rc-pos">'+posEmoji+'</div>'
+        + avatar
+        + '<div class="rc-info">'
+          + '<div class="rc-name">'+(isMe?"<strong>"+p.name+"</strong>":p.name)+'</div>'
+          + '<div class="rc-meta">'+(p.participaciones||1)+' participaciones'+(isMe?' · Tú':'')+'</div>'
+        + '</div>'
+        + '<div class="rc-pts">'
+          + '<div class="rc-pts-val">'+(p.pts||0)+'</div>'
+          + '<div class="rc-pts-lbl">pts</div>'
+        + '</div>'
+        + '</div>';
+    }).join("");
+    container.innerHTML = html;
+  }
+
+  /* ══ COMPARTIR ══════════════════════════════════════════════ */
+  var APP_URL = "https://vibraalto.cl/vbc-protocol/";
+
+  var btnShare = $$("btnShareApp");
+  if(btnShare) {
+    btnShare.addEventListener("click", function() {
+      var data = {
+        title: "VBC Protocol",
+        text: "Únete al ranking VBC Protocol — compite hasta octubre 🏆",
+        url:  APP_URL
+      };
+      if(navigator.share) {
+        navigator.share(data).catch(function(){});
+      } else {
+        navigator.clipboard && navigator.clipboard.writeText(APP_URL).then(function(){
+          toast("Link copiado: " + APP_URL);
+        });
+      }
+    });
+  }
+
+  var btnInvitar = $$("btnInvitar");
+  if(btnInvitar) {
+    btnInvitar.addEventListener("click", function() {
+      var url = "https://wa.me/?text=" + encodeURIComponent("Entra al ranking VBC Protocol: " + APP_URL);
+      window.open(url, "_blank");
+    });
+  }
+
+  /* ══ SERVICE WORKER REGISTER ════════════════════════════════ */
+  if("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/vbc-protocol/sw.js").catch(function(){});
+  }
+
+  /* ══ BOOT ════════════════════════════════════════════════════ */
+  /* Si no hay Firebase, mostrar splash rápido */
+  setTimeout(function() {
+    if(!auth) {
+      $$("fullLoader").classList.add("gone");
+      showScreen("splash");
+    }
+  }, 1500);
+
+  /* Iniciar IA cuando entre a screen-age */
+  var ageObs = new MutationObserver(function(muts) {
+    muts.forEach(function(m) {
+      if(m.type==="attributes" && m.target.id==="screen-age") {
+        if(m.target.classList.contains("active")) startAgeScreen();
+      }
+    });
+  });
+  var ageScreen = $$("screen-age");
+  if(ageScreen) ageObs.observe(ageScreen, {attributes:true, attributeFilter:["class"]});
+
+  console.log("[VBC Protocol] booting · VibraAlto · NERHIA UVX=" + nerhia.uvx);
+
+}();
+</script>
+</body>
+</html>
