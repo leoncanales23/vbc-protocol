@@ -1,13 +1,12 @@
 {
   "hosting": {
     "site": "vbc-protocol",
-    "public": ".",
-    "cleanUrls": true,
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
+      { "source": "/app",    "destination": "/vbc-app.html" },
+      { "source": "/app/**", "destination": "/vbc-app.html" },
+      { "source": "**",      "destination": "/index.html"   }
     ]
   }
 }
