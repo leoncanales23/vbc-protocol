@@ -22,7 +22,128 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
 
 <!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js">
+/* ══ VBC_CONFIG — AI backend bridge ════════════════════════════
+   Activar cuando vbc-protocol necesite análisis de PowerScore AI
+══════════════════════════════════════════════════════════════ */
+var VBC_CONFIG = {
+  enabled: false,
+  url: "https://vbc-compute-layer-852702111467.us-central1.run.app",
+  timeout: 12000
+};
+
+/* ══ updatePts — Firestore + UI sync ═══════════════════════════ */
+function updatePts(amount, reason) {
+  if(!state.profile) return;
+  state.profile.pts = (state.profile.pts || 0) + amount;
+  state.profile.updatedAt = new Date().toISOString();
+  if(db && state.user) {
+    db.collection("vbc_participants").doc(state.user.uid).update({
+      pts: firebase.firestore.FieldValue.increment(amount),
+      updatedAt: state.profile.updatedAt
+    }).catch(function(e){ console.warn("[VBC] pts update:", e); });
+  }
+  if(amount > 0) {
+    gameSound.coin(); haptic.light();
+    toast("+" + amount + " pts · " + (reason || ""), 2500);
+  }
+  if(typeof updateUserHero === "function") updateUserHero();
+}
+
+function saveAchievement(key) {
+  if(!db || !state.user) return;
+  var upd = {}; upd["ach_" + key] = true; upd.updatedAt = new Date().toISOString();
+  db.collection("vbc_participants").doc(state.user.uid).update(upd).catch(function(){});
+}
+
+/* ══ GAME LAYER — Web Audio + Haptics ══════════════════════════ */
+var _audioCtx = null;
+function getAudioCtx() {
+  if(!_audioCtx) _audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  return _audioCtx;
+}
+function playTone(freq, type, dur, vol, delay) {
+  try {
+    var c=getAudioCtx(), o=c.createOscillator(), g=c.createGain();
+    o.connect(g); g.connect(c.destination);
+    o.type=type||"sine";
+    var t=c.currentTime+(delay||0);
+    o.frequency.setValueAtTime(freq,t);
+    g.gain.setValueAtTime(vol||0.13,t);
+    g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    o.start(t); o.stop(t+dur);
+  } catch(e){}
+}
+var gameSound = {
+  coin:      function(){ playTone(660,"triangle",.08,.12); playTone(880,"triangle",.08,.10,.06); },
+  milestone: function(){ playTone(523,"square",.12,.14); playTone(659,"square",.12,.14,.13); playTone(784,"square",.12,.14,.26); playTone(1047,"square",.22,.14,.39); },
+  lift:      function(){ playTone(220,"sawtooth",.12,.10); playTone(330,"sawtooth",.10,.08,.12); playTone(523,"square",.18,.12,.22); },
+  tap:       function(){ playTone(300,"sine",.06,.08); }
+};
+var haptic = {
+  light:     function(){ if(navigator.vibrate) navigator.vibrate(8); },
+  reward:    function(){ if(navigator.vibrate) navigator.vibrate([12,6,18]); },
+  milestone: function(){ if(navigator.vibrate) navigator.vibrate([20,10,20,10,40]); }
+};
+
+/* ══ ACHIEVEMENTS — Bartle types ════════════════════════════════ */
+var vbcAchievements = {
+  firstEntry: { done:false, label:"Primer Ingreso al Protocolo", emoji:"⚡", pts:10  },
+  verified:   { done:false, label:"Verificación NERHIA +18",     emoji:"🛡", pts:15  },
+  pts100:     { done:false, label:"100 pts acumulados",          emoji:"💯", pts:25  },
+  pts500:     { done:false, label:"500 pts — Élite VBC",         emoji:"🏆", pts:75  },
+  top10:      { done:false, label:"Top 10 del Ranking",          emoji:"🥇", pts:50  },
+  shared:     { done:false, label:"Compartiste el Protocolo",    emoji:"📡", pts:10  }
+};
+
+function unlockVbcAchievement(key) {
+  var a = vbcAchievements[key];
+  if(!a || a.done) return;
+  a.done = true;
+  saveAchievement(key);
+  var ptsReward = a.pts;
+  /* updatePts calls coin sound — skip gameSound here to avoid double */
+  if(db && state.user) {
+    db.collection("vbc_participants").doc(state.user.uid).update({
+      pts: firebase.firestore.FieldValue.increment(ptsReward),
+      updatedAt: new Date().toISOString()
+    }).catch(function(){});
+  }
+  if(state.profile) state.profile.pts = (state.profile.pts||0) + ptsReward;
+  haptic.milestone(); gameSound.milestone();
+
+  var el = document.createElement("div");
+  el.className = "vbc-achievement-popup";
+  el.innerHTML =
+    '<div class="vbc-ach-icon">' + a.emoji + '</div>' +
+    '<div class="vbc-ach-body">' +
+      '<div class="vbc-ach-title">Logro desbloqueado</div>' +
+      '<div class="vbc-ach-name">' + a.label + '</div>' +
+    '</div>' +
+    '<div class="vbc-ach-pts">+' + ptsReward + ' pts</div>';
+  document.body.appendChild(el);
+  setTimeout(function(){ el.classList.add("show"); }, 20);
+  setTimeout(function(){
+    el.classList.remove("show");
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 400);
+  }, 3500);
+}
+
+function loadAchievements(profileData) {
+  Object.keys(vbcAchievements).forEach(function(key){
+    if(profileData["ach_" + key]) vbcAchievements[key].done = true;
+  });
+}
+
+function checkRankAchievements(rankingData) {
+  if(!state.user || !rankingData || !state.profile) return;
+  var pos = rankingData.findIndex(function(r){ return r.uid === state.user.uid; });
+  if(pos >= 0 && pos < 10) unlockVbcAchievement("top10");
+  if((state.profile.pts||0) >= 100) unlockVbcAchievement("pts100");
+  if((state.profile.pts||0) >= 500) unlockVbcAchievement("pts500");
+}
+
+</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
@@ -493,6 +614,34 @@ body::after {
 .anim-in-2 { animation: slideUp .45s .1s cubic-bezier(.2,0,.1,1) both; }
 .anim-in-3 { animation: slideUp .45s .2s cubic-bezier(.2,0,.1,1) both; }
 .anim-in-4 { animation: slideUp .45s .3s cubic-bezier(.2,0,.1,1) both; }
+
+/* ── Achievement popup (VW pattern) ─────────────────────────── */
+.vbc-achievement-popup {
+  position:fixed; bottom:6rem; left:50%;
+  transform:translateX(-50%) translateY(20px);
+  background:rgba(10,8,20,.95);
+  border:1px solid rgba(0,217,255,.3);
+  border-radius:.75rem; padding:.75rem 1.2rem;
+  display:flex; align-items:center; gap:.75rem;
+  opacity:0; transition:opacity .35s,transform .35s;
+  z-index:9999; min-width:260px;
+  backdrop-filter:blur(8px); box-shadow:0 8px 32px rgba(0,217,255,.12);
+}
+.vbc-achievement-popup.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.vbc-ach-icon { font-size:1.8rem; }
+.vbc-ach-title { font-size:.5rem; color:rgba(255,255,255,.45); letter-spacing:.1em; text-transform:uppercase; }
+.vbc-ach-name  { font-size:.75rem; color:#fff; font-weight:600; margin-top:.1rem; }
+.vbc-ach-pts   { font-family:var(--mono); color:#00d9ff; font-size:.9rem; font-weight:700; margin-left:auto; white-space:nowrap; }
+
+/* ── Ranking animation ───────────────────────────────────────── */
+@keyframes rankIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+.ranking-item { animation:rankIn .28s ease both; }
+.ranking-item:nth-child(1){animation-delay:.04s}
+.ranking-item:nth-child(2){animation-delay:.08s}
+.ranking-item:nth-child(3){animation-delay:.12s}
+.ranking-item:nth-child(4){animation-delay:.16s}
+.ranking-item:nth-child(5){animation-delay:.20s}
+.ranking-item:nth-child(n+6){animation-delay:.24s}
 </style>
 </head>
 <body>
