@@ -27,7 +27,7 @@
    Activar cuando vbc-protocol necesite análisis de PowerScore AI
 ══════════════════════════════════════════════════════════════ */
 var VBC_CONFIG = {
-  enabled: false,
+  enabled: true,
   url: "https://vbc-compute-layer-852702111467.us-central1.run.app",
   timeout: 12000
 };
@@ -46,6 +46,7 @@ function updatePts(amount, reason) {
   if(amount > 0) {
     gameSound.coin(); haptic.light();
     toast("+" + amount + " pts · " + (reason || ""), 2500);
+    advanceVbcMission("pts", amount);
   }
   if(typeof updateUserHero === "function") updateUserHero();
 }
@@ -141,6 +142,228 @@ function checkRankAchievements(rankingData) {
   if(pos >= 0 && pos < 10) unlockVbcAchievement("top10");
   if((state.profile.pts||0) >= 100) unlockVbcAchievement("pts100");
   if((state.profile.pts||0) >= 500) unlockVbcAchievement("pts500");
+}
+
+
+/* ══ TRACKING posición ranking ═══════════════════════════════ */
+var prevRankPos = null;
+function trackRankChange(list) {
+  if(!state.profile) return;
+  var uid = state.profile.uid;
+  var pos = list.findIndex(function(r){ return r.uid === uid; });
+  if(pos < 0) { prevRankPos = null; return; }
+  var rank = pos + 1;
+  if(prevRankPos !== null && rank < prevRankPos) {
+    var delta = prevRankPos - rank;
+    toast("⬆️ Subiste " + delta + " posición" + (delta > 1 ? "es" : "") + " — ahora #" + rank, 3500);
+    gameSound.milestone(); haptic.reward();
+    advanceVbcMission("rank", prevRankPos - rank);
+  }
+  prevRankPos = rank;
+}
+
+/* ══ SESSION MISSIONS ════════════════════════════════════════ */
+var VBC_MISSIONS = [
+  { id:"invite2",  label:"Invita a 2 participantes",    goal:2,  type:"shares",  reward:20, emoji:"📡" },
+  { id:"pts30",    label:"Gana 30 pts en sesión",       goal:30, type:"pts",     reward:15, emoji:"💪" },
+  { id:"top5",     label:"Entra al Top 5",              goal:5,  type:"rank",    reward:50, emoji:"🏆" },
+  { id:"checkin",  label:"Registra tu participación",   goal:1,  type:"checkin", reward:10, emoji:"⚡" }
+];
+var sessionMission = null;
+var sessionMissionProgress = 0;
+
+function pickVbcMission() {
+  var avail = VBC_MISSIONS.filter(function(m){ return !m.done; });
+  if(!avail.length) return;
+  sessionMission = avail[Math.floor(Math.random() * avail.length)];
+  sessionMissionProgress = 0;
+  renderMissionWidget();
+}
+
+function advanceVbcMission(type, amount) {
+  if(!sessionMission || sessionMission.completed) return;
+  if(sessionMission.type !== type) return;
+  sessionMissionProgress += (amount || 1);
+  renderMissionWidget();
+  if(sessionMissionProgress >= sessionMission.goal) completeVbcMission();
+}
+
+function completeVbcMission() {
+  if(!sessionMission) return;
+  sessionMission.completed = true;
+  sessionMission.done = true;
+  updatePts(sessionMission.reward, "Misión: " + sessionMission.label);
+  gameSound.milestone(); haptic.milestone();
+  toast("🎯 Misión cumplida · +" + sessionMission.reward + " pts", 4000);
+  var w = document.getElementById("vbcMissionWidget");
+  if(w) { w.classList.add("completed"); setTimeout(pickVbcMission, 6000); }
+}
+
+function renderMissionWidget() {
+  var w = document.getElementById("vbcMissionWidget");
+  if(!w || !sessionMission) return;
+  var pct = Math.min(100, Math.round((sessionMissionProgress / sessionMission.goal) * 100));
+  w.innerHTML =
+    '<div class="vmw-row">' +
+      '<span class="vmw-emoji">' + sessionMission.emoji + '</span>' +
+      '<span class="vmw-label">' + sessionMission.label + '</span>' +
+    '</div>' +
+    '<div class="vmw-bar-wrap"><div class="vmw-bar" style="width:' + pct + '%"></div></div>';
+  if(sessionMission.completed) w.classList.add("completed");
+}
+
+/* ══ LÉON 007 COPILOT ════════════════════════════════════════ */
+var COP007 = {
+  persona: "Eres León 007, agente de campo del Protocolo VBC. Directo, motivador, conoces cada regla del protocolo. Ayudas a participantes a entender el ranking, mejorar su PowerScore y mantenerse competitivos. Responde en español, máximo 3 líneas, tono de agente.",
+  seeds: ["¿Cuántos pts necesito para el top 5?", "¿Cómo mejoro mi PowerScore?", "¿Cuándo termina la competencia?"]
+};
+var copMemory = [];
+var copOpen = false;
+
+function cop007MemLoad() {
+  try { var m = localStorage.getItem("vbc-cop-v1"); copMemory = m ? JSON.parse(m).slice(-20) : []; }
+  catch(e) { copMemory = []; }
+}
+function cop007MemSave() {
+  try { localStorage.setItem("vbc-cop-v1", JSON.stringify(copMemory.slice(-20))); } catch(e){}
+}
+
+function openCop007() {
+  cop007MemLoad();
+  if(!document.getElementById("cop007Panel")) buildCop007UI();
+  document.getElementById("cop007Panel").classList.add("open");
+  copOpen = true;
+  gameSound.tap(); haptic.light();
+  if(!copMemory.length) renderCop007Seeds();
+}
+function closeCop007() {
+  var p = document.getElementById("cop007Panel");
+  if(p) p.classList.remove("open");
+  copOpen = false;
+}
+
+function buildCop007UI() {
+  var fab = document.createElement("button");
+  fab.id = "cop007Fab"; fab.className = "cop007-fab visible";
+  fab.innerHTML = "⚡";
+  fab.onclick = function(){ copOpen ? closeCop007() : openCop007(); };
+  document.body.appendChild(fab);
+
+  var panel = document.createElement("div");
+  panel.id = "cop007Panel"; panel.className = "cop007-panel";
+  panel.innerHTML =
+    '<div class="cop007-header">' +
+      '<div><div class="cop007-name">⚡ León 007</div>' +
+      '<div class="cop007-sub">Agente de Campo · VBC Protocol</div></div>' +
+      '<button class="cop007-close" onclick="closeCop007()">✕</button>' +
+    '</div>' +
+    '<div id="cop007Msgs" class="cop007-messages"></div>' +
+    '<div id="cop007Seeds" class="cop007-seeds"></div>' +
+    '<div class="cop007-input-row">' +
+      '<input id="cop007Input" class="cop007-input" placeholder="Pregunta a León 007…" maxlength="200">' +
+      '<button class="cop007-send" onclick="cop007Send()">→</button>' +
+    '</div>';
+  document.body.appendChild(panel);
+  setTimeout(function(){
+    var inp = document.getElementById("cop007Input");
+    if(inp) inp.addEventListener("keydown", function(e){ if(e.key==="Enter") cop007Send(); });
+  }, 100);
+}
+
+function renderCop007Seeds() {
+  var s = document.getElementById("cop007Seeds"); if(!s) return;
+  s.innerHTML = COP007.seeds.map(function(q){
+    return '<button class="cop007-seed" onclick="cop007Seed(this)">' + q + '</button>';
+  }).join("");
+}
+function cop007Seed(btn) {
+  var q = btn.textContent;
+  var s = document.getElementById("cop007Seeds"); if(s) s.innerHTML = "";
+  cop007Run(q);
+}
+function cop007Send() {
+  var inp = document.getElementById("cop007Input"); if(!inp) return;
+  var t = inp.value.trim(); if(!t) return;
+  inp.value = "";
+  var s = document.getElementById("cop007Seeds"); if(s) s.innerHTML = "";
+  cop007Run(t);
+}
+function cop007Append(role, text) {
+  var m = document.getElementById("cop007Msgs"); if(!m) return;
+  var d = document.createElement("div");
+  d.className = "cop007-msg cop007-msg-" + role;
+  d.textContent = text;
+  m.appendChild(d); m.scrollTop = m.scrollHeight;
+}
+function cop007Run(text) {
+  cop007Append("user", text);
+  copMemory.push({ role:"user", content:text });
+  var m = document.getElementById("cop007Msgs");
+  var typing = document.createElement("div");
+  typing.className = "cop007-typing"; typing.id = "cop007Typing";
+  typing.textContent = "León 007 escribiendo…";
+  if(m) { m.appendChild(typing); m.scrollTop = m.scrollHeight; }
+
+  var ctx = "";
+  if(state.profile) {
+    ctx = "Usuario: " + state.profile.name + " · " + (state.profile.pts||10) + " pts.";
+    if(rankingData.length) {
+      var pos = rankingData.findIndex(function(r){ return r.uid===state.profile.uid; });
+      if(pos>=0) ctx += " Posición #" + (pos+1) + " de " + rankingData.length + ".";
+    }
+  }
+  var system = COP007.persona + (ctx ? " CONTEXTO: " + ctx : "");
+
+  if(VBC_CONFIG.enabled) {
+    var ctrl = new AbortController();
+    var t = setTimeout(function(){ ctrl.abort(); }, VBC_CONFIG.timeout);
+    fetch(VBC_CONFIG.url + "/aura/chat", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      signal:ctrl.signal,
+      body:JSON.stringify({ messages:copMemory.slice(-8), userId:"vbc-"+(state.profile?state.profile.uid:"anon"), system:system })
+    })
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(d){ clearTimeout(t); cop007Finish(d.result||d.reply||"Sin respuesta."); })
+    .catch(function(){ clearTimeout(t); cop007Finish(cop007Fallback(text)); });
+  } else {
+    setTimeout(function(){ cop007Finish(cop007Fallback(text)); }, 700);
+  }
+}
+function cop007Fallback(text) {
+  var t = text.toLowerCase();
+  if(t.indexOf("pts")>=0||t.indexOf("punto")>=0) {
+    var top = rankingData[0];
+    return top ? "El líder tiene " + top.pts + " pts. Necesitas superar eso para el #1. ¡Cada participación suma!" : "Los pts se acumulan con cada participación. ¡Compite!";
+  }
+  if(t.indexOf("top")>=0||t.indexOf("ranking")>=0) return "Top 3 lleva medalla y bonus de pts. Invita más competidores — sube el nivel.";
+  if(t.indexOf("power")>=0||t.indexOf("score")>=0) return "PowerScore = fuerza relativa a tu peso. Más peso × más reps = más Score. Maximiza cada levantada.";
+  if(t.indexOf("cuán")>=0||t.indexOf("termina")>=0||t.indexOf("fecha")>=0) return "La competencia corre hasta octubre. Más tiempo = más pts acumulados. No pares.";
+  return "León 007 en campo. Compite, invita y sube el ranking. ¿En qué más te ayudo?";
+}
+function cop007Finish(reply) {
+  var typing = document.getElementById("cop007Typing");
+  if(typing && typing.parentNode) typing.parentNode.removeChild(typing);
+  cop007Append("assistant", reply);
+  copMemory.push({ role:"assistant", content:reply });
+  cop007MemSave();
+  gameSound.tap(); haptic.light();
+}
+
+/* ══ INJECT RANKING EXTRAS ═══════════════════════════════════ */
+function injectRankingExtras() {
+  /* Mission widget — después del userHero */
+  if(!document.getElementById("vbcMissionWrap")) {
+    var hero = document.getElementById("userHero");
+    if(hero) {
+      var wrap = document.createElement("div");
+      wrap.className = "vbc-mission-wrap";
+      wrap.innerHTML = '<div id="vbcMissionWidget" class="vbc-mission-widget"></div>';
+      hero.parentNode.insertBefore(wrap, hero.nextSibling);
+      pickVbcMission();
+    }
+  }
+  /* Copilot FAB */
+  if(!document.getElementById("cop007Fab")) buildCop007UI();
 }
 
 </script>
@@ -642,6 +865,86 @@ body::after {
 .ranking-item:nth-child(4){animation-delay:.16s}
 .ranking-item:nth-child(5){animation-delay:.20s}
 .ranking-item:nth-child(n+6){animation-delay:.24s}
+
+/* ══ León 007 Copilot ════════════════════════════════════════ */
+.cop007-fab {
+  position:fixed; right:1.2rem; bottom:5.5rem;
+  width:3rem; height:3rem; border-radius:50%;
+  background:linear-gradient(135deg,#00d9ff,#0070ff);
+  border:none; color:#000; font-size:1.15rem; font-weight:700;
+  cursor:pointer; z-index:200; display:none;
+  box-shadow:0 4px 20px rgba(0,217,255,.45);
+  align-items:center; justify-content:center;
+}
+.cop007-fab.visible { display:flex; }
+.cop007-panel {
+  position:fixed; bottom:0; left:0; right:0; height:72vh;
+  background:var(--surface); border-top:1px solid var(--b2);
+  border-radius:1rem 1rem 0 0; z-index:300;
+  display:flex; flex-direction:column;
+  transform:translateY(100%); transition:transform .35s ease;
+}
+.cop007-panel.open { transform:translateY(0); }
+.cop007-header {
+  padding:.9rem 1.2rem .7rem; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:.5rem; position:relative;
+}
+.cop007-name { font-weight:700; color:var(--cyan); font-size:.88rem; }
+.cop007-sub  { font-size:.58rem; color:var(--muted); }
+.cop007-close {
+  position:absolute; right:1rem; top:50%; transform:translateY(-50%);
+  background:none; border:none; color:var(--muted); font-size:1rem; cursor:pointer;
+}
+.cop007-messages {
+  flex:1; overflow-y:auto; padding:.8rem 1.2rem;
+  display:flex; flex-direction:column; gap:.55rem;
+}
+.cop007-msg {
+  max-width:86%; padding:.5rem .85rem; border-radius:.7rem;
+  font-size:.78rem; line-height:1.5;
+}
+.cop007-msg-user {
+  align-self:flex-end;
+  background:rgba(0,217,255,.12); border:1px solid rgba(0,217,255,.22);
+}
+.cop007-msg-assistant {
+  align-self:flex-start;
+  background:var(--s2); border:1px solid var(--border);
+}
+.cop007-typing { align-self:flex-start; font-size:.68rem; color:var(--muted); font-style:italic; }
+.cop007-seeds { padding:0 1.2rem .5rem; display:flex; gap:.45rem; flex-wrap:wrap; }
+.cop007-seed {
+  font-family:var(--mono); font-size:.57rem; padding:.28rem .65rem;
+  border:1px solid rgba(0,217,255,.28); border-radius:2rem;
+  background:none; color:var(--cyan); cursor:pointer;
+}
+.cop007-input-row {
+  padding:.7rem 1.2rem; border-top:1px solid var(--border);
+  display:flex; gap:.55rem; align-items:center;
+}
+.cop007-input {
+  flex:1; background:var(--s2); border:1px solid var(--border);
+  border-radius:.5rem; color:var(--text); padding:.5rem .8rem; font-size:.8rem;
+}
+.cop007-send {
+  background:var(--cyan); color:#000; border:none;
+  border-radius:.5rem; padding:.5rem .9rem; font-weight:700; cursor:pointer;
+}
+
+/* ══ Mission Widget ══════════════════════════════════════════ */
+.vbc-mission-wrap { padding:.75rem 1rem 0; }
+.vbc-mission-widget {
+  background:var(--s2); border:1px solid var(--border);
+  border-radius:.6rem; padding:.6rem .9rem;
+  transition:border-color .4s;
+}
+.vbc-mission-widget.completed { border-color:var(--gold); }
+.vmw-row { display:flex; align-items:center; gap:.45rem; margin-bottom:.38rem; }
+.vmw-emoji { font-size:.85rem; }
+.vmw-label { font-size:.67rem; color:var(--text); }
+.vmw-bar-wrap { height:3px; background:var(--border); border-radius:2px; overflow:hidden; }
+.vmw-bar { height:100%; background:var(--cyan); border-radius:2px; transition:width .45s ease; }
+
 </style>
 </head>
 <body>
@@ -1347,7 +1650,7 @@ void function VBCProtocol() { "use strict";
   if(btnInvitar) {
     btnInvitar.addEventListener("click", function() {
       var url = "https://wa.me/?text=" + encodeURIComponent("Entra al ranking VBC Protocol: " + APP_URL);
-      window.open(url, "_blank");
+      window.open(url, "_blank"); advanceVbcMission("shares", 1); unlockVbcAchievement("shared");
     });
   }
 
