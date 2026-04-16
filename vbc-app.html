@@ -3,746 +3,674 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#030307">
+<meta name="theme-color" content="#080810">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="VBC Protocol">
-<meta name="description" content="VBC Protocol — Proof of Strength. Tu fuerza es tu firma.">
+<meta name="description" content="VBC Protocol — Compite. Aprende. Gana. Powered by VibraAlto.">
+
+<!-- PWA Manifest -->
 <link rel="manifest" href="/vbc-protocol/manifest.json">
+
+<!-- iOS icons -->
 <link rel="apple-touch-icon" href="/vbc-protocol/icon-192.png">
+
 <title>VBC Protocol · VibraAlto</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&family=DM+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
 
-<!-- Firebase SDKs -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js">
+/* ══ VBC_CONFIG — AI backend bridge ════════════════════════════
+   Activar cuando vbc-protocol necesite análisis de PowerScore AI
+══════════════════════════════════════════════════════════════ */
+var VBC_CONFIG = {
+  enabled: false,
+  url: "https://vbc-compute-layer-852702111467.us-central1.run.app",
+  timeout: 12000
+};
+
+/* ══ updatePts — Firestore + UI sync ═══════════════════════════ */
+function updatePts(amount, reason) {
+  if(!state.profile) return;
+  state.profile.pts = (state.profile.pts || 0) + amount;
+  state.profile.updatedAt = new Date().toISOString();
+  if(db && state.user) {
+    db.collection("vbc_participants").doc(state.user.uid).update({
+      pts: firebase.firestore.FieldValue.increment(amount),
+      updatedAt: state.profile.updatedAt
+    }).catch(function(e){ console.warn("[VBC] pts update:", e); });
+  }
+  if(amount > 0) {
+    gameSound.coin(); haptic.light();
+    toast("+" + amount + " pts · " + (reason || ""), 2500);
+  }
+  if(typeof updateUserHero === "function") updateUserHero();
+}
+
+function saveAchievement(key) {
+  if(!db || !state.user) return;
+  var upd = {}; upd["ach_" + key] = true; upd.updatedAt = new Date().toISOString();
+  db.collection("vbc_participants").doc(state.user.uid).update(upd).catch(function(){});
+}
+
+/* ══ GAME LAYER — Web Audio + Haptics ══════════════════════════ */
+var _audioCtx = null;
+function getAudioCtx() {
+  if(!_audioCtx) _audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  return _audioCtx;
+}
+function playTone(freq, type, dur, vol, delay) {
+  try {
+    var c=getAudioCtx(), o=c.createOscillator(), g=c.createGain();
+    o.connect(g); g.connect(c.destination);
+    o.type=type||"sine";
+    var t=c.currentTime+(delay||0);
+    o.frequency.setValueAtTime(freq,t);
+    g.gain.setValueAtTime(vol||0.13,t);
+    g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    o.start(t); o.stop(t+dur);
+  } catch(e){}
+}
+var gameSound = {
+  coin:      function(){ playTone(660,"triangle",.08,.12); playTone(880,"triangle",.08,.10,.06); },
+  milestone: function(){ playTone(523,"square",.12,.14); playTone(659,"square",.12,.14,.13); playTone(784,"square",.12,.14,.26); playTone(1047,"square",.22,.14,.39); },
+  lift:      function(){ playTone(220,"sawtooth",.12,.10); playTone(330,"sawtooth",.10,.08,.12); playTone(523,"square",.18,.12,.22); },
+  tap:       function(){ playTone(300,"sine",.06,.08); }
+};
+var haptic = {
+  light:     function(){ if(navigator.vibrate) navigator.vibrate(8); },
+  reward:    function(){ if(navigator.vibrate) navigator.vibrate([12,6,18]); },
+  milestone: function(){ if(navigator.vibrate) navigator.vibrate([20,10,20,10,40]); }
+};
+
+/* ══ ACHIEVEMENTS — Bartle types ════════════════════════════════ */
+var vbcAchievements = {
+  firstEntry: { done:false, label:"Primer Ingreso al Protocolo", emoji:"⚡", pts:10  },
+  verified:   { done:false, label:"Verificación NERHIA +18",     emoji:"🛡", pts:15  },
+  pts100:     { done:false, label:"100 pts acumulados",          emoji:"💯", pts:25  },
+  pts500:     { done:false, label:"500 pts — Élite VBC",         emoji:"🏆", pts:75  },
+  top10:      { done:false, label:"Top 10 del Ranking",          emoji:"🥇", pts:50  },
+  shared:     { done:false, label:"Compartiste el Protocolo",    emoji:"📡", pts:10  }
+};
+
+function unlockVbcAchievement(key) {
+  var a = vbcAchievements[key];
+  if(!a || a.done) return;
+  a.done = true;
+  saveAchievement(key);
+  var ptsReward = a.pts;
+  /* updatePts calls coin sound — skip gameSound here to avoid double */
+  if(db && state.user) {
+    db.collection("vbc_participants").doc(state.user.uid).update({
+      pts: firebase.firestore.FieldValue.increment(ptsReward),
+      updatedAt: new Date().toISOString()
+    }).catch(function(){});
+  }
+  if(state.profile) state.profile.pts = (state.profile.pts||0) + ptsReward;
+  haptic.milestone(); gameSound.milestone();
+
+  var el = document.createElement("div");
+  el.className = "vbc-achievement-popup";
+  el.innerHTML =
+    '<div class="vbc-ach-icon">' + a.emoji + '</div>' +
+    '<div class="vbc-ach-body">' +
+      '<div class="vbc-ach-title">Logro desbloqueado</div>' +
+      '<div class="vbc-ach-name">' + a.label + '</div>' +
+    '</div>' +
+    '<div class="vbc-ach-pts">+' + ptsReward + ' pts</div>';
+  document.body.appendChild(el);
+  setTimeout(function(){ el.classList.add("show"); }, 20);
+  setTimeout(function(){
+    el.classList.remove("show");
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 400);
+  }, 3500);
+}
+
+function loadAchievements(profileData) {
+  Object.keys(vbcAchievements).forEach(function(key){
+    if(profileData["ach_" + key]) vbcAchievements[key].done = true;
+  });
+}
+
+function checkRankAchievements(rankingData) {
+  if(!state.user || !rankingData || !state.profile) return;
+  var pos = rankingData.findIndex(function(r){ return r.uid === state.user.uid; });
+  if(pos >= 0 && pos < 10) unlockVbcAchievement("top10");
+  if((state.profile.pts||0) >= 100) unlockVbcAchievement("pts100");
+  if((state.profile.pts||0) >= 500) unlockVbcAchievement("pts500");
+}
+
+</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<!-- face-api — NERHIA +18 gate -->
+
+<!-- face-api para NERHIA +18 -->
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
 <style>
-/* ═══════════════════════════════════════════════════════════
-   VBC PROTOCOL · PWA v2
-   Design direction: RAW INDUSTRIAL BIOTECH
-   Fonts: Bebas Neue (display) + Share Tech Mono (data) + DM Sans (body)
-   Palette: True OLED black + gold/amber + cyan + acid green
-   ═══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   VBC PROTOCOL · PWA
+   Sistema de diseño VibraOS
+   Flujo vendedor: 45 segundos de QR a inscrito
+   ══════════════════════════════════════════════════════════ */
 :root {
-  --black:   #000000;       /* true OLED black */
-  --bg:      #030307;       /* base */
-  --sf:      #0d0d18;       /* card */
-  --sf2:     #13132a;       /* elevated */
-  --sf3:     #191940;       /* highest */
-  --bd:      rgba(255,255,255,.06);
-  --bd2:     rgba(245,197,24,.15);
-  --bd3:     rgba(0,217,255,.18);
-
-  --text:    #f0f0ff;
-  --muted:   rgba(240,240,255,.42);
-  --dim:     rgba(240,240,255,.22);
-
-  --gold:    #f5c518;
-  --amber:   #f59e0b;
-  --green:   #22c55e;
+  --bg:      #080810;
+  --surface: #111120;
+  --s2:      #191930;
+  --border:  rgba(255,255,255,.06);
+  --b2:      rgba(0,217,255,.18);
+  --text:    #e4e4f0;
+  --muted:   rgba(255,255,255,.38);
   --cyan:    #00d9ff;
-  --red:     #ef4444;
+  --green:   #00e676;
+  --gold:    #ffd700;
+  --orange:  #ff8c00;
+  --red:     #ff4757;
   --violet:  #a855f7;
-  --orange:  #fb923c;
-
-  --display: 'Bebas Neue', sans-serif;
-  --mono:    'Share Tech Mono', monospace;
   --sans:    'DM Sans', system-ui, sans-serif;
-
+  --mono:    'DM Mono', monospace;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bot: env(safe-area-inset-bottom, 0px);
-  --nav-h:    60px;
-
-  --ease: cubic-bezier(.23,1,.32,1);
-  --spring: cubic-bezier(.34,1.56,.64,1);
 }
 
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{font-size:16px;-webkit-text-size-adjust:100%;touch-action:manipulation}
-body{
-  background:var(--bg);color:var(--text);
-  font-family:var(--sans);
-  min-height:100svh;overflow-x:hidden;
-  padding-top:var(--safe-top);
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { font-size:16px; -webkit-text-size-adjust:100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  padding-top: var(--safe-top);
 }
 
-/* Grain overlay */
-body::after{
+/* Noise texture VibraOS */
+body::after {
   content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
-  background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.022'/%3E%3C/svg%3E");
+  background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
 }
 
-img{display:block;object-fit:cover}
-button{cursor:pointer;border:none;background:none;font-family:var(--sans)}
+/* ── SCREENS ── */
+.screen { display:none; min-height:100vh; min-height:100dvh; flex-direction:column; }
+.screen.active { display:flex; }
 
-/* ── SCREEN SYSTEM ── */
-.screen{display:none;min-height:100svh;flex-direction:column}
-.screen.active{display:flex}
+/* ══ SCREEN: SPLASH ════════════════════════════════════════ */
+#screen-splash {
+  align-items:center; justify-content:center;
+  background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(0,217,255,.07) 0%, transparent 70%), var(--bg);
+  padding: 2rem;
+  text-align: center;
+  gap: 2rem;
+}
 
-/* Stagger animation */
-@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
-.au{animation:fadeUp .42s var(--ease) both}
-.au-2{animation:fadeUp .42s .09s var(--ease) both}
-.au-3{animation:fadeUp .42s .18s var(--ease) both}
-.au-4{animation:fadeUp .42s .27s var(--ease) both}
-.au-5{animation:fadeUp .42s .36s var(--ease) both}
+.splash-logo {
+  display:flex; flex-direction:column; align-items:center; gap:.6rem;
+}
+.splash-dot {
+  width:14px; height:14px; border-radius:50%;
+  background: var(--cyan);
+  box-shadow: 0 0 20px var(--cyan), 0 0 40px rgba(0,217,255,.3);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100%{transform:scale(1);box-shadow:0 0 20px var(--cyan),0 0 40px rgba(0,217,255,.3)}
+  50%{transform:scale(1.15);box-shadow:0 0 30px var(--cyan),0 0 60px rgba(0,217,255,.4)}
+}
+.splash-brand {
+  font-family: var(--sans); font-size: 2.4rem; font-weight:800;
+  letter-spacing:-.02em; line-height:1;
+}
+.splash-brand .vbc { color: var(--cyan); }
+.splash-brand .protocol { color: var(--text); }
 
-/* ── FULL LOADER ── */
-.full-loader{
-  position:fixed;inset:0;z-index:600;
-  background:var(--bg);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;
+.splash-tag {
+  font-family: var(--mono); font-size:.65rem; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--muted);
+  display:flex; align-items:center; gap:.5rem;
 }
-.full-loader.gone{display:none}
-.fl-vbc{font-family:var(--display);font-size:2rem;letter-spacing:.08em;color:var(--gold)}
-.spin{width:24px;height:24px;border-radius:50%;border:2px solid rgba(245,197,24,.15);border-top-color:var(--gold);animation:spin .7s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.fl-sub{font-family:var(--mono);font-size:.6rem;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.splash-tag::before,.splash-tag::after { content:''; width:24px; height:1px; background:rgba(0,217,255,.3); }
 
-/* ── TOAST ── */
-.toast{
-  position:fixed;bottom:calc(var(--nav-h) + 16px + var(--safe-bot));
-  left:50%;transform:translateX(-50%) translateY(12px);
-  background:var(--sf2);border:1px solid var(--bd);border-radius:8px;
-  padding:.6rem 1.2rem;font-size:.8rem;color:var(--text);
-  opacity:0;transition:all .28s var(--ease);pointer-events:none;white-space:nowrap;z-index:400;
+.splash-claim {
+  font-size:1.05rem; font-weight:500; color:var(--muted); line-height:1.5;
+  max-width:300px;
 }
-.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.toast.ok{border-color:rgba(34,197,94,.3);color:var(--green)}
-.toast.err{border-color:rgba(239,68,68,.3);color:var(--red)}
+.splash-claim strong { color:var(--text); }
 
-/* ══════════════════════════════════════════════════════════
-   SCREEN: SPLASH / LOGIN
-══════════════════════════════════════════════════════════ */
-#screen-splash{
-  align-items:center;justify-content:center;
-  background:radial-gradient(ellipse 70% 55% at 50% 35%,rgba(245,197,24,.06) 0%,transparent 70%),var(--bg);
-  padding:2rem;text-align:center;gap:2rem;
+/* Botón Google Sign-In */
+.btn-google {
+  display:flex; align-items:center; justify-content:center; gap:.75rem;
+  width:100%; max-width:320px; padding:1rem 1.5rem;
+  background: #fff; border:none; border-radius:12px;
+  font-family:var(--sans); font-size:1rem; font-weight:700;
+  color:#1f1f1f; cursor:pointer;
+  box-shadow: 0 4px 24px rgba(0,0,0,.4);
+  transition:.2s;
+  -webkit-tap-highlight-color:transparent;
 }
-.splash-orb{
-  width:72px;height:72px;border-radius:50%;position:relative;
-  background:radial-gradient(circle at 35% 30%,rgba(245,197,24,.6),rgba(245,197,24,.1) 60%,transparent);
-  border:1px solid rgba(245,197,24,.25);
-  box-shadow:0 0 40px rgba(245,197,24,.15);
-  display:flex;align-items:center;justify-content:center;
-  font-family:var(--display);font-size:1.6rem;letter-spacing:.04em;color:var(--gold);
-  animation:orb-pulse 3s ease-in-out infinite;
-}
-@keyframes orb-pulse{0%,100%{box-shadow:0 0 40px rgba(245,197,24,.15)}50%{box-shadow:0 0 60px rgba(245,197,24,.28)}}
-.splash-brand{font-family:var(--display);font-size:2.8rem;letter-spacing:.06em;line-height:.9}
-.splash-brand .vbc{color:var(--gold)}
-.splash-tag{
-  font-family:var(--mono);font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);
-  display:flex;align-items:center;gap:.5rem;
-}
-.splash-tag::before,.splash-tag::after{content:'';width:20px;height:1px;background:rgba(245,197,24,.3)}
-.splash-claim{font-size:1rem;font-weight:400;color:var(--muted);line-height:1.65;max-width:280px}
-.splash-claim strong{color:var(--text);font-weight:700}
+.btn-google:active { transform:scale(.97); }
+.google-icon { width:22px; height:22px; flex-shrink:0; }
 
-.btn-google{
-  display:flex;align-items:center;justify-content:center;gap:.75rem;
-  width:100%;max-width:300px;padding:.95rem 1.5rem;
-  background:#fff;border-radius:10px;border:none;
-  font-family:var(--sans);font-size:.95rem;font-weight:700;color:#1f1f1f;
-  box-shadow:0 6px 28px rgba(0,0,0,.45);transition:.2s var(--ease);
+.splash-install-hint {
+  font-family:var(--mono); font-size:.6rem; letter-spacing:.1em;
+  color:rgba(0,217,255,.5); text-align:center; line-height:1.7;
 }
-.btn-google:active{transform:scale(.97)}
-.g-icon{width:20px;height:20px;flex-shrink:0}
+.install-btn {
+  display:none; /* se muestra cuando el browser soporta install */
+  align-items:center; gap:.5rem;
+  font-family:var(--mono); font-size:.65rem; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--cyan);
+  background:rgba(0,217,255,.06); border:1px solid rgba(0,217,255,.2);
+  padding:.5rem 1.2rem; cursor:pointer; margin-top:.5rem;
+  transition:.2s;
+}
+.install-btn:hover { background:rgba(0,217,255,.1); }
+.install-btn.show { display:flex; }
 
-.install-btn{
-  display:none;align-items:center;gap:.5rem;
-  font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--gold);background:rgba(245,197,24,.07);border:1px solid rgba(245,197,24,.22);
-  padding:.5rem 1.2rem;border-radius:6px;transition:.2s;
+/* ══ SCREEN: NERHIA +18 (Portón cerebral) ══════════════════ */
+#screen-age {
+  align-items:center; justify-content:center;
+  background: var(--bg); padding:1.5rem;
+  gap:1.2rem;
 }
-.install-btn.show{display:flex}
-.install-btn:hover{background:rgba(245,197,24,.14)}
-.splash-hint{font-family:var(--mono);font-size:.58rem;letter-spacing:.1em;color:rgba(245,197,24,.4);line-height:1.8}
+.age-header {
+  text-align:center;
+}
+.age-header .tag {
+  font-family:var(--mono); font-size:.58rem; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--cyan);
+  padding:.25rem .7rem; border:1px solid rgba(0,217,255,.25);
+  background:rgba(0,217,255,.05); display:inline-block; margin-bottom:.8rem;
+}
+.age-title {
+  font-size:1.6rem; font-weight:800; letter-spacing:-.02em; line-height:1.1;
+}
+.age-sub { font-size:.85rem; color:var(--muted); margin-top:.4rem; }
 
-/* ══════════════════════════════════════════════════════════
-   SCREEN: NERHIA +18 GATE
-══════════════════════════════════════════════════════════ */
-#screen-age{align-items:center;justify-content:center;padding:1.5rem;gap:1.2rem;background:var(--bg)}
-.age-kicker{
-  font-family:var(--mono);font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--cyan);padding:.25rem .8rem;border:1px solid rgba(0,217,255,.25);
-  background:rgba(0,217,255,.05);border-radius:4px;
+.age-cam-wrap {
+  position:relative; width:100%; max-width:340px;
+  aspect-ratio:4/3; border-radius:16px; overflow:hidden;
+  border:1px solid rgba(0,217,255,.15);
+  background:#000;
 }
-.age-title{font-size:1.5rem;font-weight:800;letter-spacing:-.02em;line-height:1.1;text-align:center}
-.age-sub{font-size:.82rem;color:var(--muted);text-align:center}
-.age-cam-wrap{
-  position:relative;width:100%;max-width:320px;aspect-ratio:4/3;
-  border-radius:16px;overflow:hidden;border:1px solid rgba(0,217,255,.15);background:#000;
+#age-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+#age-canvas { position:absolute; inset:0; width:100%; height:100%; transform:scaleX(-1); }
+
+/* Corner brackets */
+.age-cam-wrap::before,.age-cam-wrap::after {
+  content:''; position:absolute; width:24px; height:24px; z-index:10;
 }
-#age-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
-#age-canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1)}
-.cam-corner{position:absolute;width:20px;height:20px;z-index:10}
-.cam-corner.tl{top:8px;left:8px;border-top:2px solid var(--cyan);border-left:2px solid var(--cyan)}
-.cam-corner.tr{top:8px;right:8px;border-top:2px solid var(--cyan);border-right:2px solid var(--cyan)}
-.cam-corner.bl{bottom:8px;left:8px;border-bottom:2px solid var(--cyan);border-left:2px solid var(--cyan)}
-.cam-corner.br{bottom:8px;right:8px;border-bottom:2px solid var(--cyan);border-right:2px solid var(--cyan)}
-.age-scanline{
-  position:absolute;left:0;right:0;height:1.5px;
+.age-cam-wrap::before { top:10px; left:10px; border-top:2px solid var(--cyan); border-left:2px solid var(--cyan); }
+.age-cam-wrap::after  { bottom:10px; right:10px; border-bottom:2px solid var(--cyan); border-right:2px solid var(--cyan); }
+
+.age-scanline {
+  position:absolute; left:0; right:0; height:2px;
   background:linear-gradient(90deg,transparent,var(--cyan),transparent);
-  box-shadow:0 0 6px var(--cyan);animation:scan-v 2.4s ease-in-out infinite;
-  opacity:0;z-index:11;pointer-events:none;
+  box-shadow:0 0 8px var(--cyan); animation:scan 2.4s ease-in-out infinite;
+  opacity:0; z-index:11; pointer-events:none;
 }
-.age-scanline.active{opacity:1}
-@keyframes scan-v{0%{top:0;opacity:0}8%{opacity:1}92%{opacity:1}100%{top:100%;opacity:0}}
-.age-loading{
-  position:absolute;inset:0;z-index:30;background:var(--bg);border-radius:14px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.8rem;
-}
-.age-loading.gone{display:none}
-.age-loading-txt{font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;color:var(--muted)}
-.age-result-overlay{
-  position:absolute;inset:0;z-index:20;border-radius:14px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;
-  opacity:0;pointer-events:none;transition:opacity .3s;
-}
-.age-result-overlay.granted{background:rgba(0,8,4,.9);opacity:1;pointer-events:auto}
-.age-result-overlay.denied{background:rgba(10,2,2,.9);opacity:1;pointer-events:auto}
-.aro-icon{font-size:2.2rem}.aro-age{font-size:3rem;font-weight:800;line-height:1}
-.aro-label{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
-.age-result-overlay.granted .aro-age,.age-result-overlay.granted .aro-label{color:var(--green)}
-.age-result-overlay.denied .aro-age,.age-result-overlay.denied .aro-label{color:var(--red)}
-.aro-note{font-size:.6rem;color:var(--muted);text-align:center;line-height:1.6;padding:0 1rem}
-.aro-cta{
-  font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;
-  padding:.5rem 1.4rem;border:1px solid rgba(0,217,255,.3);background:transparent;
-  color:var(--cyan);border-radius:4px;cursor:pointer;margin-top:.3rem;transition:.2s;
-}
-.aro-cta:hover{background:rgba(0,217,255,.1)}
-.age-status-row{display:flex;align-items:center;gap:.5rem;font-family:var(--mono);font-size:.68rem;color:var(--muted)}
-.asd{width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0}
-.asd.scanning{background:var(--cyan);box-shadow:0 0 6px var(--cyan);animation:orb-pulse 1s ease-in-out infinite}
-.asd.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
-.asd.deny{background:var(--red);box-shadow:0 0 6px var(--red)}
-.age-privacy{font-family:var(--mono);font-size:.55rem;color:rgba(0,217,255,.38);text-align:center;letter-spacing:.06em;line-height:1.7}
-.btn-skip{font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;color:rgba(255,255,255,.2);background:transparent;border:none;cursor:pointer;padding:.4rem;text-decoration:underline;text-underline-offset:3px}
+.age-scanline.active { opacity:1; }
+@keyframes scan { 0%{top:0%;opacity:0}5%{opacity:1}95%{opacity:1}100%{top:100%;opacity:0} }
 
-/* ══════════════════════════════════════════════════════════
-   SCREEN: ONBOARDING
-══════════════════════════════════════════════════════════ */
-#screen-onboard{padding:1.5rem 1.5rem calc(1.5rem + var(--safe-bot));gap:1.2rem}
-.ob-header{display:flex;align-items:center;gap:.85rem;padding-top:.5rem}
-.ob-avatar-ph{
-  width:44px;height:44px;border-radius:50%;
-  background:var(--sf);border:2px solid var(--bd);
-  display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;
+.age-result-overlay {
+  position:absolute; inset:0; z-index:20;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.5rem;
+  opacity:0; pointer-events:none; transition:opacity .3s;
+  border-radius:14px;
 }
-.ob-avatar-img{width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid rgba(245,197,24,.3)}
-.ob-name{font-size:.95rem;font-weight:700}.ob-email{font-size:.7rem;color:var(--muted)}
-.ob-title{font-size:1.5rem;font-weight:800;letter-spacing:-.02em;line-height:1.2}
-.ob-title span{color:var(--gold)}
-.nerhia-chip{
-  display:flex;align-items:center;gap:.5rem;
-  padding:.45rem .8rem;border:1px solid rgba(0,217,255,.18);
-  background:rgba(0,217,255,.04);border-radius:6px;
-  font-family:var(--mono);font-size:.58rem;letter-spacing:.1em;color:rgba(0,217,255,.7);
+.age-result-overlay.granted { background:rgba(0,10,5,.88); opacity:1; pointer-events:auto; }
+.age-result-overlay.denied  { background:rgba(10,2,2,.88); opacity:1; pointer-events:auto; }
+.aro-icon { font-size:2.5rem; }
+.aro-age { font-family:var(--sans); font-size:3rem; font-weight:800; line-height:1; }
+.aro-label { font-size:.8rem; letter-spacing:.1em; text-transform:uppercase; font-weight:700; }
+.age-result-overlay.granted .aro-age,.age-result-overlay.granted .aro-label { color:var(--green); }
+.age-result-overlay.denied  .aro-age,.age-result-overlay.denied  .aro-label { color:var(--red); }
+.aro-note { font-size:.62rem; color:var(--muted); text-align:center; line-height:1.5; padding:0 1rem; }
+.aro-btn {
+  font-family:var(--mono); font-size:.65rem; letter-spacing:.1em;
+  padding:.5rem 1.4rem; border:1px solid rgba(0,217,255,.3);
+  background:transparent; color:var(--cyan); cursor:pointer; margin-top:.2rem;
 }
-.nchip-dot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green);animation:orb-pulse 2s ease-in-out infinite}
-.form-grp{display:flex;flex-direction:column;gap:.4rem}
-.form-lbl{font-family:var(--mono);font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-.form-inp{
-  background:var(--sf);border:1px solid var(--bd);border-radius:10px;
-  padding:.85rem 1rem;color:var(--text);font-family:var(--sans);font-size:.95rem;
-  outline:none;transition:border-color .2s;-webkit-appearance:none;
-  min-height:48px;
+
+/* Loading models */
+.age-loading {
+  position:absolute; inset:0; z-index:30;
+  background:var(--bg); display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:.8rem;
+  border-radius:14px;
 }
-.form-inp:focus{border-color:rgba(245,197,24,.4)}
-.form-inp::placeholder{color:var(--muted)}
-.form-sel{
-  background:var(--sf);border:1px solid var(--bd);border-radius:10px;
-  padding:.85rem 1rem;color:var(--text);font-family:var(--sans);font-size:.95rem;
-  outline:none;-webkit-appearance:none;cursor:pointer;
+.age-loading.gone { display:none; }
+.spin { width:28px; height:28px; border-radius:50%; border:2px solid rgba(0,217,255,.15); border-top-color:var(--cyan); animation:spin .8s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.age-loading-text { font-family:var(--mono); font-size:.62rem; letter-spacing:.12em; color:var(--muted); }
+
+.age-status {
+  font-family:var(--mono); font-size:.7rem; letter-spacing:.08em;
+  color:var(--muted); text-align:center;
+  display:flex; align-items:center; gap:.5rem;
+}
+.age-status-dot { width:6px; height:6px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+.age-status-dot.scanning { background:var(--cyan); box-shadow:0 0 6px var(--cyan); animation:pulse-dot 1s ease-in-out infinite; }
+.age-status-dot.ok { background:var(--green); box-shadow:0 0 6px var(--green); }
+.age-status-dot.deny { background:var(--red); box-shadow:0 0 6px var(--red); }
+
+.age-privacy {
+  font-family:var(--mono); font-size:.58rem; color:rgba(0,217,255,.4);
+  text-align:center; letter-spacing:.06em; line-height:1.6;
+}
+
+.btn-skip {
+  font-family:var(--mono); font-size:.6rem; letter-spacing:.1em;
+  color:rgba(255,255,255,.25); background:transparent; border:none; cursor:pointer; padding:.4rem;
+  text-decoration:underline;
+}
+
+/* ══ SCREEN: ONBOARDING (datos) ════════════════════════════ */
+#screen-onboard {
+  padding:1.5rem 1.5rem calc(1.5rem + var(--safe-bot));
+  gap:1.2rem;
+}
+.onboard-header {
+  display:flex; align-items:center; gap:.75rem; padding-top:.5rem;
+}
+.oh-avatar {
+  width:44px; height:44px; border-radius:50%;
+  object-fit:cover; border:2px solid rgba(0,217,255,.3);
+}
+.oh-avatar-placeholder {
+  width:44px; height:44px; border-radius:50%;
+  background:var(--surface); border:2px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.2rem;
+}
+.oh-name { font-size:1rem; font-weight:700; }
+.oh-email { font-size:.72rem; color:var(--muted); }
+
+.onboard-title { font-size:1.5rem; font-weight:800; letter-spacing:-.02em; line-height:1.2; }
+.onboard-title span { color:var(--cyan); }
+
+.form-group { display:flex; flex-direction:column; gap:.4rem; }
+.form-label { font-family:var(--mono); font-size:.65rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+.form-input {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:.85rem 1rem;
+  color:var(--text); font-family:var(--sans); font-size:1rem;
+  outline:none; transition:border-color .2s; -webkit-appearance:none;
+}
+.form-input:focus { border-color:rgba(0,217,255,.4); }
+.form-input::placeholder { color:var(--muted); }
+
+.form-select {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:.85rem 1rem;
+  color:var(--text); font-family:var(--sans); font-size:1rem;
+  outline:none; transition:border-color .2s; -webkit-appearance:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,.3)' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 1rem center;
-  min-height:48px;
-}
-.btn-primary{
-  display:flex;align-items:center;justify-content:center;gap:.5rem;
-  width:100%;padding:1.05rem;background:var(--gold);
-  border:none;border-radius:12px;
-  font-family:var(--display);font-size:1.1rem;letter-spacing:.08em;
-  color:#050510;cursor:pointer;transition:.18s var(--ease);margin-top:.4rem;
-  min-height:52px;
-}
-.btn-primary:active{transform:scale(.97)}
-.btn-primary:hover{background:#f7ce30}
-
-/* ══════════════════════════════════════════════════════════
-   SCREEN: MAIN APP
-   Full PWA shell with bottom tab navigation
-══════════════════════════════════════════════════════════ */
-#screen-app{
-  padding-bottom:0;
-  position:relative;
-  background:var(--black);
+  background-repeat:no-repeat; background-position:right 1rem center;
+  cursor:pointer;
 }
 
-/* ─ TOP BAR ─ */
-.app-topbar{
-  position:sticky;top:0;z-index:100;
-  height:calc(52px + var(--safe-top));
-  padding-top:var(--safe-top);
-  background:rgba(3,3,7,.92);backdrop-filter:blur(20px);
-  border-bottom:1px solid var(--bd);
-  display:flex;align-items:center;justify-content:space-between;
-  padding-left:1.2rem;padding-right:1.2rem;
+.nerhia-badge-inline {
+  display:flex; align-items:center; gap:.5rem;
+  padding:.5rem .8rem; border:1px solid rgba(0,217,255,.18);
+  background:rgba(0,217,255,.04); font-family:var(--mono); font-size:.6rem;
+  letter-spacing:.1em; color:rgba(0,217,255,.7);
 }
-.atb-brand{display:flex;align-items:center;gap:.5rem}
-.atb-logo{
-  font-family:var(--display);font-size:1.1rem;letter-spacing:.06em;color:var(--gold);
-}
-.atb-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:orb-pulse 2s ease-in-out infinite}
-.atb-right{display:flex;align-items:center;gap:.6rem}
-.atb-avatar{width:30px;height:30px;border-radius:50%;object-fit:cover;border:2px solid rgba(245,197,24,.3);cursor:pointer}
-.atb-avatar-ph{width:30px;height:30px;border-radius:50%;background:var(--sf);border:2px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:.8rem;cursor:pointer}
-.atb-nerhia{font-family:var(--mono);font-size:.52rem;letter-spacing:.08em;color:var(--cyan);padding:.2rem .5rem;border:1px solid rgba(0,217,255,.18);border-radius:4px}
+.nbi-dot { width:5px; height:5px; border-radius:50%; background:var(--green); box-shadow:0 0 6px var(--green); animation:pulse-dot 2s ease-in-out infinite; }
 
-/* ─ TAB CONTENT ─ */
-.tab-content{display:none;flex:1;overflow-y:auto;padding-bottom:calc(var(--nav-h) + var(--safe-bot))}
-.tab-content.active{display:block}
+.btn-primary {
+  display:flex; align-items:center; justify-content:center; gap:.5rem;
+  width:100%; padding:1.05rem; background:var(--cyan);
+  border:none; border-radius:12px;
+  font-family:var(--sans); font-size:1rem; font-weight:800;
+  color:#020810; cursor:pointer; letter-spacing:.02em;
+  transition:.15s; margin-top:.4rem;
+}
+.btn-primary:active { transform:scale(.97); }
 
-/* ─ BOTTOM NAV ─ */
-.bottom-nav{
-  position:fixed;bottom:0;left:0;right:0;z-index:200;
-  height:calc(var(--nav-h) + var(--safe-bot));
-  padding-bottom:var(--safe-bot);
-  background:rgba(3,3,7,.96);backdrop-filter:blur(24px);
-  border-top:1px solid var(--bd);
-  display:flex;align-items:stretch;
+/* ══ SCREEN: RANKING ══════════════════════════════════════ */
+#screen-ranking {
+  padding-bottom: calc(80px + var(--safe-bot));
 }
-.nav-tab{
-  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;cursor:pointer;border:none;background:transparent;
-  padding:.4rem 0;position:relative;transition:.18s;min-height:44px;
-}
-.nav-tab .nt-icon{font-size:1.1rem;transition:transform .2s var(--spring)}
-.nav-tab .nt-label{font-family:var(--mono);font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);transition:.18s}
-.nav-tab.active .nt-label{color:var(--gold)}
-.nav-tab.active .nt-icon{transform:scale(1.1)}
-.nav-tab.active::after{
-  content:'';position:absolute;top:0;left:30%;right:30%;height:1.5px;
-  background:var(--gold);border-radius:0 0 3px 3px;
-}
-/* Lift tab — special CTA styling */
-.nav-tab.nav-lift .nt-icon{
-  width:44px;height:44px;border-radius:50%;
-  background:var(--gold);color:#050510;
-  display:flex;align-items:center;justify-content:center;font-size:1.2rem;
-  box-shadow:0 4px 18px rgba(245,197,24,.4);
-  margin-bottom:-2px;
-}
-.nav-tab.nav-lift.active .nt-icon{box-shadow:0 6px 24px rgba(245,197,24,.6)}
 
-/* ══════════════════════════════════════════════════════════
-   TAB: HOME
-══════════════════════════════════════════════════════════ */
-.home-hero{
-  background:linear-gradient(180deg,rgba(245,197,24,.07) 0%,transparent 100%);
-  border-bottom:1px solid var(--bd);
-  padding:1.2rem 1.2rem 1rem;
-  display:flex;align-items:center;gap:1rem;
+.ranking-topbar {
+  position:sticky; top:0; z-index:50;
+  background:rgba(8,8,16,.94); backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  padding:.85rem 1.2rem;
+  display:flex; align-items:center; justify-content:space-between;
+  padding-top:calc(.85rem + var(--safe-top));
 }
-.hh-rank{
-  font-family:var(--display);font-size:3.2rem;color:var(--gold);letter-spacing:.02em;
-  line-height:1;min-width:52px;text-align:center;
+.rtb-brand {
+  display:flex; align-items:center; gap:.5rem;
+  font-family:var(--sans); font-size:1rem; font-weight:800;
 }
-.hh-rank.silver{color:#c0c0c0}.hh-rank.bronze{color:#cd7f32}
-.hh-info{flex:1;min-width:0}
-.hh-name{font-size:1.1rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hh-sub{font-size:.7rem;color:var(--muted);margin-top:.18rem}
-.hh-pts{text-align:right;flex-shrink:0}
-.hh-pts-val{font-family:var(--mono);font-size:1.5rem;font-weight:500;color:var(--gold)}
-.hh-pts-lbl{font-family:var(--mono);font-size:.5rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.rtb-dot {
+  width:8px; height:8px; border-radius:50%;
+  background:var(--green); box-shadow:0 0 10px var(--green);
+  animation:pulse-dot 2s ease-in-out infinite;
+}
+.rtb-right { display:flex; align-items:center; gap:.6rem; }
+.rtb-avatar {
+  width:32px; height:32px; border-radius:50%;
+  object-fit:cover; border:2px solid rgba(0,217,255,.3);
+}
+.rtb-avatar-ph {
+  width:32px; height:32px; border-radius:50%;
+  background:var(--surface); border:2px solid var(--border);
+  display:flex; align-items:center; justify-content:center; font-size:.9rem;
+}
 
-/* NERHIA strip */
-.nerhia-bar{
-  background:var(--sf);border-bottom:1px solid var(--bd);
-  padding:.7rem 1.2rem;display:flex;align-items:center;gap:.8rem;
-  overflow-x:auto;scrollbar-width:none;
+/* Hero del usuario */
+.user-hero {
+  background: linear-gradient(180deg, rgba(0,217,255,.08) 0%, transparent 100%);
+  border-bottom:1px solid var(--border);
+  padding:1.4rem 1.2rem;
+  display:flex; align-items:center; gap:1rem;
 }
-.nerhia-bar::-webkit-scrollbar{display:none}
-.nb-label{font-family:var(--mono);font-size:.52rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);flex-shrink:0;margin-right:.3rem}
-.nb-item{flex-shrink:0;text-align:center}
-.nb-val{font-family:var(--mono);font-size:1rem;font-weight:500}
-.nb-lbl{font-family:var(--mono);font-size:.46rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:1px}
-.nb-div{width:1px;height:28px;background:var(--bd);flex-shrink:0}
+.uh-rank {
+  font-family:var(--sans); font-size:2.8rem; font-weight:800;
+  color:var(--cyan); line-height:1; min-width:48px;
+}
+.uh-rank.gold { color:var(--gold); }
+.uh-rank.silver { color:#c0c0c0; }
+.uh-rank.bronze { color:#cd7f32; }
+.uh-info { flex:1; }
+.uh-name { font-size:1.1rem; font-weight:700; }
+.uh-sub { font-size:.72rem; color:var(--muted); margin-top:.15rem; }
+.uh-pts {
+  text-align:right;
+}
+.uh-pts-val { font-family:var(--mono); font-size:1.4rem; font-weight:500; color:var(--cyan); }
+.uh-pts-label { font-family:var(--mono); font-size:.55rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
 
-/* Home sections */
-.home-pad{padding:.9rem 1.2rem}
-.section-kicker{
-  font-family:var(--mono);font-size:.56rem;letter-spacing:.18em;
-  text-transform:uppercase;color:var(--muted);margin-bottom:.7rem;
-  display:flex;align-items:center;gap:.5rem;
+/* NERHIA pulse strip */
+.nerhia-strip {
+  background:var(--surface); border-bottom:1px solid var(--border);
+  padding:.75rem 1.2rem;
+  display:flex; align-items:center; gap:1rem; overflow-x:auto;
+  scrollbar-width:none;
 }
-.section-kicker::before{content:'';width:14px;height:1px;background:rgba(245,197,24,.3)}
-
-/* Quick action card */
-.quick-action{
-  background:linear-gradient(135deg,rgba(245,197,24,.1),rgba(245,197,24,.04));
-  border:1px solid rgba(245,197,24,.2);border-radius:14px;
-  padding:1.1rem;display:flex;align-items:center;gap:1rem;
-  cursor:pointer;transition:.2s var(--ease);
-}
-.quick-action:hover{background:linear-gradient(135deg,rgba(245,197,24,.16),rgba(245,197,24,.07))}
-.quick-action:active{transform:scale(.98)}
-.qa-icon{
-  width:48px;height:48px;border-radius:12px;
-  background:var(--gold);
-  display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;
-}
-.qa-title{font-family:var(--display);font-size:1rem;letter-spacing:.06em;color:var(--gold)}
-.qa-sub{font-size:.72rem;color:var(--muted);margin-top:.15rem;line-height:1.4}
-.qa-arrow{margin-left:auto;font-size:1.2rem;color:rgba(245,197,24,.4)}
-
-/* Recent lifts */
-.lift-card{
-  background:var(--sf);border:1px solid var(--bd);border-radius:10px;
-  padding:.85rem 1rem;display:flex;align-items:center;gap:.9rem;
-  margin-bottom:.5rem;transition:.18s;
-}
-.lift-card:last-child{margin-bottom:0}
-.lc-disc{
-  width:38px;height:38px;border-radius:8px;background:var(--sf2);
-  display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;
-}
-.lc-info{flex:1;min-width:0}
-.lc-name{font-size:.85rem;font-weight:600}
-.lc-meta{font-family:var(--mono);font-size:.6rem;color:var(--muted);margin-top:.14rem}
-.lc-score{text-align:right;flex-shrink:0}
-.lc-ps{font-family:var(--display);font-size:1.3rem;color:var(--gold);letter-spacing:.02em}
-.lc-tier{font-family:var(--mono);font-size:.46rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-
-/* Protocol stats grid */
-.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
-.stat-box{
-  background:var(--sf);border:1px solid var(--bd);border-radius:10px;
-  padding:.85rem 1rem;
-}
-.sb-val{font-family:var(--display);font-size:1.6rem;letter-spacing:.04em}
-.sb-lbl{font-family:var(--mono);font-size:.54rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:.2rem}
-
-/* Empty state */
-.empty-state{text-align:center;padding:2.5rem 1rem}
-.es-icon{font-size:2rem;margin-bottom:.8rem;opacity:.5}
-.es-title{font-family:var(--display);font-size:1rem;letter-spacing:.06em;color:var(--muted);margin-bottom:.4rem}
-.es-sub{font-size:.75rem;color:var(--dim);line-height:1.6}
-
-/* ══════════════════════════════════════════════════════════
-   TAB: LIFT — the full upload + score engine
-══════════════════════════════════════════════════════════ */
-.lift-header{
-  padding:1.1rem 1.2rem .8rem;
-  border-bottom:1px solid var(--bd);
-}
-.lift-title{font-family:var(--display);font-size:1.6rem;letter-spacing:.08em;margin-bottom:.2rem}
-.lift-sub{font-size:.78rem;color:var(--muted);line-height:1.5}
-
-/* Upload zone */
-.upload-zone{
-  border:2px dashed rgba(245,197,24,.2);border-radius:14px;
-  padding:1.8rem 1rem;text-align:center;cursor:pointer;
-  transition:all .25s var(--ease);position:relative;overflow:hidden;
-  background:rgba(245,197,24,.01);
-}
-.upload-zone:hover,.upload-zone.dragover{border-color:rgba(245,197,24,.5);background:rgba(245,197,24,.04)}
-.uz-icon{font-size:2.2rem;margin-bottom:.7rem}
-.uz-title{font-family:var(--display);font-size:1.1rem;letter-spacing:.06em;margin-bottom:.35rem}
-.uz-sub{font-size:.74rem;color:var(--muted);line-height:1.6}
-.uz-formats{font-family:var(--mono);font-size:.56rem;letter-spacing:.08em;color:var(--dim);margin-top:.7rem}
-
-/* Selected file display */
-.file-selected{
-  display:none;
-  background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.2);border-radius:10px;
-  padding:.85rem 1rem;align-items:center;gap:.8rem;
-}
-.file-selected.show{display:flex}
-.fs-icon{font-size:1.3rem;flex-shrink:0}
-.fs-name{font-size:.82rem;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fs-size{font-family:var(--mono);font-size:.62rem;color:var(--muted)}
-.fs-clear{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:.3rem .6rem;font-size:.7rem;color:var(--red);cursor:pointer;flex-shrink:0;transition:.2s}
-
-/* URL divider */
-.or-row{
-  display:flex;align-items:center;gap:.7rem;
-  font-family:var(--mono);font-size:.58rem;letter-spacing:.12em;color:var(--dim);
-}
-.or-row::before,.or-row::after{content:'';flex:1;height:1px;background:var(--bd)}
-
-/* URL input */
-.url-inp{
-  width:100%;padding:.9rem 1rem;background:var(--sf);
-  border:1px solid var(--bd);border-radius:10px;
-  color:var(--text);font-family:var(--mono);font-size:.78rem;
-  outline:none;transition:border-color .2s;
-  min-height:48px;
-}
-.url-inp:focus{border-color:rgba(245,197,24,.4)}
-.url-inp::placeholder{color:var(--dim)}
-
-/* Exercise form */
-.ex-form{display:flex;flex-direction:column;gap:.75rem}
-.disc-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
-.disc-btn{
-  padding:.75rem .5rem;border-radius:10px;
-  background:var(--sf);border:1px solid var(--bd);
-  font-family:var(--display);font-size:.95rem;letter-spacing:.06em;color:var(--muted);
-  cursor:pointer;transition:.2s var(--ease);text-align:center;
-  min-height:48px;
-}
-.disc-btn.selected{background:rgba(245,197,24,.1);border-color:rgba(245,197,24,.4);color:var(--gold)}
-.disc-btn:active{transform:scale(.97)}
-
-.weight-reps-row{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
-.wr-input{
-  background:var(--sf);border:1px solid var(--bd);border-radius:10px;
-  padding:.85rem 1rem;color:var(--text);font-family:var(--mono);font-size:1.1rem;
-  outline:none;text-align:center;transition:border-color .2s;
-  -webkit-appearance:none;min-height:52px;
-}
-.wr-input:focus{border-color:rgba(245,197,24,.45)}
-.wr-input::placeholder{font-size:.8rem;color:var(--dim)}
-.wr-label{font-family:var(--mono);font-size:.54rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:center;margin-top:.3rem}
-
-/* Power score animation */
-.score-reveal{
-  display:none;
-  background:linear-gradient(135deg,rgba(245,197,24,.08),rgba(245,197,24,.03));
-  border:1px solid rgba(245,197,24,.25);border-radius:16px;
-  padding:1.5rem 1rem;text-align:center;
-  animation:card-in .4s var(--spring);
-}
-.score-reveal.show{display:block}
-@keyframes card-in{from{opacity:0;transform:scale(.92) translateY(10px)}to{opacity:1;transform:none}}
-.score-num{
-  font-family:var(--display);font-size:5rem;letter-spacing:.02em;
-  color:var(--gold);line-height:1;
-}
-.score-ps-label{font-family:var(--mono);font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(245,197,24,.5);margin-bottom:1rem}
-.score-tier{
-  display:inline-block;font-family:var(--display);font-size:1rem;letter-spacing:.1em;
-  padding:.25rem .9rem;border-radius:4px;margin-bottom:.7rem;
-}
-.tier-BRONCE   {background:rgba(205,127,50,.12);border:1px solid rgba(205,127,50,.3);color:#cd7f32}
-.tier-PLATA    {background:rgba(192,192,192,.1);border:1px solid rgba(192,192,192,.25);color:#c0c0c0}
-.tier-ORO      {background:rgba(245,197,24,.1);border:1px solid rgba(245,197,24,.3);color:var(--gold)}
-.tier-PLATINO  {background:rgba(0,217,255,.08);border:1px solid rgba(0,217,255,.25);color:var(--cyan)}
-.tier-GALÁCTICO{background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:var(--violet)}
-.score-detail{font-size:.75rem;color:var(--muted);line-height:1.7}
-.score-tokens{
-  display:flex;justify-content:center;gap:1.5rem;
-  margin-top:.8rem;padding-top:.8rem;border-top:1px solid rgba(255,255,255,.06);
-}
-.st-item{text-align:center}
-.st-val{font-family:var(--display);font-size:1rem;letter-spacing:.04em}
-.st-lbl{font-family:var(--mono);font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-
-/* Score error */
-.score-error{
-  display:none;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);
-  border-radius:10px;padding:.85rem 1rem;font-size:.8rem;color:var(--red);line-height:1.6;
-}
-.score-error.show{display:block}
-
-/* Register lift CTA */
-.btn-register-lift{
-  display:none;width:100%;padding:1.05rem;border-radius:12px;border:none;cursor:pointer;
-  font-family:var(--display);font-size:1.1rem;letter-spacing:.1em;
-  background:linear-gradient(135deg,var(--gold),var(--amber));color:#050510;
-  transition:.2s var(--ease);min-height:52px;
-  box-shadow:0 6px 24px rgba(245,197,24,.3);
-}
-.btn-register-lift.show{display:block}
-.btn-register-lift:hover{box-shadow:0 8px 32px rgba(245,197,24,.45);transform:translateY(-1px)}
-.btn-register-lift:active{transform:scale(.97)}
-.btn-register-lift:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
-
-/* Success animation */
-.lift-success{
-  display:none;text-align:center;padding:2.5rem 1rem;
-}
-.lift-success.show{display:block;animation:card-in .5s var(--spring)}
-.ls-orb{
-  width:80px;height:80px;border-radius:50%;
-  background:radial-gradient(circle at 35% 35%,rgba(34,197,94,.5),rgba(34,197,94,.1) 60%,transparent);
-  border:1px solid rgba(34,197,94,.3);margin:0 auto 1rem;
-  display:flex;align-items:center;justify-content:center;font-size:2rem;
-  animation:orb-pulse 2s ease-in-out infinite;
-}
-.ls-title{font-family:var(--display);font-size:1.4rem;letter-spacing:.06em;color:var(--green);margin-bottom:.4rem}
-.ls-sub{font-size:.82rem;color:var(--muted);line-height:1.65;max-width:280px;margin:0 auto .9rem}
-.btn-see-ranking{
-  display:inline-flex;align-items:center;gap:.5rem;
-  padding:.75rem 1.5rem;border-radius:10px;
-  background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);
-  color:var(--green);font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;
-  cursor:pointer;transition:.2s;
-}
-.btn-see-ranking:hover{background:rgba(34,197,94,.18)}
-
-/* ══════════════════════════════════════════════════════════
-   TAB: RANKING
-══════════════════════════════════════════════════════════ */
-/* Filter bar */
-.filter-bar{
-  padding:.6rem 1.2rem;border-bottom:1px solid var(--bd);
-  display:flex;gap:.5rem;overflow-x:auto;scrollbar-width:none;
-}
-.filter-bar::-webkit-scrollbar{display:none}
-.filter-btn{
-  flex-shrink:0;font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;
-  padding:.35rem .85rem;border-radius:20px;cursor:pointer;
-  background:transparent;border:1px solid var(--bd);color:var(--muted);
-  transition:.18s;min-height:32px;
-}
-.filter-btn.active{background:rgba(245,197,24,.1);border-color:rgba(245,197,24,.3);color:var(--gold)}
-
-/* My position card */
-.my-position{
-  background:rgba(245,197,24,.05);border-bottom:1px solid rgba(245,197,24,.15);
-  padding:1rem 1.2rem;display:flex;align-items:center;gap:1rem;
-}
-.mp-rank{font-family:var(--display);font-size:2.4rem;color:var(--gold);letter-spacing:.02em;line-height:1;min-width:48px;text-align:center}
-.mp-info{flex:1;min-width:0}
-.mp-name{font-size:.9rem;font-weight:700}
-.mp-meta{font-size:.68rem;color:var(--muted);margin-top:.15rem}
-.mp-pts{text-align:right;flex-shrink:0}
-.mp-val{font-family:var(--mono);font-size:1.2rem;color:var(--gold)}
-.mp-lbl{font-family:var(--mono);font-size:.48rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.nerhia-strip::-webkit-scrollbar { display:none; }
+.ns-item { flex-shrink:0; text-align:center; }
+.ns-val { font-family:var(--mono); font-size:.95rem; font-weight:500; }
+.ns-lbl { font-family:var(--mono); font-size:.5rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-top:.1rem; }
+.ns-div { width:1px; height:32px; background:var(--border); flex-shrink:0; }
 
 /* Ranking list */
-.ranking-list{padding:.6rem 1rem;display:flex;flex-direction:column;gap:.45rem}
-.rank-card{
-  background:var(--sf);border:1px solid var(--bd);border-radius:11px;
-  padding:.85rem 1rem;display:flex;align-items:center;gap:.85rem;
-  transition:.18s;position:relative;overflow:hidden;
+.ranking-section-title {
+  font-family:var(--mono); font-size:.6rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--muted);
+  padding:.75rem 1.2rem .4rem;
 }
-.rank-card.isme{background:rgba(245,197,24,.05);border-color:rgba(245,197,24,.2)}
-.rank-card.isme::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2.5px;background:var(--gold)}
-.rank-card.r1{border-color:rgba(245,197,24,.3);background:rgba(245,197,24,.04)}
-.rank-card.r2{border-color:rgba(192,192,192,.2)}
-.rank-card.r3{border-color:rgba(205,127,50,.2)}
-.rc-pos{font-family:var(--display);font-size:.9rem;min-width:28px;text-align:center;flex-shrink:0}
-.r1 .rc-pos{font-size:1.1rem;color:var(--gold)}
-.r2 .rc-pos{color:#c0c0c0}
-.r3 .rc-pos{color:#cd7f32}
-.rc-av{width:34px;height:34px;border-radius:50%;flex-shrink:0}
-.rc-av-ph{width:34px;height:34px;border-radius:50%;background:var(--sf2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0}
-.rc-info{flex:1;min-width:0}
-.rc-name{font-size:.88rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rc-meta{font-family:var(--mono);font-size:.56rem;color:var(--muted);margin-top:.12rem}
-.rc-tier{display:inline-block;font-family:var(--mono);font-size:.46rem;letter-spacing:.07em;padding:1px 6px;border-radius:3px;margin-top:.2rem}
-.rc-pts{text-align:right;flex-shrink:0}
-.rc-pts-val{font-family:var(--mono);font-size:.95rem;color:var(--gold)}
-.rc-pts-lbl{font-family:var(--mono);font-size:.48rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 
-/* ══════════════════════════════════════════════════════════
-   TAB: PROFILE
-══════════════════════════════════════════════════════════ */
-.profile-hero{
-  background:linear-gradient(180deg,rgba(245,197,24,.06) 0%,transparent 100%);
-  border-bottom:1px solid var(--bd);
-  padding:1.5rem 1.2rem;text-align:center;
+.ranking-list { padding:0 1rem; display:flex; flex-direction:column; gap:.5rem; }
+.rank-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:.9rem 1rem;
+  display:flex; align-items:center; gap:.85rem;
+  transition:.2s; position:relative; overflow:hidden;
 }
-.ph-avatar-wrap{position:relative;display:inline-block;margin-bottom:.9rem}
-.ph-avatar{width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid rgba(245,197,24,.35);display:block}
-.ph-avatar-ph{width:72px;height:72px;border-radius:50%;background:var(--sf);border:2px solid rgba(245,197,24,.2);display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto}
-.ph-tier-badge{
-  position:absolute;bottom:-2px;right:-2px;
-  font-family:var(--mono);font-size:.48rem;letter-spacing:.07em;
-  padding:2px 7px;border-radius:20px;
-  background:var(--sf2);border:1px solid rgba(245,197,24,.25);color:var(--gold);
+.rank-card.is-me {
+  background:rgba(0,217,255,.06); border-color:rgba(0,217,255,.2);
 }
-.ph-name{font-family:var(--display);font-size:1.5rem;letter-spacing:.04em;margin-bottom:.2rem}
-.ph-email{font-size:.75rem;color:var(--muted)}
-.ph-joined{font-family:var(--mono);font-size:.58rem;color:var(--dim);margin-top:.4rem;letter-spacing:.06em}
-
-/* Profile stats grid */
-.profile-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;padding:1rem 1.2rem;border-bottom:1px solid var(--bd)}
-.ps-item{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:.75rem .6rem;text-align:center}
-.psi-val{font-family:var(--display);font-size:1.3rem;letter-spacing:.04em;color:var(--gold)}
-.psi-lbl{font-family:var(--mono);font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:.15rem;line-height:1.3}
-
-/* Achievements */
-.achiev-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
-.achiev-card{
-  background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:.85rem;
-  display:flex;align-items:center;gap:.7rem;transition:.18s;
+.rank-card.is-me::before {
+  content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:var(--cyan);
 }
-.achiev-card.earned{border-color:rgba(245,197,24,.25);background:rgba(245,197,24,.04)}
-.ac-icon{font-size:1.4rem;flex-shrink:0}
-.ac-name{font-size:.76rem;font-weight:600}
-.ac-desc{font-size:.62rem;color:var(--muted);margin-top:.1rem;line-height:1.4}
-.ac-locked{opacity:.3}
+.rank-card.rank-1 { border-color:rgba(255,215,0,.25); background:rgba(255,215,0,.04); }
+.rank-card.rank-2 { border-color:rgba(192,192,192,.2); }
+.rank-card.rank-3 { border-color:rgba(205,127,50,.2); }
 
-/* Action buttons */
-.profile-actions{display:flex;flex-direction:column;gap:.6rem;padding:1rem 1.2rem}
-.pact-btn{
-  display:flex;align-items:center;gap:.85rem;
-  padding:.9rem 1rem;background:var(--sf);border:1px solid var(--bd);border-radius:10px;
-  font-size:.9rem;color:var(--text);cursor:pointer;transition:.18s;
-  min-height:52px;
+.rc-pos {
+  font-family:var(--mono); font-size:.85rem; font-weight:500;
+  width:28px; text-align:center; flex-shrink:0;
 }
-.pact-btn:active{transform:scale(.98)}
-.pact-btn:hover{background:var(--sf2)}
-.pact-icon{font-size:1rem;width:24px;text-align:center;flex-shrink:0}
-.pact-label{flex:1;font-size:.88rem;font-weight:500}
-.pact-arrow{color:var(--muted);font-size:.8rem}
-.pact-btn.danger{color:var(--red);border-color:rgba(239,68,68,.15)}
-.pact-btn.danger .pact-icon{color:var(--red)}
+.rank-1 .rc-pos { color:var(--gold); font-size:1.1rem; }
+.rank-2 .rc-pos { color:#c0c0c0; }
+.rank-3 .rc-pos { color:#cd7f32; }
 
-/* iOS install banner */
-.ios-banner{
-  display:none;position:fixed;bottom:0;left:0;right:0;z-index:300;
-  background:var(--sf2);border-top:1px solid var(--bd3);
+.rc-avatar {
+  width:36px; height:36px; border-radius:50%;
+  object-fit:cover; flex-shrink:0; border:1px solid var(--border);
+}
+.rc-avatar-ph {
+  width:36px; height:36px; border-radius:50%;
+  background:var(--s2); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:1rem; flex-shrink:0;
+}
+
+.rc-info { flex:1; min-width:0; }
+.rc-name { font-size:.9rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rc-meta { font-family:var(--mono); font-size:.58rem; color:var(--muted); margin-top:.15rem; }
+
+.rc-pts {
+  text-align:right; flex-shrink:0;
+}
+.rc-pts-val { font-family:var(--mono); font-size:1rem; font-weight:500; color:var(--cyan); }
+.rc-pts-lbl { font-family:var(--mono); font-size:.52rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+
+/* Bottom actions */
+.bottom-actions {
+  position:fixed; bottom:0; left:0; right:0; z-index:50;
+  background:rgba(8,8,16,.96); backdrop-filter:blur(20px);
+  border-top:1px solid var(--border);
+  padding:.8rem 1.2rem calc(.8rem + var(--safe-bot));
+  display:flex; gap:.6rem;
+}
+.ba-btn {
+  flex:1; padding:.85rem; border-radius:10px;
+  font-family:var(--sans); font-size:.85rem; font-weight:700;
+  border:none; cursor:pointer; transition:.15s;
+  display:flex; align-items:center; justify-content:center; gap:.4rem;
+}
+.ba-btn:active { transform:scale(.96); }
+.ba-primary { background:var(--cyan); color:#020810; }
+.ba-secondary { background:var(--surface); color:var(--text); border:1px solid var(--border); }
+
+/* Splash install banner (iOS) */
+.ios-install-banner {
+  display:none; position:fixed; bottom:0; left:0; right:0; z-index:200;
+  background:var(--surface); border-top:1px solid var(--b2);
   padding:1rem 1.2rem calc(1rem + var(--safe-bot));
-  flex-direction:column;gap:.5rem;
+  gap:.6rem; flex-direction:column;
 }
-.ios-banner.show{display:flex}
-.ios-close{position:absolute;top:.8rem;right:1rem;font-size:1.1rem;cursor:pointer;color:var(--muted)}
+.ios-install-banner.show { display:flex; }
+.iib-title { font-size:.9rem; font-weight:700; }
+.iib-sub { font-size:.72rem; color:var(--muted); line-height:1.5; }
+.iib-close { position:absolute; top:.8rem; right:1rem; font-size:1.2rem; cursor:pointer; color:var(--muted); }
 
-/* Responsive */
-@media(min-width:480px){
-  .disc-grid{grid-template-columns:repeat(4,1fr)}
+/* Toast */
+.toast {
+  position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:.6rem 1.2rem;
+  font-size:.78rem; color:var(--text); opacity:0;
+  transition:all .3s; pointer-events:none; white-space:nowrap;
+  z-index:300;
 }
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* Loader full */
+.full-loader {
+  position:fixed; inset:0; z-index:500;
+  background:var(--bg); display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:1rem;
+}
+.full-loader.gone { display:none; }
+.fl-logo { font-family:var(--sans); font-size:1.6rem; font-weight:800; color:var(--cyan); }
+.fl-sub { font-family:var(--mono); font-size:.62rem; letter-spacing:.14em; color:var(--muted); text-transform:uppercase; }
+
+/* Animaciones de entrada */
+@keyframes slideUp {
+  from { opacity:0; transform:translateY(24px); }
+  to   { opacity:1; transform:none; }
+}
+.anim-in { animation: slideUp .45s cubic-bezier(.2,0,.1,1) both; }
+.anim-in-2 { animation: slideUp .45s .1s cubic-bezier(.2,0,.1,1) both; }
+.anim-in-3 { animation: slideUp .45s .2s cubic-bezier(.2,0,.1,1) both; }
+.anim-in-4 { animation: slideUp .45s .3s cubic-bezier(.2,0,.1,1) both; }
+
+/* ── Achievement popup (VW pattern) ─────────────────────────── */
+.vbc-achievement-popup {
+  position:fixed; bottom:6rem; left:50%;
+  transform:translateX(-50%) translateY(20px);
+  background:rgba(10,8,20,.95);
+  border:1px solid rgba(0,217,255,.3);
+  border-radius:.75rem; padding:.75rem 1.2rem;
+  display:flex; align-items:center; gap:.75rem;
+  opacity:0; transition:opacity .35s,transform .35s;
+  z-index:9999; min-width:260px;
+  backdrop-filter:blur(8px); box-shadow:0 8px 32px rgba(0,217,255,.12);
+}
+.vbc-achievement-popup.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.vbc-ach-icon { font-size:1.8rem; }
+.vbc-ach-title { font-size:.5rem; color:rgba(255,255,255,.45); letter-spacing:.1em; text-transform:uppercase; }
+.vbc-ach-name  { font-size:.75rem; color:#fff; font-weight:600; margin-top:.1rem; }
+.vbc-ach-pts   { font-family:var(--mono); color:#00d9ff; font-size:.9rem; font-weight:700; margin-left:auto; white-space:nowrap; }
+
+/* ── Ranking animation ───────────────────────────────────────── */
+@keyframes rankIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+.ranking-item { animation:rankIn .28s ease both; }
+.ranking-item:nth-child(1){animation-delay:.04s}
+.ranking-item:nth-child(2){animation-delay:.08s}
+.ranking-item:nth-child(3){animation-delay:.12s}
+.ranking-item:nth-child(4){animation-delay:.16s}
+.ranking-item:nth-child(5){animation-delay:.20s}
+.ranking-item:nth-child(n+6){animation-delay:.24s}
 </style>
 </head>
 <body>
 
-<!-- ═══ LOADER ═══ -->
+<!-- FULL PAGE LOADER -->
 <div class="full-loader" id="fullLoader">
-  <div class="fl-vbc">VBC</div>
+  <div class="fl-logo">VBC</div>
   <div class="spin"></div>
   <div class="fl-sub">cargando protocolo…</div>
 </div>
 
-<!-- ══════════════════════════════════════════
-   SCREEN: SPLASH / GOOGLE LOGIN
-══════════════════════════════════════════ -->
+<!-- ══ SCREEN: SPLASH / LOGIN ═══════════════════════════════ -->
 <div class="screen" id="screen-splash">
-  <div class="splash-orb au">VBC</div>
-  <div class="au-2">
-    <div class="splash-brand"><span class="vbc">PROOF OF</span><br>STRENGTH</div>
-  </div>
-  <div class="splash-tag au-2">Powered by NERHIA · VibraAlto</div>
-  <div class="splash-claim au-3">
-    <strong>Tu fuerza es tu firma.</strong><br>
-    Registra tu levantamiento, sube el video y gana puntos reales.
+
+  <div class="splash-logo anim-in">
+    <div class="splash-dot"></div>
+    <div class="splash-brand">
+      <span class="vbc">VBC </span><span class="protocol">Protocol</span>
+    </div>
+    <div class="splash-tag">VibraAlto · Powered by NERHIA</div>
   </div>
 
-  <button class="btn-google au-3" id="btnGoogleLogin">
-    <svg class="g-icon" viewBox="0 0 24 24">
+  <div class="splash-claim anim-in-2">
+    <strong>Compite. Aprende. Gana.</strong><br>
+    El ranking que te lleva a octubre.
+  </div>
+
+  <button class="btn-google anim-in-3" id="btnGoogleLogin">
+    <svg class="google-icon" viewBox="0 0 24 24">
       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
       <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
       <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
@@ -750,74 +678,96 @@ button{cursor:pointer;border:none;background:none;font-family:var(--sans)}
     </svg>
     Entrar con Google
   </button>
-  <button class="install-btn" id="btnInstall">⬇ Instalar app</button>
-  <div class="splash-hint au-4">Sin App Store · Solo Google · Funciona offline</div>
+
+  <button class="install-btn" id="btnInstall">
+    ⬇ Instalar app
+  </button>
+
+  <div class="splash-install-hint anim-in-4">
+    Sin App Store · Sin registro · Solo Google<br>
+    Funciona offline · Se instala en 1 tap
+  </div>
+
 </div>
 
-<!-- ══════════════════════════════════════════
-   SCREEN: NERHIA +18 GATE
-══════════════════════════════════════════ -->
+<!-- ══ SCREEN: NERHIA +18 ════════════════════════════════════ -->
 <div class="screen" id="screen-age">
-  <div class="age-kicker au">NERHIA · Portón +18</div>
-  <div class="age-title au-2">Verificación de edad</div>
-  <div class="age-sub au-2">Mira la cámara · listo en 3 seg</div>
 
-  <div class="age-cam-wrap au-3">
+  <div class="age-header anim-in">
+    <div class="tag">NERHIA · Portón +18</div>
+    <div class="age-title">Verificación de edad</div>
+    <div class="age-sub">Mira la cámara · listo en 3 seg</div>
+  </div>
+
+  <div class="age-cam-wrap anim-in-2">
     <video id="age-video" autoplay muted playsinline></video>
     <canvas id="age-canvas"></canvas>
     <div class="age-scanline" id="ageScanline"></div>
-    <div class="cam-corner tl"></div><div class="cam-corner tr"></div>
-    <div class="cam-corner bl"></div><div class="cam-corner br"></div>
+
+    <!-- Loading -->
     <div class="age-loading" id="ageLoading">
       <div class="spin"></div>
-      <div class="age-loading-txt" id="ageLoadTxt">Cargando IA…</div>
+      <div class="age-loading-text" id="ageLoadingText">Cargando IA…</div>
     </div>
+
+    <!-- Result overlay -->
     <div class="age-result-overlay" id="ageResult">
       <div class="aro-icon" id="aroIcon"></div>
       <div class="aro-age" id="aroAge"></div>
       <div class="aro-label" id="aroLabel"></div>
       <div class="aro-note" id="aroNote"></div>
-      <button class="aro-cta" id="aroBtn">Continuar →</button>
+      <button class="aro-btn" id="aroBtn">Continuar →</button>
     </div>
   </div>
 
-  <div class="age-status-row">
-    <div class="asd" id="asd"></div>
-    <span id="ageTxt">Iniciando cámara…</span>
+  <div class="age-status">
+    <div class="age-status-dot" id="ageStatusDot"></div>
+    <span id="ageStatusText">Iniciando cámara…</span>
   </div>
+
   <div class="age-privacy">
-    0 imágenes al servidor · Edge AI · Privacy by Design · NERHIA
+    0 imágenes al servidor · Edge AI · Privacy by Design<br>
+    NERHIA · VibraAlto.cl
   </div>
+
   <button class="btn-skip" id="ageSkip">Omitir verificación →</button>
+
 </div>
 
-<!-- ══════════════════════════════════════════
-   SCREEN: ONBOARDING
-══════════════════════════════════════════ -->
+<!-- ══ SCREEN: ONBOARDING ════════════════════════════════════ -->
 <div class="screen" id="screen-onboard">
-  <div class="ob-header au">
-    <div class="ob-avatar-ph" id="obAvatarPh">👤</div>
+
+  <div class="onboard-header anim-in">
+    <div class="oh-avatar-placeholder" id="onboardAvatarPh">👤</div>
     <div>
-      <div class="ob-name" id="obName">Bienvenido</div>
-      <div class="ob-email" id="obEmail">—</div>
+      <div class="oh-name" id="onboardName">Bienvenido</div>
+      <div class="oh-email" id="onboardEmail">—</div>
     </div>
   </div>
-  <div class="ob-title au-2">Último paso.<br><span>Completa tu perfil.</span></div>
-  <div class="nerhia-chip au-2">
-    <div class="nchip-dot"></div>
+
+  <div class="onboard-title anim-in-2">
+    Último paso.<br>
+    <span>Completa tu perfil.</span>
+  </div>
+
+  <div class="nerhia-badge-inline anim-in-2">
+    <div class="nbi-dot"></div>
     NERHIA confirma: mayor de 18 · acceso autorizado
   </div>
-  <div class="form-grp au-3">
-    <label class="form-lbl" for="inputNombre">Nombre</label>
-    <input type="text" class="form-inp" id="inputNombre" placeholder="Tu nombre en el ranking" autocomplete="name">
+
+  <div class="form-group anim-in-3">
+    <label class="form-label">Nombre completo</label>
+    <input type="text" class="form-input" id="inputNombre" placeholder="Tu nombre" autocomplete="name">
   </div>
-  <div class="form-grp au-3">
-    <label class="form-lbl" for="inputTel">Teléfono (WhatsApp)</label>
-    <input type="tel" class="form-inp" id="inputTel" placeholder="+56 9 xxxx xxxx" autocomplete="tel">
+
+  <div class="form-group anim-in-3">
+    <label class="form-label">Teléfono</label>
+    <input type="tel" class="form-input" id="inputTel" placeholder="+56 9 xxxx xxxx" autocomplete="tel">
   </div>
-  <div class="form-grp au-3">
-    <label class="form-lbl" for="inputSource">¿Cómo llegaste?</label>
-    <select class="form-sel" id="inputSource">
+
+  <div class="form-group anim-in-3">
+    <label class="form-label">¿Cómo te enteraste?</label>
+    <select class="form-select" id="inputSource">
       <option value="">Seleccionar…</option>
       <option value="gym">En el gym</option>
       <option value="qr">Escaneé un QR</option>
@@ -826,1037 +776,609 @@ button{cursor:pointer;border:none;background:none;font-family:var(--sans)}
       <option value="otro">Otro</option>
     </select>
   </div>
-  <button class="btn-primary au-4" id="btnConfirmar">ENTRAR AL RANKING →</button>
+
+  <button class="btn-primary anim-in-4" id="btnConfirmar">
+    ENTRAR AL RANKING →
+  </button>
+
 </div>
 
-<!-- ══════════════════════════════════════════
-   SCREEN: MAIN APP
-══════════════════════════════════════════ -->
-<div class="screen" id="screen-app">
+<!-- ══ SCREEN: RANKING ════════════════════════════════════════ -->
+<div class="screen" id="screen-ranking">
 
-  <!-- TOP BAR -->
-  <div class="app-topbar">
-    <div class="atb-brand">
-      <div class="atb-dot"></div>
-      <div class="atb-logo">VBC</div>
+  <div class="ranking-topbar">
+    <div class="rtb-brand">
+      <div class="rtb-dot"></div>
+      VBC Protocol
     </div>
-    <div class="atb-right">
-      <div class="atb-nerhia" id="atbNerhia">UVX —</div>
-      <div id="atbAvatarWrap"><div class="atb-avatar-ph" onclick="switchTab('profile')">👤</div></div>
-    </div>
-  </div>
-
-  <!-- ═══ TAB: HOME ═══ -->
-  <div class="tab-content active" id="tab-home">
-
-    <!-- User hero -->
-    <div class="home-hero" id="homeHero">
-      <div class="hh-rank" id="hhRank">#—</div>
-      <div class="hh-info">
-        <div class="hh-name" id="hhName">—</div>
-        <div class="hh-sub" id="hhSub">0 participaciones</div>
-      </div>
-      <div class="hh-pts">
-        <div class="hh-pts-val" id="hhPts">0</div>
-        <div class="hh-pts-lbl">pts</div>
-      </div>
-    </div>
-
-    <!-- NERHIA bar -->
-    <div class="nerhia-bar">
-      <div class="nb-label">NERHIA</div>
-      <div class="nb-item"><div class="nb-val" style="color:var(--cyan)" id="nb-uvx">—</div><div class="nb-lbl">UVX</div></div>
-      <div class="nb-div"></div>
-      <div class="nb-item"><div class="nb-val" style="color:var(--violet)" id="nb-cai">—</div><div class="nb-lbl">CAI</div></div>
-      <div class="nb-div"></div>
-      <div class="nb-item"><div class="nb-val" style="color:var(--green)" id="nb-uei">—</div><div class="nb-lbl">UEI</div></div>
-      <div class="nb-div"></div>
-      <div class="nb-item"><div class="nb-val" style="font-size:.72rem;color:var(--green)" id="nb-health">Healthy</div><div class="nb-lbl">Estado</div></div>
-      <div class="nb-div"></div>
-      <div class="nb-item"><div class="nb-val" style="color:var(--gold)" id="nb-inscritos">—</div><div class="nb-lbl">Atletas</div></div>
-    </div>
-
-    <!-- Quick action -->
-    <div class="home-pad">
-      <div class="section-kicker">Acción rápida</div>
-      <div class="quick-action" onclick="switchTab('lift')">
-        <div class="qa-icon">🏋️</div>
-        <div>
-          <div class="qa-title">Registrar levantamiento</div>
-          <div class="qa-sub">Sube tu video y calcula tu Power Score → suma puntos al ranking</div>
-        </div>
-        <div class="qa-arrow">→</div>
-      </div>
-    </div>
-
-    <!-- Recent lifts -->
-    <div class="home-pad" style="padding-top:.4rem">
-      <div class="section-kicker">Mis levantamientos</div>
-      <div id="recentLifts">
-        <div class="empty-state">
-          <div class="es-icon">⚡</div>
-          <div class="es-title">SIN REGISTROS AÚN</div>
-          <div class="es-sub">Registra tu primer levantamiento para ver tu historial aquí.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Protocol stats -->
-    <div class="home-pad" style="padding-top:.4rem;padding-bottom:1rem">
-      <div class="section-kicker">Protocolo</div>
-      <div class="stats-grid">
-        <div class="stat-box">
-          <div class="sb-val" style="color:var(--gold)" id="st-atletas">—</div>
-          <div class="sb-lbl">Atletas activos</div>
-        </div>
-        <div class="stat-box">
-          <div class="sb-val" style="color:var(--cyan)" id="st-lifts">—</div>
-          <div class="sb-lbl">Lifts registrados</div>
-        </div>
-        <div class="stat-box">
-          <div class="sb-val" style="color:var(--green)" id="st-vbc">—</div>
-          <div class="sb-lbl">VBC minado</div>
-        </div>
-        <div class="stat-box">
-          <div class="sb-val" style="color:var(--violet)" id="st-condor">—</div>
-          <div class="sb-lbl">CONDOR tokens</div>
-        </div>
+    <div class="rtb-right">
+      <div id="rankingUserAvatarWrap">
+        <div class="rtb-avatar-ph">👤</div>
       </div>
     </div>
   </div>
 
-  <!-- ═══ TAB: LIFT ═══ -->
-  <div class="tab-content" id="tab-lift">
-    <div class="lift-header">
-      <div class="lift-title">REGISTRAR LIFT</div>
-      <div class="lift-sub">Sube tu video, ingresa los datos y calcula tu Power Score. Se guarda en el ranking automáticamente.</div>
+  <!-- Mi posición -->
+  <div class="user-hero" id="userHero">
+    <div class="uh-rank" id="userRankNum">#—</div>
+    <div class="uh-info">
+      <div class="uh-name" id="userHeroName">—</div>
+      <div class="uh-sub" id="userHeroSub">0 participaciones · inscrito hoy</div>
     </div>
-
-    <div style="padding:.9rem 1rem;display:flex;flex-direction:column;gap:.9rem" id="liftForm">
-
-      <!-- Upload zone -->
-      <div>
-        <div class="section-kicker">Video del ejercicio</div>
-        <div class="upload-zone" id="uploadZone">
-          <input type="file" id="fileInput" accept="video/*" style="display:none">
-          <div class="uz-icon">📹</div>
-          <div class="uz-title">ARRASTRA TU VIDEO</div>
-          <div class="uz-sub">o toca para seleccionar archivo</div>
-          <div class="uz-formats">MP4 · MOV · AVI · MAX 100MB</div>
-        </div>
-        <div class="file-selected" id="fileSelected">
-          <span class="fs-icon">🎬</span>
-          <span class="fs-name" id="fsName">—</span>
-          <span class="fs-size" id="fsSize">—</span>
-          <button class="fs-clear" onclick="clearFile()">✕</button>
-        </div>
-      </div>
-
-      <!-- URL input -->
-      <div>
-        <div class="or-row">O PEGA UN LINK</div>
-        <input type="url" class="url-inp" id="videoUrl" placeholder="Instagram · YouTube · TikTok · Google Drive">
-      </div>
-
-      <!-- Discipline picker -->
-      <div class="ex-form" id="exerciseFields">
-        <div>
-          <div class="section-kicker">Disciplina</div>
-          <div class="disc-grid">
-            <button class="disc-btn" data-disc="bench"    onclick="selectDisc(this)">BENCH<br>PRESS</button>
-            <button class="disc-btn" data-disc="deadlift" onclick="selectDisc(this)">DEAD<br>LIFT</button>
-            <button class="disc-btn" data-disc="squat"    onclick="selectDisc(this)">SQUAT</button>
-            <button class="disc-btn" data-disc="overhead" onclick="selectDisc(this)">OVERHEAD<br>PRESS</button>
-          </div>
-        </div>
-
-        <!-- Weight / reps -->
-        <div>
-          <div class="section-kicker">Peso y repeticiones</div>
-          <div class="weight-reps-row">
-            <div>
-              <input type="number" class="wr-input" id="liftWeight" placeholder="80" min="1" max="600">
-              <div class="wr-label">kg levantados</div>
-            </div>
-            <div>
-              <input type="number" class="wr-input" id="liftReps" placeholder="5" min="1" max="30">
-              <div class="wr-label">repeticiones</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Calculate button -->
-        <button class="btn-primary" style="background:var(--sf2);color:var(--gold);border:1px solid rgba(245,197,24,.3)" id="btnCalculate" onclick="calculateScore()">
-          ⚡ CALCULAR POWER SCORE
-        </button>
-      </div>
-
-      <!-- Score reveal -->
-      <div class="score-error" id="scoreError"></div>
-
-      <div class="score-reveal" id="scoreReveal">
-        <div class="score-ps-label">POWER SCORE</div>
-        <div class="score-num" id="scoreNum">0</div>
-        <div class="score-tier" id="scoreTier">BRONCE</div>
-        <div class="score-detail" id="scoreDetail"></div>
-        <div class="score-tokens">
-          <div class="st-item">
-            <div class="st-val" style="color:var(--gold)" id="scoreVBC">0</div>
-            <div class="st-lbl">VBC Fuel</div>
-          </div>
-          <div class="st-item">
-            <div class="st-val" style="color:var(--violet)" id="scoreCONDOR">0</div>
-            <div class="st-lbl">CONDOR</div>
-          </div>
-          <div class="st-item">
-            <div class="st-val" style="color:var(--green)" id="scorrePts">+0</div>
-            <div class="st-lbl">Puntos</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Register CTA -->
-      <button class="btn-register-lift" id="btnRegisterLift" onclick="registerLift()">
-        🏆 REGISTRAR EN EL RANKING
-      </button>
-
-    </div>
-
-    <!-- Success state (replaces form after submit) -->
-    <div class="lift-success" id="liftSuccess">
-      <div class="ls-orb">🏆</div>
-      <div class="ls-title">LIFT REGISTRADO</div>
-      <div class="ls-sub" id="lsSubText">Tu Power Score ha sido guardado y el ranking fue actualizado.</div>
-      <button class="btn-see-ranking" onclick="switchTab('ranking')">Ver mi posición en el ranking →</button>
-      <br><br>
-      <button style="font-family:var(--mono);font-size:.62rem;color:var(--muted);background:transparent;border:1px solid var(--bd);border-radius:6px;padding:.5rem 1rem;cursor:pointer" onclick="resetLiftForm()">Registrar otro levantamiento</button>
+    <div class="uh-pts">
+      <div class="uh-pts-val" id="userHeroPts">0</div>
+      <div class="uh-pts-label">pts</div>
     </div>
   </div>
 
-  <!-- ═══ TAB: RANKING ═══ -->
-  <div class="tab-content" id="tab-ranking">
-
-    <!-- My position -->
-    <div class="my-position" id="myPosition">
-      <div class="mp-rank" id="mpRank">#—</div>
-      <div class="mp-info">
-        <div class="mp-name" id="mpName">—</div>
-        <div class="mp-meta" id="mpMeta">0 participaciones</div>
-      </div>
-      <div class="mp-pts">
-        <div class="mp-val" id="mpPts">0</div>
-        <div class="mp-lbl">pts</div>
-      </div>
+  <!-- NERHIA strip -->
+  <div class="nerhia-strip">
+    <div class="ns-item">
+      <div class="ns-val" id="strip-uvx" style="color:var(--cyan)">—</div>
+      <div class="ns-lbl">UVX</div>
     </div>
-
-    <!-- Filters -->
-    <div class="filter-bar">
-      <button class="filter-btn active" data-filter="all" onclick="setFilter(this,'all')">Global</button>
-      <button class="filter-btn" data-filter="bench"    onclick="setFilter(this,'bench')">Bench Press</button>
-      <button class="filter-btn" data-filter="deadlift" onclick="setFilter(this,'deadlift')">Deadlift</button>
-      <button class="filter-btn" data-filter="squat"    onclick="setFilter(this,'squat')">Squat</button>
-      <button class="filter-btn" data-filter="overhead" onclick="setFilter(this,'overhead')">Overhead</button>
+    <div class="ns-div"></div>
+    <div class="ns-item">
+      <div class="ns-val" id="strip-cai" style="color:var(--violet)">—</div>
+      <div class="ns-lbl">CAI</div>
     </div>
-
-    <div class="ranking-list" id="rankingList"></div>
-  </div>
-
-  <!-- ═══ TAB: PROFILE ═══ -->
-  <div class="tab-content" id="tab-profile">
-
-    <!-- Hero -->
-    <div class="profile-hero">
-      <div class="ph-avatar-wrap" id="phAvatarWrap">
-        <div class="ph-avatar-ph">👤</div>
-      </div>
-      <div class="ph-name" id="phName">—</div>
-      <div class="ph-email" id="phEmail">—</div>
-      <div class="ph-joined" id="phJoined">PROTOCOLO · VBC</div>
+    <div class="ns-div"></div>
+    <div class="ns-item">
+      <div class="ns-val" id="strip-uei" style="color:var(--green)">—</div>
+      <div class="ns-lbl">UEI</div>
     </div>
-
-    <!-- Stats grid -->
-    <div class="profile-stats">
-      <div class="ps-item">
-        <div class="psi-val" id="ps-pts">0</div>
-        <div class="psi-lbl">Puntos VBC</div>
-      </div>
-      <div class="ps-item">
-        <div class="psi-val" id="ps-lifts">0</div>
-        <div class="psi-lbl">Levantamientos</div>
-      </div>
-      <div class="ps-item">
-        <div class="psi-val" id="ps-best">—</div>
-        <div class="psi-lbl">Mejor score</div>
-      </div>
+    <div class="ns-div"></div>
+    <div class="ns-item">
+      <div class="ns-val" id="strip-health" style="color:var(--green);font-size:.72rem">Healthy</div>
+      <div class="ns-lbl">Estado</div>
     </div>
-
-    <!-- Achievements -->
-    <div style="padding:.9rem 1.2rem">
-      <div class="section-kicker">Logros</div>
-      <div class="achiev-grid" id="achievGrid">
-        <div class="achiev-card earned">
-          <div class="ac-icon">🚀</div>
-          <div><div class="ac-name">Primer Lift</div><div class="ac-desc">Registraste tu primer levantamiento</div></div>
-        </div>
-        <div class="achiev-card ac-locked">
-          <div class="ac-icon">🥇</div>
-          <div><div class="ac-name">Top 10</div><div class="ac-desc">Llega al top 10 del ranking</div></div>
-        </div>
-        <div class="achiev-card ac-locked">
-          <div class="ac-icon">💫</div>
-          <div><div class="ac-name">Platino</div><div class="ac-desc">Alcanza el tier PLATINO</div></div>
-        </div>
-        <div class="achiev-card ac-locked">
-          <div class="ac-icon">🌌</div>
-          <div><div class="ac-name">Galáctico</div><div class="ac-desc">Power Score > 75</div></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Actions -->
-    <div class="profile-actions">
-      <div class="section-kicker">Acciones</div>
-      <button class="pact-btn" onclick="shareApp()">
-        <span class="pact-icon">↗</span>
-        <span class="pact-label">Compartir VBC Protocol</span>
-        <span class="pact-arrow">›</span>
-      </button>
-      <button class="pact-btn" onclick="inviteWhatsApp()">
-        <span class="pact-icon">💬</span>
-        <span class="pact-label">Invitar por WhatsApp</span>
-        <span class="pact-arrow">›</span>
-      </button>
-      <button class="pact-btn" onclick="openGithub()">
-        <span class="pact-icon">⭐</span>
-        <span class="pact-label">Open Source · GitHub</span>
-        <span class="pact-arrow">›</span>
-      </button>
-      <button class="pact-btn danger" onclick="signOut()">
-        <span class="pact-icon">↩</span>
-        <span class="pact-label">Cerrar sesión</span>
-        <span class="pact-arrow">›</span>
-      </button>
+    <div class="ns-div"></div>
+    <div class="ns-item">
+      <div class="ns-val" id="strip-inscritos" style="color:var(--gold)">—</div>
+      <div class="ns-lbl">Inscritos</div>
     </div>
   </div>
 
-  <!-- BOTTOM NAV -->
-  <nav class="bottom-nav">
-    <button class="nav-tab active" id="navHome" onclick="switchTab('home')">
-      <span class="nt-icon">🏠</span>
-      <span class="nt-label">Inicio</span>
+  <div class="ranking-section-title">Ranking global · VBC Protocol</div>
+  <div class="ranking-list" id="rankingList">
+    <!-- generado por JS -->
+  </div>
+
+  <!-- Bottom actions -->
+  <div class="bottom-actions">
+    <button class="ba-btn ba-primary" id="btnShareApp">
+      ↗ Compartir app
     </button>
-    <button class="nav-tab nav-lift" id="navLift" onclick="switchTab('lift')">
-      <span class="nt-icon">🏋️</span>
-      <span class="nt-label">Levantar</span>
+    <button class="ba-btn ba-secondary" id="btnInvitar">
+      + Invitar
     </button>
-    <button class="nav-tab" id="navRanking" onclick="switchTab('ranking')">
-      <span class="nt-icon">🏆</span>
-      <span class="nt-label">Ranking</span>
-    </button>
-    <button class="nav-tab" id="navProfile" onclick="switchTab('profile')">
-      <span class="nt-icon">👤</span>
-      <span class="nt-label">Perfil</span>
-    </button>
-  </nav>
+  </div>
 
-</div><!-- /screen-app -->
-
-<!-- iOS Banner -->
-<div class="ios-banner" id="iosBanner">
-  <div class="ios-close" id="iosClose">✕</div>
-  <div style="font-size:.9rem;font-weight:700">📲 Instala VBC Protocol</div>
-  <div style="font-size:.72rem;color:var(--muted);line-height:1.5">Toca <strong>Compartir</strong> → "<strong>Agregar a inicio</strong>" para instalar sin App Store.</div>
 </div>
 
+<!-- iOS Install Banner -->
+<div class="ios-install-banner" id="iosBanner">
+  <div class="iib-close" id="iosBannerClose">✕</div>
+  <div class="iib-title">📲 Instala VBC Protocol</div>
+  <div class="iib-sub">Toca <strong>Compartir</strong> → "<strong>Agregar a inicio</strong>" para instalar sin App Store.</div>
+</div>
+
+<!-- Toast -->
 <div class="toast" id="toast"></div>
 
-<!-- ══════════════════════════════════════════
-   JAVASCRIPT — VBC Protocol App v2
-══════════════════════════════════════════ -->
 <script>
-void function VBC() { "use strict";
+void function VBCProtocol() { "use strict";
 
-  /* ── Firebase ── */
+  /* ══ FIREBASE CONFIG ════════════════════════════════════════ */
+  /* Reemplazar con tu config real de Firebase */
   var _FC = {
-    apiKey:"AIzaSyA-PBjiR6uJtXg00JZnsC78Aqy4yUK__g8",
-    authDomain:"vibraaltoai-11f55.firebaseapp.com",
-    projectId:"vibraaltoai-11f55",
-    storageBucket:"vibraaltoai-11f55.appspot.com",
-    messagingSenderId:"482078525826",
-    appId:"1:482078525826:web:6a1a3e2f4f1a3e2f"
+    apiKey:            "AIzaSyA-PBjiR6uJtXg00JZnsC78Aqy4yUK__g8",
+    authDomain:        "vibraaltoai-11f55.firebaseapp.com",
+    projectId:         "vibraaltoai-11f55",
+    storageBucket:     "vibraaltoai-11f55.appspot.com",
+    messagingSenderId: "482078525826",
+    appId:             "1:482078525826:web:6a1a3e2f4f1a3e2f"
   };
 
-  var app=null,db=null,auth=null;
+  var app = null, db = null, auth = null;
   try {
     app  = firebase.initializeApp(_FC);
     db   = firebase.firestore();
     auth = firebase.auth();
     db.enablePersistence({synchronizeTabs:false}).catch(function(){});
-  } catch(e){ console.warn("[VBC] Firebase:",e.message); }
-
-  /* ── STATE ── */
-  var S = {
-    user:null, profile:null,
-    ageVerified:false, ageValue:null,
-    liftData:null, liftResult:null,
-    rankingFilter:"all",
-    rankingData:[], myLifts:[],
-    nerhia:{ uvx:73, cai:64, uei:76, health:"Healthy" },
-    unsubs:[]
-  };
-
-  /* ── WORLD RECORDS (sdk/index.js inline) ── */
-  var WR={bench:335,deadlift:501,squat:477,overhead:225};
-
-  function calcPowerScore(disc,weight,reps){
-    var est = weight*(1+reps/30);
-    var pct = est/WR[disc];
-    if(pct>0.90) return {ok:false,error:"Supera el 90% del récord mundial ("+WR[disc]+"kg). Verifica tus datos.",est:Math.round(est*10)/10,pct:pct};
-    var ps = Math.max(1,Math.min(99,Math.round(pct*99)));
-    var tier = pct>0.75?"GALÁCTICO":pct>0.55?"PLATINO":pct>0.40?"ORO":pct>0.25?"PLATA":"BRONCE";
-    var vbc = ps*10;
-    var condor = Math.floor(vbc*1000*0.98);
-    return {ok:true,powerScore:ps,tier:tier,est:Math.round(est*10)/10,pct:Math.round(pct*1000)/1000,vbc:vbc,condor:condor,weight:weight,reps:reps,discipline:disc};
+  } catch(e) {
+    console.warn("[VBC] Firebase init:", e.message);
   }
 
-  /* ── HELPERS ── */
+  /* ══ STATE ══════════════════════════════════════════════════ */
+  var state = {
+    user:       null,
+    profile:    null,
+    ageVerified:false,
+    ageValue:   null,
+    screen:     "splash",
+  };
+
+  var nerhia = { uvx:73, mpi:71, cai:64, iei:61, uei:76, health:"Healthy" };
+
+  /* ══ HELPERS ════════════════════════════════════════════════ */
   function $$(id){ return document.getElementById(id); }
 
-  function showScreen(name){
-    document.querySelectorAll(".screen").forEach(function(s){ s.classList.remove("active"); });
-    var el = $$("screen-"+name);
+  function showScreen(name) {
+    document.querySelectorAll(".screen").forEach(function(s){
+      s.classList.remove("active");
+    });
+    var el = $$("screen-" + name);
     if(el) el.classList.add("active");
+    state.screen = name;
     $$("fullLoader").classList.add("gone");
   }
 
-  var _toastTimer;
-  function toast(msg,type,ms){
-    var el=$$("toast");
-    el.textContent=msg; el.className="toast show"+(type?" "+type:"");
-    clearTimeout(_toastTimer);
-    _toastTimer=setTimeout(function(){ el.classList.remove("show"); },ms||2600);
+  function toast(msg, ms) {
+    var el = $$("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    setTimeout(function(){ el.classList.remove("show"); }, ms || 2500);
   }
 
-  /* ── NERHIA ENGINE ── */
-  function tickNerhia(){
-    var j=function(v){ return Math.min(99,Math.max(20,v+Math.floor((Math.random()-.5)*8))); };
-    S.nerhia.uvx=j(73); S.nerhia.cai=j(64); S.nerhia.uei=j(76);
-    S.nerhia.health=S.nerhia.uvx>=80?"⚡ Hyperactive":S.nerhia.uvx>=60?"● Healthy":S.nerhia.uvx>=40?"◌ Slow":"⚠ Critical";
-    updateNerhiaUI();
+  /* ══ NERHIA ENGINE ══════════════════════════════════════════ */
+  function computeNerhia() {
+    var j = function(v){ return Math.min(99,Math.max(20,v+Math.floor((Math.random()-.5)*10))); };
+    nerhia.uvx=j(73); nerhia.mpi=j(71); nerhia.cai=j(64);
+    nerhia.iei=j(61); nerhia.uei=j(76);
+    nerhia.health = nerhia.uvx>=80?"⚡ Hyperactive"
+                  : nerhia.uvx>=60?"● Healthy"
+                  : nerhia.uvx>=40?"◌ Slow":"⚠ Critical";
   }
-  function updateNerhiaUI(){
-    var set=function(id,v){ var e=$$(id); if(e) e.textContent=v; };
-    set("nb-uvx",S.nerhia.uvx); set("nb-cai",S.nerhia.cai); set("nb-uei",S.nerhia.uei);
-    set("nb-health",S.nerhia.health);
-    var atb=$$("atbNerhia"); if(atb) atb.textContent="UVX "+S.nerhia.uvx;
-  }
-  tickNerhia();
-  setInterval(tickNerhia,8000);
 
-  /* ── PWA INSTALL ── */
-  var _dip=null;
-  window.addEventListener("beforeinstallprompt",function(e){
-    e.preventDefault(); _dip=e;
-    var btn=$$("btnInstall"); if(btn) btn.classList.add("show");
+  function updateNerhiaStrip() {
+    function s(id,v){ var el=$$(id); if(el) el.textContent=v; }
+    s("strip-uvx", nerhia.uvx);
+    s("strip-cai", nerhia.cai);
+    s("strip-uei", nerhia.uei);
+    s("strip-health", nerhia.health);
+  }
+
+  computeNerhia();
+  setInterval(function(){ computeNerhia(); updateNerhiaStrip(); }, 8000);
+
+  /* ══ PWA INSTALL ════════════════════════════════════════════ */
+  var deferredInstallPrompt = null;
+
+  window.addEventListener("beforeinstallprompt", function(e) {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    var btn = $$("btnInstall");
+    if(btn) btn.classList.add("show");
   });
-  var btnI=$$("btnInstall");
-  if(btnI) btnI.addEventListener("click",function(){
-    if(!_dip) return;
-    _dip.prompt();
-    _dip.userChoice.then(function(r){ if(r.outcome==="accepted") toast("✓ App instalada","ok"); _dip=null; btnI.classList.remove("show"); });
-  });
 
-  var isIOS=/iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
-  var isSA=window.navigator.standalone===true;
-  if(isIOS&&!isSA){
-    setTimeout(function(){ var b=$$("iosBanner"); if(b) b.classList.add("show"); },5000);
-  }
-  var iosCl=$$("iosClose");
-  if(iosCl) iosCl.addEventListener("click",function(){ $$("iosBanner").classList.remove("show"); });
-
-  /* ── GOOGLE AUTH ── */
-  var btnG=$$("btnGoogleLogin");
-  if(btnG) btnG.addEventListener("click",function(){
-    if(!auth){ toast("Sin conexión","err"); return; }
-    btnG.textContent="Conectando…";
-    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
-      .then(function(r){ S.user=r.user; syncUserUI(); checkProfile(r.user); })
-      .catch(function(e){
-        console.error("[VBC] Auth:",e);
-        btnG.innerHTML='<svg class="g-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Entrar con Google';
-        toast("Error al iniciar sesión","err");
+  var btnInstall = $$("btnInstall");
+  if(btnInstall) {
+    btnInstall.addEventListener("click", function() {
+      if(!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      deferredInstallPrompt.userChoice.then(function(r){
+        if(r.outcome === "accepted") toast("✓ App instalada");
+        deferredInstallPrompt = null;
+        btnInstall.classList.remove("show");
       });
-  });
+    });
+  }
 
-  if(auth){
-    auth.onAuthStateChanged(function(user){
-      if(user){ S.user=user; syncUserUI(); checkProfile(user); }
-      else { $$("fullLoader").classList.add("gone"); showScreen("splash"); }
+  /* iOS: mostrar banner al llegar al ranking */
+  var isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+  var isInStandaloneMode = window.navigator.standalone === true;
+  if(isIOS && !isInStandaloneMode) {
+    setTimeout(function(){
+      var b = $$("iosBanner");
+      if(b) b.classList.add("show");
+    }, 3000);
+  }
+  var iosBannerClose = $$("iosBannerClose");
+  if(iosBannerClose) {
+    iosBannerClose.addEventListener("click",function(){
+      var b = $$("iosBanner"); if(b) b.classList.remove("show");
+    });
+  }
+
+  /* ══ GOOGLE AUTH ════════════════════════════════════════════ */
+  var btnGoogle = $$("btnGoogleLogin");
+  if(btnGoogle) {
+    btnGoogle.addEventListener("click", function() {
+      if(!auth) { toast("Error de conexión"); return; }
+      btnGoogle.textContent = "Conectando…";
+      var provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider)
+        .then(function(result) {
+          state.user = result.user;
+          updateUserUI();
+          checkUserProfile(result.user);
+        })
+        .catch(function(e) {
+          console.error("[VBC] Auth error:", e);
+          btnGoogle.innerHTML = '<svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Entrar con Google';
+          toast("Error al iniciar sesión");
+        });
+    });
+  }
+
+  /* Auth state listener */
+  if(auth) {
+    auth.onAuthStateChanged(function(user) {
+      if(user) {
+        state.user = user;
+        updateUserUI();
+        checkUserProfile(user);
+      } else {
+        $$("fullLoader").classList.add("gone");
+        showScreen("splash");
+      }
     });
   } else {
-    setTimeout(function(){ $$("fullLoader").classList.add("gone"); showScreen("splash"); },1200);
+    $$("fullLoader").classList.add("gone");
+    showScreen("splash");
   }
 
-  function syncUserUI(){
-    var u=S.user; if(!u) return;
-    // Onboard
-    var ph=$$("obAvatarPh");
-    if(ph&&u.photoURL) ph.outerHTML='<img class="ob-avatar-img" src="'+u.photoURL+'" id="obAvatarPh">';
-    var on=$$("obName"); if(on) on.textContent=u.displayName||"Bienvenido";
-    var oe=$$("obEmail"); if(oe) oe.textContent=u.email||"";
-    var ni=$$("inputNombre"); if(ni&&!ni.value) ni.value=u.displayName||"";
-    // Topbar avatar
-    var aw=$$("atbAvatarWrap");
-    if(aw&&u.photoURL) aw.innerHTML='<img class="atb-avatar" src="'+u.photoURL+'" onclick="switchTab(\'profile\')">';
-    // Profile tab
-    var pw=$$("phAvatarWrap");
-    if(pw) pw.innerHTML=u.photoURL
-      ?'<img class="ph-avatar" src="'+u.photoURL+'">'
-      :'<div class="ph-avatar-ph">👤</div>';
-    var pn=$$("phName"); if(pn) pn.textContent=u.displayName||"—";
-    var pe=$$("phEmail"); if(pe) pe.textContent=u.email||"—";
-  }
-
-  function checkProfile(user){
-    if(!db){ showScreen("age"); return; }
-    db.collection("vbc_participants").doc(user.uid).get()
-      .then(function(doc){
-        if(doc.exists){ S.profile=doc.data(); S.ageVerified=true; enterApp(); }
-        else showScreen("age");
-      }).catch(function(){ showScreen("age"); });
-  }
-
-  /* ── NERHIA +18 GATE ── */
-  var _faceModels=false,_detecting=false,_detectInt=null;
-  var MODEL_URL="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights";
-
-  function startAgeScreen(){
-    $$("ageScanline").classList.add("active");
-    setAS("Cargando modelos IA…","");
-    if(typeof faceapi==="undefined"){
-      setAS("Sin conexión — omitir verificación","deny");
-      $$("ageSkip").style.display="block";
-      $$("ageLoading").classList.add("gone"); return;
+  function updateUserUI() {
+    var u = state.user; if(!u) return;
+    /* Onboarding header */
+    var ph = $$("onboardAvatarPh");
+    if(ph && u.photoURL) {
+      ph.outerHTML = '<img class="oh-avatar" src="'+u.photoURL+'" id="onboardAvatarPh">';
     }
-    $$("ageLoadTxt").textContent="Cargando IA…";
+    var nm = $$("onboardName"); if(nm) nm.textContent = u.displayName || "Bienvenido";
+    var em = $$("onboardEmail"); if(em) em.textContent = u.email || "";
+    var ni = $$("inputNombre"); if(ni && !ni.value) ni.value = u.displayName || "";
+
+    /* Ranking avatar */
+    var rawWrap = $$("rankingUserAvatarWrap");
+    if(rawWrap && u.photoURL) {
+      rawWrap.innerHTML = '<img class="rtb-avatar" src="'+u.photoURL+'">';
+    }
+  }
+
+  function checkUserProfile(user) {
+    if(!db) { showScreen("age"); return; }
+    db.collection("vbc_participants").doc(user.uid).get()
+      .then(function(doc) {
+        if(doc.exists) {
+          state.profile = doc.data();
+          state.ageVerified = true;
+          showRanking();
+        } else {
+          showScreen("age");
+        }
+      })
+      .catch(function() {
+        showScreen("age");
+      });
+  }
+
+  /* ══ NERHIA +18 (Portón cerebral) ══════════════════════════ */
+  var modelsLoaded = false;
+  var detecting = false;
+  var detectTimer = null;
+  var trackId = 1;
+
+  var MODEL_URL = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights";
+
+  function startAgeScreen() {
+    $$("ageScanline").classList.add("active");
+    setAgeStatus("Cargando modelos IA…","");
+
+    if(typeof faceapi === "undefined") {
+      setAgeStatus("Sin conexión — omitir verificación","deny");
+      $$("ageSkip").style.display="block";
+      $$("ageLoading").classList.add("gone");
+      return;
+    }
+
     Promise.all([
       faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
       faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL)
-    ]).then(function(){
-      _faceModels=true;
+    ]).then(function() {
+      modelsLoaded = true;
       $$("ageLoading").classList.add("gone");
-      setAS("Mira la cámara…","scanning");
-      startCam();
-    }).catch(function(){
+      setAgeStatus("Mira la cámara…","scanning");
+      startAgeCam();
+    }).catch(function(e) {
       $$("ageLoading").classList.add("gone");
-      setAS("Error — usa omitir","deny");
+      setAgeStatus("Error — usa omitir","deny");
       $$("ageSkip").style.display="block";
     });
   }
 
-  function startCam(){
-    if(!navigator.mediaDevices){ setAS("Cámara no disponible","deny"); $$("ageSkip").style.display="block"; return; }
+  function startAgeCam() {
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setAgeStatus("Cámara no disponible","deny");
+      $$("ageSkip").style.display="block"; return;
+    }
     navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:320},height:{ideal:240}},audio:false})
-      .then(function(stream){
-        var v=$$("age-video"); v.srcObject=stream;
-        v.onloadedmetadata=function(){
-          v.play().then(function(){
-            var c=$$("age-canvas"); c.width=v.videoWidth||320; c.height=v.videoHeight||240;
-            setAS("Acerca tu rostro…","scanning");
-            _detecting=true;
-            _detectInt=setInterval(runDetect,700);
+      .then(function(stream) {
+        var video = $$("age-video");
+        video.srcObject = stream;
+        video.onloadedmetadata = function() {
+          video.play().then(function() {
+            var cv = $$("age-canvas");
+            cv.width = video.videoWidth||320; cv.height = video.videoHeight||240;
+            setAgeStatus("Acerca tu rostro…","scanning");
+            detecting = true;
+            detectTimer = setInterval(runAgeDetect, 700);
           });
         };
-      }).catch(function(){
-        setAS("Cámara bloqueada — omitir","deny");
+      })
+      .catch(function(e) {
+        setAgeStatus("Cámara bloqueada — omitir","deny");
         $$("ageSkip").style.display="block";
         $$("ageLoading").classList.add("gone");
       });
   }
 
-  function runDetect(){
-    if(!_faceModels||!_detecting) return;
-    var v=$$("age-video"); if(!v||v.readyState<2) return;
-    faceapi.detectAllFaces(v,new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:.4}))
-      .withAgeAndGender().then(function(dets){
-        if(!dets||!dets.length){ setAS("No te veo — acércate…","scanning"); return; }
-        var p=dets.reduce(function(a,b){ return a.detection.box.area>b.detection.box.area?a:b; });
-        var age=Math.round(p.age), conf=Math.round(p.detection.score*100);
-        if(conf<60){ setAS("Mantén la posición ("+conf+"%)…","scanning"); return; }
-        _detecting=false; clearInterval(_detectInt);
-        showAgeResult(age,conf);
+  function runAgeDetect() {
+    if(!modelsLoaded||!detecting) return;
+    var video = $$("age-video");
+    if(!video||video.readyState<2) return;
+    var t0 = performance.now();
+    faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:.4}))
+      .withAgeAndGender()
+      .then(function(detections) {
+        if(!detections||!detections.length) {
+          setAgeStatus("No te veo — acércate un poco…","scanning"); return;
+        }
+        var primary = detections.reduce(function(a,b){ return a.detection.box.area>b.detection.box.area?a:b; });
+        var age  = Math.round(primary.age);
+        var conf = Math.round(primary.detection.score*100);
+        if(conf < 60) { setAgeStatus("Mantén la posición ("+conf+"%)…","scanning"); return; }
+        detecting = false; clearInterval(detectTimer);
+        showAgeResult(age, conf);
       }).catch(function(){});
   }
 
-  function showAgeResult(age,conf){
-    var ov=$$("ageResult"), granted=age>=18;
-    $$("aroIcon").textContent  = granted?"✓":"✗";
+  function showAgeResult(age, conf) {
+    var overlay = $$("ageResult");
+    var granted = age >= 18;
+    $$("aroIcon").textContent  = granted ? "✓" : "✗";
     $$("aroAge").textContent   = age;
-    $$("aroLabel").textContent = granted?"ACCESO AUTORIZADO":"ACCESO DENEGADO";
+    $$("aroLabel").textContent = granted ? "ACCESO AUTORIZADO" : "ACCESO DENEGADO";
     $$("aroNote").textContent  = granted
-      ?"Edad: "+age+" años · Confianza: "+conf+"% · Imagen: nunca almacenada"
-      :"Debes ser mayor de 18 años para participar.";
-    ov.className="age-result-overlay "+(granted?"granted":"denied");
-    if(granted){ S.ageVerified=true; S.ageValue=age; setAS("✓ Verificado · "+age+" años","ok"); }
-    else{ $$("aroBtn").style.display="none"; setTimeout(function(){ ov.className="age-result-overlay"; setAS("Inténtalo de nuevo…","scanning"); _detecting=true; _detectInt=setInterval(runDetect,700); },4000); }
-  }
+      ? "Edad: "+age+" años · Confianza: "+conf+"% · Imagen: nunca almacenada"
+      : "Debes ser mayor de 18 años para participar.";
+    overlay.className = "age-result-overlay " + (granted?"granted":"denied");
 
-  $$("aroBtn").addEventListener("click",function(){ stopCam(); showScreen("onboard"); });
-  $$("ageSkip").addEventListener("click",function(){ S.ageVerified=true; S.ageValue=0; stopCam(); showScreen("onboard"); });
-
-  function stopCam(){
-    _detecting=false; clearInterval(_detectInt);
-    var v=$$("age-video"); if(v&&v.srcObject) v.srcObject.getTracks().forEach(function(t){t.stop();});
-  }
-  function setAS(txt,st){
-    var d=$$("asd"),t=$$("ageTxt");
-    if(t) t.textContent=txt;
-    if(d) d.className="asd"+(st?" "+st:"");
-  }
-
-  /* ── ONBOARDING ── */
-  $$("btnConfirmar").addEventListener("click",function(){
-    var nombre=$$("inputNombre").value.trim();
-    var tel=$$("inputTel").value.trim();
-    var source=$$("inputSource").value;
-    if(!nombre){ toast("Escribe tu nombre","err"); return; }
-    $$("btnConfirmar").textContent="Guardando…";
-    var profile={
-      uid:  S.user?S.user.uid:"anon-"+Date.now(),
-      name: nombre, email:S.user?S.user.email:"anon",
-      photoURL:S.user?(S.user.photoURL||null):null,
-      tel:tel, source:source,
-      ageVerified:S.ageVerified, ageValue:S.ageValue,
-      pts:10, participaciones:1, totalLifts:0,
-      bestPowerScore:0, bestTier:"",
-      createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(),
-    };
-    S.profile=profile;
-    var done=function(){ enterApp(); toast("¡Bienvenido "+nombre+"! +10 pts 🎉","ok"); };
-    if(db&&S.user) db.collection("vbc_participants").doc(S.user.uid).set(profile).then(done).catch(done);
-    else done();
-  });
-
-  /* ── ENTER APP ── */
-  function enterApp(){
-    showScreen("app");
-    syncUserUI();
-    renderHomeHero();
-    loadRanking();
-    loadMyLifts();
-    loadStats();
-    renderProfileUI();
-  }
-
-  /* ── TAB NAVIGATION ── */
-  var _currentTab="home";
-  window.switchTab=function(name){
-    _currentTab=name;
-    document.querySelectorAll(".tab-content").forEach(function(t){ t.classList.remove("active"); });
-    document.querySelectorAll(".nav-tab").forEach(function(b){ b.classList.remove("active"); });
-    var tc=$$("tab-"+name); if(tc) tc.classList.add("active");
-    var nb=$$("nav"+name.charAt(0).toUpperCase()+name.slice(1)); if(nb) nb.classList.add("active");
-    // Tab-specific init
-    if(name==="ranking") loadRanking();
-    if(name==="profile") renderProfileUI();
-  };
-
-  /* ── HOME HERO ── */
-  function renderHomeHero(){
-    var p=S.profile; if(!p) return;
-    var n=$$("hhName"); if(n) n.textContent=p.name||"—";
-    var sub=$$("hhSub"); if(sub) sub.textContent=(p.participaciones||1)+" participaciones";
-    var pts=$$("hhPts"); if(pts) pts.textContent=p.pts||0;
-    // Rank will update from ranking data
-    updateNerhiaUI();
-    var si=$$("nb-inscritos"); if(si&&S.rankingData.length) si.textContent=S.rankingData.length;
-  }
-
-  function updateHomeRank(rankNum){
-    var el=$$("hhRank"); if(!el) return;
-    el.textContent="#"+rankNum;
-    el.className="hh-rank"+(rankNum===1?" gold":rankNum===2?" silver":rankNum===3?" bronze":"");
-    // Also MP
-    var mp=$$("mpRank"); if(mp){ mp.textContent="#"+rankNum; mp.className="mp-rank"+(rankNum<=3?" gold":""); }
-  }
-
-  /* ── LIFT FORM LOGIC ── */
-  var _selectedDisc=null, _selectedFile=null, _liftResult=null;
-
-  // Drag/drop
-  var uz=$$("uploadZone");
-  uz.addEventListener("dragover",function(e){ e.preventDefault(); uz.classList.add("dragover"); });
-  uz.addEventListener("dragleave",function(){ uz.classList.remove("dragover"); });
-  uz.addEventListener("drop",function(e){
-    e.preventDefault(); uz.classList.remove("dragover");
-    if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-  });
-  uz.addEventListener("click",function(){ $$("fileInput").click(); });
-  $$("fileInput").addEventListener("change",function(){ if(this.files.length) handleFile(this.files[0]); });
-
-  function handleFile(f){
-    if(!f.type.startsWith("video/")){ toast("Solo videos (MP4, MOV, AVI)","err"); return; }
-    _selectedFile=f;
-    var fs=$$("fileSelected"), fn=$$("fsName"), fsz=$$("fsSize");
-    fs.classList.add("show");
-    fn.textContent=f.name;
-    fsz.textContent=Math.round(f.size/1024/1024*10)/10+"MB";
-    $$("uploadZone").style.display="none";
-  }
-
-  window.clearFile=function(){
-    _selectedFile=null;
-    $$("fileSelected").classList.remove("show");
-    $$("uploadZone").style.display="";
-    $$("fileInput").value="";
-  };
-
-  $$("videoUrl").addEventListener("input",function(){
-    // Just trigger visibility (no action needed — url captured on submit)
-  });
-
-  window.selectDisc=function(btn){
-    document.querySelectorAll(".disc-btn").forEach(function(b){ b.classList.remove("selected"); });
-    btn.classList.add("selected");
-    _selectedDisc=btn.dataset.disc;
-  };
-
-  window.calculateScore=function(){
-    var disc=_selectedDisc;
-    var w=parseFloat($$("liftWeight").value);
-    var r=parseInt($$("liftReps").value);
-    var err=$$("scoreError"), rev=$$("scoreReveal"), regBtn=$$("btnRegisterLift");
-    err.classList.remove("show"); rev.classList.remove("show"); regBtn.classList.remove("show");
-
-    if(!disc){ toast("Selecciona una disciplina","err"); return; }
-    if(!w||w<=0||w>600){ toast("Ingresa un peso válido (1-600 kg)","err"); return; }
-    if(!r||r<1||r>30){ toast("Ingresa las reps (1-30)","err"); return; }
-
-    var res=calcPowerScore(disc,w,r);
-    _liftResult=res;
-
-    if(!res.ok){
-      err.classList.add("show");
-      err.innerHTML="⚠️ "+res.error+"<br><small style='opacity:.6'>Est 1RM: "+res.est+"kg · "+Math.round(res.pct*100)+"% del récord mundial</small>";
-      return;
+    if(granted) {
+      state.ageVerified = true; state.ageValue = age;
+      setAgeStatus("✓ Verificado · "+age+" años","ok");
+      $$("ageResultBtn")||0; // handled below
+    } else {
+      $$("aroBtn").style.display="none";
+      setTimeout(function(){ resetAgeScreen(); },4000);
     }
-
-    // Animate score counting up
-    rev.classList.add("show");
-    animateNumber($$("scoreNum"), 0, res.powerScore, 900);
-
-    var tierEl=$$("scoreTier");
-    tierEl.textContent=res.tier; tierEl.className="score-tier tier-"+res.tier;
-    $$("scoreDetail").innerHTML=
-      "<strong>Est 1RM: "+res.est+"kg</strong> · "+Math.round(res.pct*100)+"% del récord mundial ("+WR[disc]+"kg)";
-
-    animateNumber($$("scoreVBC"),0,res.vbc,800);
-    animateNumber($$("scoreCONDOR"),0,res.condor,900);
-    var ptsGain=Math.round(res.powerScore/2);
-    $$("scorrePts").textContent="+"+ptsGain;
-
-    regBtn.classList.add("show");
-    // Scroll to show result
-    setTimeout(function(){ rev.scrollIntoView({behavior:"smooth",block:"nearest"}); },100);
-  };
-
-  function animateNumber(el,from,to,dur){
-    if(!el) return;
-    var start=null;
-    function step(ts){
-      if(!start) start=ts;
-      var p=Math.min((ts-start)/dur,1);
-      var ease=1-Math.pow(1-p,3);
-      el.textContent=Math.round(from+(to-from)*ease);
-      if(p<1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
   }
 
-  window.registerLift=function(){
-    var btn=$$("btnRegisterLift"); btn.disabled=true; btn.textContent="Guardando…";
-    var res=_liftResult; if(!res||!res.ok) return;
-    var url=$$("videoUrl").value.trim();
-    var ptsGain=Math.round(res.powerScore/2);
+  var aroBtn = $$("aroBtn");
+  if(aroBtn) {
+    aroBtn.addEventListener("click", function(){
+      stopAgeCam();
+      showScreen("onboard");
+    });
+  }
 
-    var lift={
-      uid:       S.profile.uid,
-      name:      S.profile.name,
-      discipline:res.discipline,
-      weight:    res.weight, reps:res.reps,
-      powerScore:res.powerScore, tier:res.tier,
-      est1RM:    res.est, vbc:res.vbc, condor:res.condor,
-      ptsGained: ptsGain,
-      videoUrl:  url||null,
-      createdAt: new Date().toISOString(),
-    };
+  var ageSkip = $$("ageSkip");
+  if(ageSkip) {
+    ageSkip.addEventListener("click",function(){
+      state.ageVerified = true; state.ageValue = 0;
+      stopAgeCam(); showScreen("onboard");
+    });
+  }
 
-    var updateProfile={
-      pts:firebase.firestore.FieldValue.increment(ptsGain),
-      participaciones:firebase.firestore.FieldValue.increment(1),
-      totalLifts:firebase.firestore.FieldValue.increment(1),
-      updatedAt:new Date().toISOString(),
-    };
-    if(res.powerScore>(S.profile.bestPowerScore||0)){
-      updateProfile.bestPowerScore=res.powerScore;
-      updateProfile.bestTier=res.tier;
-    }
+  function resetAgeScreen() {
+    $$("ageResult").className = "age-result-overlay";
+    setAgeStatus("Inténtalo de nuevo…","scanning");
+    detecting = true;
+    detectTimer = setInterval(runAgeDetect, 700);
+  }
 
-    var done=function(){
-      S.profile.pts=(S.profile.pts||0)+ptsGain;
-      S.profile.participaciones=(S.profile.participaciones||0)+1;
-      S.profile.totalLifts=(S.profile.totalLifts||0)+1;
-      if(res.powerScore>(S.profile.bestPowerScore||0)){
-        S.profile.bestPowerScore=res.powerScore;
-        S.profile.bestTier=res.tier;
+  function stopAgeCam() {
+    detecting = false; clearInterval(detectTimer);
+    var v = $$("age-video");
+    if(v&&v.srcObject) v.srcObject.getTracks().forEach(function(t){t.stop();});
+  }
+
+  function setAgeStatus(text, state2) {
+    var dot = $$("ageStatusDot"), txt = $$("ageStatusText");
+    if(txt) txt.textContent = text;
+    if(dot) { dot.className = "age-status-dot"+(state2?" "+state2:""); }
+  }
+
+  /* ══ ONBOARDING ═════════════════════════════════════════════ */
+  var btnConfirmar = $$("btnConfirmar");
+  if(btnConfirmar) {
+    btnConfirmar.addEventListener("click", function() {
+      var u      = state.user;
+      var nombre = $$("inputNombre").value.trim();
+      var tel    = $$("inputTel").value.trim();
+      var source = $$("inputSource").value;
+      if(!nombre) { toast("Escribe tu nombre"); return; }
+      btnConfirmar.textContent = "Guardando…";
+      var profile = {
+        uid:          u ? u.uid    : "anon-"+Date.now(),
+        name:         nombre,
+        email:        u ? u.email  : "anon",
+        photoURL:     u ? (u.photoURL||null) : null,
+        tel:          tel,
+        source:       source,
+        ageVerified:  state.ageVerified,
+        ageValue:     state.ageValue,
+        nerhiaUVX:    nerhia.uvx,
+        pts:          10,
+        participaciones: 1,
+        createdAt:    new Date().toISOString(),
+        updatedAt:    new Date().toISOString(),
+      };
+      state.profile = profile;
+      var saveAndShow = function() {
+        showRanking();
+        toast("¡Bienvenido " + nombre + "! +10 pts por inscribirse 🎉");
+      };
+      if(db && u) {
+        db.collection("vbc_participants").doc(u.uid).set(profile)
+          .then(saveAndShow)
+          .catch(saveAndShow);
+      } else {
+        saveAndShow();
       }
-      showLiftSuccess(res,ptsGain);
-      loadMyLifts(); loadRanking(); renderHomeHero(); renderProfileUI();
-    };
-
-    if(db&&S.user){
-      var batch=db.batch();
-      batch.set(db.collection("vbc_lifts").doc(),lift);
-      batch.update(db.collection("vbc_participants").doc(S.user.uid),updateProfile);
-      batch.commit().then(done).catch(done);
-    } else done();
-  };
-
-  function showLiftSuccess(res,pts){
-    $$("liftForm").style.display="none";
-    var ls=$$("liftSuccess"); ls.classList.add("show");
-    $$("lsSubText").innerHTML="Power Score: <strong>"+res.powerScore+"</strong> · Tier: <strong>"+res.tier+"</strong><br>+"+pts+" puntos agregados al ranking.";
+    });
   }
 
-  window.resetLiftForm=function(){
-    _selectedDisc=null; _liftResult=null; _selectedFile=null;
-    document.querySelectorAll(".disc-btn").forEach(function(b){ b.classList.remove("selected"); });
-    $$("liftWeight").value=""; $$("liftReps").value=""; $$("videoUrl").value="";
-    $$("scoreReveal").classList.remove("show");
-    $$("scoreError").classList.remove("show");
-    $$("btnRegisterLift").classList.remove("show");
-    $$("btnRegisterLift").disabled=false; $$("btnRegisterLift").textContent="🏆 REGISTRAR EN EL RANKING";
-    clearFile();
-    $$("liftForm").style.display="";
-    $$("liftSuccess").classList.remove("show");
-  };
-
-  /* ── RANKING ── */
-  var DEMO=[
-    {name:"Carlos M.",   pts:520,participaciones:12,bestPowerScore:81,bestTier:"GALÁCTICO",discipline:"deadlift"},
-    {name:"Valentina R.",pts:480,participaciones:11,bestPowerScore:74,bestTier:"PLATINO",discipline:"squat"},
-    {name:"Rodrigo T.",  pts:410,participaciones:9, bestPowerScore:68,bestTier:"ORO",discipline:"bench"},
-    {name:"Camila L.",   pts:380,participaciones:8, bestPowerScore:61,bestTier:"ORO",discipline:"overhead"},
-    {name:"Felipe S.",   pts:310,participaciones:7, bestPowerScore:52,bestTier:"PLATA",discipline:"deadlift"},
-    {name:"Javiera P.",  pts:290,participaciones:6, bestPowerScore:45,bestTier:"PLATA",discipline:"squat"},
-    {name:"Diego F.",    pts:240,participaciones:5, bestPowerScore:38,bestTier:"BRONCE",discipline:"bench"},
+  /* ══ RANKING ════════════════════════════════════════════════ */
+  var DEMO_RANKING = [
+    {name:"Carlos M.",   pts:520, participaciones:12, photoURL:null, isDemo:true},
+    {name:"Valentina R.",pts:480, participaciones:11, photoURL:null, isDemo:true},
+    {name:"Rodrigo T.",  pts:410, participaciones:9,  photoURL:null, isDemo:true},
+    {name:"Camila L.",   pts:380, participaciones:8,  photoURL:null, isDemo:true},
+    {name:"Felipe S.",   pts:310, participaciones:7,  photoURL:null, isDemo:true},
+    {name:"Javiera P.",  pts:290, participaciones:6,  photoURL:null, isDemo:true},
+    {name:"Diego F.",    pts:240, participaciones:5,  photoURL:null, isDemo:true},
   ];
 
-  var _rankUnsub=null;
-  function loadRanking(){
-    if(!db){
-      // No Firebase — mostrar solo perfil propio + DEMO
-      var data=S.profile?[S.profile].concat(DEMO.filter(function(d){ return d.name!==S.profile.name; })):DEMO;
-      S.rankingData=data.sort(function(a,b){ return (b.pts||0)-(a.pts||0); });
-      renderRanking();
-      var si=$$("nb-inscritos"); if(si) si.textContent=S.rankingData.length;
-      var st=$$("st-atletas"); if(st) st.textContent=S.rankingData.length;
+  var rankingData = [];
+  var rankingUnsub = null;
+
+  function showRanking() {
+    showScreen("ranking");
+    updateNerhiaStrip();
+    loadRanking();
+    updateUserHero();
+  }
+
+  function updateUserHero() {
+    var p = state.profile; if(!p) return;
+    var n = $$("userHeroName"); if(n) n.textContent = p.name || "—";
+    var s = $$("userHeroSub");  if(s) s.textContent = (p.participaciones||1) + " participaciones · inscrito hoy";
+    var pv = $$("userHeroPts"); if(pv) pv.textContent = p.pts || 10;
+  }
+
+  function loadRanking() {
+    if(!db) {
+      renderRanking(DEMO_RANKING);
+      $$("strip-inscritos").textContent = DEMO_RANKING.length;
       return;
     }
-    if(_rankUnsub) _rankUnsub();
-
-    // ── FIX: Sin orderBy() — evita requerir índice compuesto en Firestore.
-    // El orderBy("pts","desc") causaba que la query fallara silenciosamente
-    // si el índice no existía, mostrando solo bots DEMO. Ordenamos client-side.
-    _rankUnsub=db.collection("vbc_participants").limit(100)
-      .onSnapshot(function(snap){
-        console.log("[VBC Ranking] docs recibidos:", snap.size);
-
-        var docs=snap.docs.map(function(d){ return d.data(); });
-
-        // Ordenar client-side por pts desc
-        docs.sort(function(a,b){ return (b.pts||0)-(a.pts||0); });
-
-        // Solo usar DEMO si realmente no hay ningún participante real
-        S.rankingData = docs.length > 0 ? docs : DEMO;
-
-        renderRanking();
-        updateNerhiaUI();
-        var n=docs.length||S.rankingData.length;
-        var si=$$("nb-inscritos"); if(si) si.textContent=n;
-        var st=$$("st-atletas"); if(st) st.textContent=n;
-      }, function(err){
-        // Error real de Firestore — log útil + mostrar lo que tenemos
-        console.error("[VBC Ranking] Firestore error:", err.code, err.message);
-        // No reemplazar con DEMO si ya tenemos datos reales
-        if(!S.rankingData.length) S.rankingData=DEMO;
-        renderRanking();
-        toast("Ranking offline — mostrando cache","err",3000);
-      });
-    S.unsubs.push(function(){ if(_rankUnsub) _rankUnsub(); });
-  }
-
-  var _rankFilter="all";
-  window.setFilter=function(btn,f){
-    _rankFilter=f;
-    document.querySelectorAll(".filter-btn").forEach(function(b){ b.classList.remove("active"); });
-    btn.classList.add("active");
-    renderRanking();
-  };
-
-  function renderRanking(){
-    var list=S.rankingData.slice();
-    if(_rankFilter!=="all"){
-      list=list.filter(function(p){ return p.discipline===_rankFilter||p.bestTier; });
-      if(_rankFilter!=="all") list.sort(function(a,b){ return (b.bestPowerScore||0)-(a.bestPowerScore||0); });
-    }
-
-    var myUid=S.profile?S.profile.uid:null;
-    var myPos=list.findIndex(function(x){ return x.uid&&x.uid===myUid; });
-
-    // Update my position card
-    var mpn=$$("mpName"), mpm=$$("mpMeta"), mpp=$$("mpPts");
-    if(S.profile){
-      if(mpn) mpn.textContent=S.profile.name||"—";
-      if(mpm) mpm.textContent=(S.profile.participaciones||1)+" participaciones";
-      if(mpp) mpp.textContent=S.profile.pts||0;
-      if(myPos>=0) updateHomeRank(myPos+1);
-      else updateHomeRank(list.length+1);
-    }
-
-    // Tier colors (inline for rank cards)
-    var tierColors={BRONCE:"#cd7f32",PLATA:"#c0c0c0",ORO:"#f5c518",PLATINO:"#00d9ff",GALÁCTICO:"#a855f7"};
-    var tierBg={BRONCE:"rgba(205,127,50,.1)",PLATA:"rgba(192,192,192,.08)",ORO:"rgba(245,197,24,.1)",PLATINO:"rgba(0,217,255,.08)",GALÁCTICO:"rgba(168,85,247,.1)"};
-
-    var container=$$("rankingList"); if(!container) return;
-    container.innerHTML=list.slice(0,30).map(function(p,i){
-      var pos=i+1;
-      var isMe=p.uid&&p.uid===myUid;
-      var posDisp=pos===1?"🥇":pos===2?"🥈":pos===3?"🥉":"#"+pos;
-      var av=p.photoURL
-        ?'<img class="rc-av" src="'+p.photoURL+'" onerror="this.style.display=\'none\'">'
-        :'<div class="rc-av-ph">👤</div>';
-      var tier=p.bestTier||"";
-      var tc=tierColors[tier]||"rgba(255,255,255,.3)";
-      var tb=tierBg[tier]||"rgba(255,255,255,.04)";
-      var tierPill=tier?'<span class="rc-tier" style="color:'+tc+';background:'+tb+';border:1px solid '+tc+'44">'+tier+'</span>':"";
-      return '<div class="rank-card r'+(pos<=3?pos:"x")+(isMe?" isme":"")+'"><div class="rc-pos">'+posDisp+'</div>'+av+'<div class="rc-info"><div class="rc-name">'+(isMe?"<strong>":"")+p.name+(isMe?"</strong>":"")+'</div><div class="rc-meta">'+(p.participaciones||1)+" lifts"+(isMe?" · Tú":"")+"</div>"+tierPill+'</div><div class="rc-pts"><div class="rc-pts-val">'+(p.pts||0)+'</div><div class="rc-pts-lbl">pts</div></div></div>';
-    }).join("");
-  }
-
-  /* ── MY LIFTS ── */
-  function loadMyLifts(){
-    if(!db||!S.user){ renderRecentLifts([]); return; }
-    // Sin orderBy compuesto — filtramos por uid y ordenamos client-side
-    db.collection("vbc_lifts").where("uid","==",S.user.uid)
-      .get().then(function(snap){
-        var lifts=snap.docs.map(function(d){ return d.data(); });
-        // Ordenar por fecha desc client-side
-        lifts.sort(function(a,b){ return (b.createdAt||"").localeCompare(a.createdAt||""); });
-        S.myLifts=lifts.slice(0,5);
-        renderRecentLifts(S.myLifts);
-      }).catch(function(e){
-        console.warn("[VBC] loadMyLifts error:",e.code,e.message);
-        renderRecentLifts([]);
+    if(rankingUnsub) rankingUnsub();
+    rankingUnsub = db.collection("vbc_participants")
+      .orderBy("pts","desc")
+      .limit(50)
+      .onSnapshot(function(snap) {
+        rankingData = snap.docs.map(function(d){ return d.data(); });
+        if(!rankingData.length) rankingData = DEMO_RANKING;
+        renderRanking(rankingData);
+        $$("strip-inscritos").textContent = snap.size || rankingData.length;
+        updateUserPosition(rankingData);
+      }, function() {
+        renderRanking(DEMO_RANKING);
+        $$("strip-inscritos").textContent = DEMO_RANKING.length;
       });
   }
 
-  var DISC_ICONS={bench:"🤜",deadlift:"🏗️",squat:"🦵",overhead:"🙌"};
-  function renderRecentLifts(lifts){
-    var container=$$("recentLifts"); if(!container) return;
-    if(!lifts.length){
-      container.innerHTML='<div class="empty-state"><div class="es-icon">⚡</div><div class="es-title">SIN REGISTROS AÚN</div><div class="es-sub">Registra tu primer levantamiento para ver tu historial aquí.</div></div>';
-      return;
-    }
-    container.innerHTML=lifts.map(function(l){
-      var tc={BRONCE:"#cd7f32",PLATA:"#c0c0c0",ORO:"#f5c518",PLATINO:"#00d9ff",GALÁCTICO:"#a855f7"}[l.tier]||"#f5c518";
-      return '<div class="lift-card"><div class="lc-disc">'+(DISC_ICONS[l.discipline]||"💪")+'</div><div class="lc-info"><div class="lc-name">'+l.discipline.charAt(0).toUpperCase()+l.discipline.slice(1)+'</div><div class="lc-meta">'+l.weight+'kg × '+l.reps+' reps · Est 1RM: '+l.est1RM+'kg</div></div><div class="lc-score"><div class="lc-ps" style="color:'+tc+'">'+l.powerScore+'</div><div class="lc-tier">'+l.tier+'</div></div></div>';
-    }).join("");
-  }
-
-  /* ── STATS ── */
-  function loadStats(){
-    if(!db){ renderStats({atletas:DEMO.length,vbc:0}); return; }
-    db.collection("vbc_participants").get().then(function(snap){
-      var total=snap.size;
-      var totalPts=snap.docs.reduce(function(s,d){ return s+(d.data().pts||0); },0);
-      renderStats({atletas:total,vbc:totalPts});
-    }).catch(function(e){
-      console.warn("[VBC] loadStats error:",e.message);
-      renderStats({atletas:0,vbc:0});
-    });
-  }
-  }
-  function renderStats(d){
-    var set=function(id,v){ var e=$$(id); if(e) e.textContent=v; };
-    set("st-atletas",d.atletas||0);
-    var myPts=S.profile?S.profile.pts:0;
-    var totalVBC=(d.vbc||myPts)*10;
-    set("st-lifts",d.atletas||0);
-    set("st-vbc",totalVBC.toLocaleString());
-    set("st-condor",Math.floor(totalVBC*980).toLocaleString());
-  }
-
-  /* ── PROFILE UI ── */
-  function renderProfileUI(){
-    var p=S.profile; if(!p) return;
-    var set=function(id,v){ var e=$$(id); if(e) e.textContent=v; };
-    set("ps-pts",p.pts||0);
-    set("ps-lifts",p.totalLifts||p.participaciones||1);
-    set("ps-best",p.bestPowerScore||"—");
-    set("phJoined","Inscrito · VBC Protocol · Piloto Buin");
-
-    // Achievements based on state
-    var ag=$$("achievGrid"); if(!ag) return;
-    var hasFirst=(p.totalLifts||0)>=1;
-    var isPlatino=["PLATINO","GALÁCTICO"].includes(p.bestTier||"");
-    var isGal=p.bestTier==="GALÁCTICO";
-    function ac(icon,name,desc,earned){
-      return '<div class="achiev-card'+(earned?' earned':' ac-locked')+'"><div class="ac-icon">'+icon+'</div><div><div class="ac-name">'+name+'</div><div class="ac-desc">'+desc+'</div></div></div>';
-    }
-    ag.innerHTML=
-      ac("🚀","Primer Lift","Registraste tu primer levantamiento",hasFirst)+
-      ac("🥇","Top 10","Llega al top 10 del ranking",false)+
-      ac("💫","Platino","Alcanza el tier PLATINO",isPlatino)+
-      ac("🌌","Galáctico","Power Score > 75",isGal);
-  }
-
-  /* ── SHARE / SOCIAL ── */
-  var APP_URL="https://vibraalto.cl/vbc-protocol/vbc-app.html";
-  window.shareApp=function(){
-    if(navigator.share){
-      navigator.share({title:"VBC Protocol",text:"Compite en el ranking VBC Protocol — tu fuerza es tu firma 🏋️",url:APP_URL}).catch(function(){});
+  function updateUserPosition(list) {
+    if(!state.profile) return;
+    var myUid = state.profile.uid;
+    var pos = list.findIndex(function(x){ return x.uid===myUid; });
+    var rn = $$("userRankNum");
+    if(!rn) return;
+    if(pos >= 0) {
+      rn.textContent = "#" + (pos+1);
+      rn.className = "uh-rank" + (pos===0?" gold":pos===1?" silver":pos===2?" bronze":"");
     } else {
-      navigator.clipboard&&navigator.clipboard.writeText(APP_URL).then(function(){ toast("Link copiado","ok"); });
+      rn.textContent = "#" + (list.length+1);
     }
-  };
-  window.inviteWhatsApp=function(){
-    window.open("https://wa.me/?text="+encodeURIComponent("Entra al ranking VBC Protocol: "+APP_URL),"_blank");
-  };
-  window.openGithub=function(){
-    window.open("https://github.com/leoncanales23/vibraalto-core","_blank");
-  };
-  window.signOut=function(){
-    if(!auth){ showScreen("splash"); return; }
-    auth.signOut().then(function(){ S.rankingData=[]; S.myLifts=[]; S.profile=null; showScreen("splash"); });
-  };
+    var pv = $$("userHeroPts");
+    if(pv && state.profile.pts) pv.textContent = state.profile.pts;
+  }
 
-  /* ── BOOT ── */
-  setTimeout(function(){ if(!auth){ $$("fullLoader").classList.add("gone"); showScreen("splash"); } },1500);
+  function renderRanking(list) {
+    var container = $$("rankingList"); if(!container) return;
+    var myUid = state.profile ? state.profile.uid : null;
+    var html = list.slice(0,30).map(function(p, i) {
+      var pos = i+1;
+      var isMe = (p.uid && p.uid===myUid);
+      var posEmoji = pos===1?"🥇":pos===2?"🥈":pos===3?"🥉":"#"+pos;
+      var avatar = p.photoURL
+        ? '<img class="rc-avatar" src="'+p.photoURL+'" onerror="this.style.display=\'none\'">'
+        : '<div class="rc-avatar-ph">👤</div>';
+      return '<div class="rank-card rank-'+(pos<=3?pos:"x")+(isMe?" is-me":"")+'">'
+        + '<div class="rc-pos">'+posEmoji+'</div>'
+        + avatar
+        + '<div class="rc-info">'
+          + '<div class="rc-name">'+(isMe?"<strong>"+p.name+"</strong>":p.name)+'</div>'
+          + '<div class="rc-meta">'+(p.participaciones||1)+' participaciones'+(isMe?' · Tú':'')+'</div>'
+        + '</div>'
+        + '<div class="rc-pts">'
+          + '<div class="rc-pts-val">'+(p.pts||0)+'</div>'
+          + '<div class="rc-pts-lbl">pts</div>'
+        + '</div>'
+        + '</div>';
+    }).join("");
+    container.innerHTML = html;
+  }
 
-  // Watch for age screen becoming active
-  new MutationObserver(function(muts){
-    muts.forEach(function(m){
-      if(m.target.id==="screen-age"&&m.target.classList.contains("active")) startAgeScreen();
+  /* ══ COMPARTIR ══════════════════════════════════════════════ */
+  var APP_URL = "https://vibraalto.cl/vbc-protocol/";
+
+  var btnShare = $$("btnShareApp");
+  if(btnShare) {
+    btnShare.addEventListener("click", function() {
+      var data = {
+        title: "VBC Protocol",
+        text: "Únete al ranking VBC Protocol — compite hasta octubre 🏆",
+        url:  APP_URL
+      };
+      if(navigator.share) {
+        navigator.share(data).catch(function(){});
+      } else {
+        navigator.clipboard && navigator.clipboard.writeText(APP_URL).then(function(){
+          toast("Link copiado: " + APP_URL);
+        });
+      }
     });
-  }).observe($$("screen-age"),{attributes:true,attributeFilter:["class"]});
+  }
 
-  // Service Worker
-  if("serviceWorker" in navigator) navigator.serviceWorker.register("/vbc-protocol/sw.js").catch(function(){});
+  var btnInvitar = $$("btnInvitar");
+  if(btnInvitar) {
+    btnInvitar.addEventListener("click", function() {
+      var url = "https://wa.me/?text=" + encodeURIComponent("Entra al ranking VBC Protocol: " + APP_URL);
+      window.open(url, "_blank");
+    });
+  }
 
-  console.log("[VBC Protocol v2] booting · NERHIA UVX="+S.nerhia.uvx);
+  /* ══ SERVICE WORKER REGISTER ════════════════════════════════ */
+  if("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/vbc-protocol/sw.js").catch(function(){});
+  }
+
+  /* ══ BOOT ════════════════════════════════════════════════════ */
+  /* Si no hay Firebase, mostrar splash rápido */
+  setTimeout(function() {
+    if(!auth) {
+      $$("fullLoader").classList.add("gone");
+      showScreen("splash");
+    }
+  }, 1500);
+
+  /* Iniciar IA cuando entre a screen-age */
+  var ageObs = new MutationObserver(function(muts) {
+    muts.forEach(function(m) {
+      if(m.type==="attributes" && m.target.id==="screen-age") {
+        if(m.target.classList.contains("active")) startAgeScreen();
+      }
+    });
+  });
+  var ageScreen = $$("screen-age");
+  if(ageScreen) ageObs.observe(ageScreen, {attributes:true, attributeFilter:["class"]});
+
+  console.log("[VBC Protocol] booting · VibraAlto · NERHIA UVX=" + nerhia.uvx);
+
 }();
 </script>
 </body>
 </html>
-
