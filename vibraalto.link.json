@@ -1,7 +1,18 @@
 {
-  "hub_repo": "leoncanales23/lc-j.a.r.v.i.s",
+  "name": "vbc-protocol",
+  "role": "protocol",
+  "version": "0.1.0",
+  "hub": "leoncanales23/lc-j.a.r.v.i.s",
   "hub_branch": "claude/deploy-github-zip-frontend-mAye8",
-  "role": "vbc-protocol",
   "portal_url": "https://lc-vibraalto-cl.web.app",
-  "backend": "http://34.74.27.168:8000"
+  "backend": "http://34.74.27.168:8000",
+  "description": "Protocolo VBC: contratos, schemas, formatos de evento. Fuente de verdad de la comunicación cross-repo del ecosistema VibraAlto.",
+  "depends_on": {},
+  "exposes": {
+    "contracts": "contracts/",
+    "sdk_path": "sdk/",
+    "examples": "examples/",
+    "firebase_target": "vbc",
+    "formats": ["event", "schema", "contract"]
+  }
 }
