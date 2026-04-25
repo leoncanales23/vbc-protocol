@@ -1,0 +1,13 @@
+runtime: python39
+service: vbc-app
+
+handlers:
+- url: /
+  static_files: vbc-app.html
+  upload: vbc-app.html
+  secure: always
+
+- url: /(.*)
+  static_files: \1
+  upload: (.*)
+  secure: always
