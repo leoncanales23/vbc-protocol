@@ -2,2107 +2,1686 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VBC Protocol · SAO Interface · VibraAlto</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#080810">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VBC Protocol">
+<meta name="description" content="VBC Protocol — Compite. Aprende. Gana. Powered by VibraAlto.">
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="/vbc-protocol/manifest.json">
+
+<!-- iOS icons -->
+<link rel="apple-touch-icon" href="/vbc-protocol/icon-192.png">
+
+<title>VBC Protocol · VibraAlto</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+
 <!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js">
+/* ══ VBC_CONFIG — AI backend bridge ════════════════════════════
+   Activar cuando vbc-protocol necesite análisis de PowerScore AI
+══════════════════════════════════════════════════════════════ */
+var VBC_CONFIG = {
+  enabled: true,
+  url: "https://vbc-compute-layer-852702111467.us-central1.run.app",
+  timeout: 12000
+};
+
+/* ══ updatePts — Firestore + UI sync ═══════════════════════════ */
+function updatePts(amount, reason) {
+  if(!state.profile) return;
+  state.profile.pts = (state.profile.pts || 0) + amount;
+  state.profile.updatedAt = new Date().toISOString();
+  if(db && state.user) {
+    db.collection("vbc_participants").doc(state.user.uid).update({
+      pts: firebase.firestore.FieldValue.increment(amount),
+      updatedAt: state.profile.updatedAt
+    }).catch(function(e){ console.warn("[VBC] pts update:", e); });
+  }
+  if(amount > 0) {
+    gameSound.coin(); haptic.light();
+    toast("+" + amount + " pts · " + (reason || ""), 2500);
+    advanceVbcMission("pts", amount);
+  }
+  if(typeof updateUserHero === "function") updateUserHero();
+}
+
+function saveAchievement(key) {
+  if(!db || !state.user) return;
+  var upd = {}; upd["ach_" + key] = true; upd.updatedAt = new Date().toISOString();
+  db.collection("vbc_participants").doc(state.user.uid).update(upd).catch(function(){});
+}
+
+/* ══ GAME LAYER — Web Audio + Haptics ══════════════════════════ */
+var _audioCtx = null;
+function getAudioCtx() {
+  if(!_audioCtx) _audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  return _audioCtx;
+}
+function playTone(freq, type, dur, vol, delay) {
+  try {
+    var c=getAudioCtx(), o=c.createOscillator(), g=c.createGain();
+    o.connect(g); g.connect(c.destination);
+    o.type=type||"sine";
+    var t=c.currentTime+(delay||0);
+    o.frequency.setValueAtTime(freq,t);
+    g.gain.setValueAtTime(vol||0.13,t);
+    g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    o.start(t); o.stop(t+dur);
+  } catch(e){}
+}
+var gameSound = {
+  coin:      function(){ playTone(660,"triangle",.08,.12); playTone(880,"triangle",.08,.10,.06); },
+  milestone: function(){ playTone(523,"square",.12,.14); playTone(659,"square",.12,.14,.13); playTone(784,"square",.12,.14,.26); playTone(1047,"square",.22,.14,.39); },
+  lift:      function(){ playTone(220,"sawtooth",.12,.10); playTone(330,"sawtooth",.10,.08,.12); playTone(523,"square",.18,.12,.22); },
+  tap:       function(){ playTone(300,"sine",.06,.08); }
+};
+var haptic = {
+  light:     function(){ if(navigator.vibrate) navigator.vibrate(8); },
+  reward:    function(){ if(navigator.vibrate) navigator.vibrate([12,6,18]); },
+  milestone: function(){ if(navigator.vibrate) navigator.vibrate([20,10,20,10,40]); }
+};
+
+/* ══ ACHIEVEMENTS — Bartle types ════════════════════════════════ */
+var vbcAchievements = {
+  firstEntry: { done:false, label:"Primer Ingreso al Protocolo", emoji:"⚡", pts:10  },
+  verified:   { done:false, label:"Verificación NERHIA +18",     emoji:"🛡", pts:15  },
+  pts100:     { done:false, label:"100 pts acumulados",          emoji:"💯", pts:25  },
+  pts500:     { done:false, label:"500 pts — Élite VBC",         emoji:"🏆", pts:75  },
+  top10:      { done:false, label:"Top 10 del Ranking",          emoji:"🥇", pts:50  },
+  shared:     { done:false, label:"Compartiste el Protocolo",    emoji:"📡", pts:10  }
+};
+
+function unlockVbcAchievement(key) {
+  var a = vbcAchievements[key];
+  if(!a || a.done) return;
+  a.done = true;
+  saveAchievement(key);
+  var ptsReward = a.pts;
+  /* updatePts calls coin sound — skip gameSound here to avoid double */
+  if(db && state.user) {
+    db.collection("vbc_participants").doc(state.user.uid).update({
+      pts: firebase.firestore.FieldValue.increment(ptsReward),
+      updatedAt: new Date().toISOString()
+    }).catch(function(){});
+  }
+  if(state.profile) state.profile.pts = (state.profile.pts||0) + ptsReward;
+  haptic.milestone(); gameSound.milestone();
+
+  var el = document.createElement("div");
+  el.className = "vbc-achievement-popup";
+  el.innerHTML =
+    '<div class="vbc-ach-icon">' + a.emoji + '</div>' +
+    '<div class="vbc-ach-body">' +
+      '<div class="vbc-ach-title">Logro desbloqueado</div>' +
+      '<div class="vbc-ach-name">' + a.label + '</div>' +
+    '</div>' +
+    '<div class="vbc-ach-pts">+' + ptsReward + ' pts</div>';
+  document.body.appendChild(el);
+  setTimeout(function(){ el.classList.add("show"); }, 20);
+  setTimeout(function(){
+    el.classList.remove("show");
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 400);
+  }, 3500);
+}
+
+function loadAchievements(profileData) {
+  Object.keys(vbcAchievements).forEach(function(key){
+    if(profileData["ach_" + key]) vbcAchievements[key].done = true;
+  });
+}
+
+function checkRankAchievements(rankingData) {
+  if(!state.user || !rankingData || !state.profile) return;
+  var pos = rankingData.findIndex(function(r){ return r.uid === state.user.uid; });
+  if(pos >= 0 && pos < 10) unlockVbcAchievement("top10");
+  if((state.profile.pts||0) >= 100) unlockVbcAchievement("pts100");
+  if((state.profile.pts||0) >= 500) unlockVbcAchievement("pts500");
+}
+
+
+/* ══ TRACKING posición ranking ═══════════════════════════════ */
+var prevRankPos = null;
+function trackRankChange(list) {
+  if(!state.profile) return;
+  var uid = state.profile.uid;
+  var pos = list.findIndex(function(r){ return r.uid === uid; });
+  if(pos < 0) { prevRankPos = null; return; }
+  var rank = pos + 1;
+  if(prevRankPos !== null && rank < prevRankPos) {
+    var delta = prevRankPos - rank;
+    toast("⬆️ Subiste " + delta + " posición" + (delta > 1 ? "es" : "") + " — ahora #" + rank, 3500);
+    gameSound.milestone(); haptic.reward();
+    advanceVbcMission("rank", prevRankPos - rank);
+  }
+  prevRankPos = rank;
+}
+
+/* ══ SESSION MISSIONS ════════════════════════════════════════ */
+var VBC_MISSIONS = [
+  { id:"invite2",  label:"Invita a 2 participantes",    goal:2,  type:"shares",  reward:20, emoji:"📡" },
+  { id:"pts30",    label:"Gana 30 pts en sesión",       goal:30, type:"pts",     reward:15, emoji:"💪" },
+  { id:"top5",     label:"Entra al Top 5",              goal:5,  type:"rank",    reward:50, emoji:"🏆" },
+  { id:"checkin",  label:"Registra tu participación",   goal:1,  type:"checkin", reward:10, emoji:"⚡" }
+];
+var sessionMission = null;
+var sessionMissionProgress = 0;
+
+function pickVbcMission() {
+  var avail = VBC_MISSIONS.filter(function(m){ return !m.done; });
+  if(!avail.length) return;
+  sessionMission = avail[Math.floor(Math.random() * avail.length)];
+  sessionMissionProgress = 0;
+  renderMissionWidget();
+}
+
+function advanceVbcMission(type, amount) {
+  if(!sessionMission || sessionMission.completed) return;
+  if(sessionMission.type !== type) return;
+  sessionMissionProgress += (amount || 1);
+  renderMissionWidget();
+  if(sessionMissionProgress >= sessionMission.goal) completeVbcMission();
+}
+
+function completeVbcMission() {
+  if(!sessionMission) return;
+  sessionMission.completed = true;
+  sessionMission.done = true;
+  updatePts(sessionMission.reward, "Misión: " + sessionMission.label);
+  gameSound.milestone(); haptic.milestone();
+  toast("🎯 Misión cumplida · +" + sessionMission.reward + " pts", 4000);
+  var w = document.getElementById("vbcMissionWidget");
+  if(w) { w.classList.add("completed"); setTimeout(pickVbcMission, 6000); }
+}
+
+function renderMissionWidget() {
+  var w = document.getElementById("vbcMissionWidget");
+  if(!w || !sessionMission) return;
+  var pct = Math.min(100, Math.round((sessionMissionProgress / sessionMission.goal) * 100));
+  w.innerHTML =
+    '<div class="vmw-row">' +
+      '<span class="vmw-emoji">' + sessionMission.emoji + '</span>' +
+      '<span class="vmw-label">' + sessionMission.label + '</span>' +
+    '</div>' +
+    '<div class="vmw-bar-wrap"><div class="vmw-bar" style="width:' + pct + '%"></div></div>';
+  if(sessionMission.completed) w.classList.add("completed");
+}
+
+/* ══ LÉON 007 COPILOT ════════════════════════════════════════ */
+var COP007 = {
+  persona: "Eres León 007, agente de campo del Protocolo VBC. Directo, motivador, conoces cada regla del protocolo. Ayudas a participantes a entender el ranking, mejorar su PowerScore y mantenerse competitivos. Responde en español, máximo 3 líneas, tono de agente.",
+  seeds: ["¿Cuántos pts necesito para el top 5?", "¿Cómo mejoro mi PowerScore?", "¿Cuándo termina la competencia?"]
+};
+var copMemory = [];
+var copOpen = false;
+
+function cop007MemLoad() {
+  try { var m = localStorage.getItem("vbc-cop-v1"); copMemory = m ? JSON.parse(m).slice(-20) : []; }
+  catch(e) { copMemory = []; }
+}
+function cop007MemSave() {
+  try { localStorage.setItem("vbc-cop-v1", JSON.stringify(copMemory.slice(-20))); } catch(e){}
+}
+
+function openCop007() {
+  cop007MemLoad();
+  if(!document.getElementById("cop007Panel")) buildCop007UI();
+  document.getElementById("cop007Panel").classList.add("open");
+  copOpen = true;
+  gameSound.tap(); haptic.light();
+  if(!copMemory.length) renderCop007Seeds();
+}
+function closeCop007() {
+  var p = document.getElementById("cop007Panel");
+  if(p) p.classList.remove("open");
+  copOpen = false;
+}
+
+function buildCop007UI() {
+  var fab = document.createElement("button");
+  fab.id = "cop007Fab"; fab.className = "cop007-fab visible";
+  fab.innerHTML = "⚡";
+  fab.onclick = function(){ copOpen ? closeCop007() : openCop007(); };
+  document.body.appendChild(fab);
+
+  var panel = document.createElement("div");
+  panel.id = "cop007Panel"; panel.className = "cop007-panel";
+  panel.innerHTML =
+    '<div class="cop007-header">' +
+      '<div><div class="cop007-name">⚡ León 007</div>' +
+      '<div class="cop007-sub">Agente de Campo · VBC Protocol</div></div>' +
+      '<button class="cop007-close" onclick="closeCop007()">✕</button>' +
+    '</div>' +
+    '<div id="cop007Msgs" class="cop007-messages"></div>' +
+    '<div id="cop007Seeds" class="cop007-seeds"></div>' +
+    '<div class="cop007-input-row">' +
+      '<input id="cop007Input" class="cop007-input" placeholder="Pregunta a León 007…" maxlength="200">' +
+      '<button class="cop007-send" onclick="cop007Send()">→</button>' +
+    '</div>';
+  document.body.appendChild(panel);
+  setTimeout(function(){
+    var inp = document.getElementById("cop007Input");
+    if(inp) inp.addEventListener("keydown", function(e){ if(e.key==="Enter") cop007Send(); });
+  }, 100);
+}
+
+function renderCop007Seeds() {
+  var s = document.getElementById("cop007Seeds"); if(!s) return;
+  s.innerHTML = COP007.seeds.map(function(q){
+    return '<button class="cop007-seed" onclick="cop007Seed(this)">' + q + '</button>';
+  }).join("");
+}
+function cop007Seed(btn) {
+  var q = btn.textContent;
+  var s = document.getElementById("cop007Seeds"); if(s) s.innerHTML = "";
+  cop007Run(q);
+}
+function cop007Send() {
+  var inp = document.getElementById("cop007Input"); if(!inp) return;
+  var t = inp.value.trim(); if(!t) return;
+  inp.value = "";
+  var s = document.getElementById("cop007Seeds"); if(s) s.innerHTML = "";
+  cop007Run(t);
+}
+function cop007Append(role, text) {
+  var m = document.getElementById("cop007Msgs"); if(!m) return;
+  var d = document.createElement("div");
+  d.className = "cop007-msg cop007-msg-" + role;
+  d.textContent = text;
+  m.appendChild(d); m.scrollTop = m.scrollHeight;
+}
+function cop007Run(text) {
+  cop007Append("user", text);
+  copMemory.push({ role:"user", content:text });
+  var m = document.getElementById("cop007Msgs");
+  var typing = document.createElement("div");
+  typing.className = "cop007-typing"; typing.id = "cop007Typing";
+  typing.textContent = "León 007 escribiendo…";
+  if(m) { m.appendChild(typing); m.scrollTop = m.scrollHeight; }
+
+  var ctx = "";
+  if(state.profile) {
+    ctx = "Usuario: " + state.profile.name + " · " + (state.profile.pts||10) + " pts.";
+    if(rankingData.length) {
+      var pos = rankingData.findIndex(function(r){ return r.uid===state.profile.uid; });
+      if(pos>=0) ctx += " Posición #" + (pos+1) + " de " + rankingData.length + ".";
+    }
+  }
+  var system = COP007.persona + (ctx ? " CONTEXTO: " + ctx : "");
+
+  if(VBC_CONFIG.enabled) {
+    var ctrl = new AbortController();
+    var t = setTimeout(function(){ ctrl.abort(); }, VBC_CONFIG.timeout);
+    fetch(VBC_CONFIG.url + "/aura/chat", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      signal:ctrl.signal,
+      body:JSON.stringify({ messages:copMemory.slice(-8), userId:"vbc-"+(state.profile?state.profile.uid:"anon"), system:system })
+    })
+    .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(d){ clearTimeout(t); cop007Finish(d.result||d.reply||"Sin respuesta."); })
+    .catch(function(){ clearTimeout(t); cop007Finish(cop007Fallback(text)); });
+  } else {
+    setTimeout(function(){ cop007Finish(cop007Fallback(text)); }, 700);
+  }
+}
+function cop007Fallback(text) {
+  var t = text.toLowerCase();
+  if(t.indexOf("pts")>=0||t.indexOf("punto")>=0) {
+    var top = rankingData[0];
+    return top ? "El líder tiene " + top.pts + " pts. Necesitas superar eso para el #1. ¡Cada participación suma!" : "Los pts se acumulan con cada participación. ¡Compite!";
+  }
+  if(t.indexOf("top")>=0||t.indexOf("ranking")>=0) return "Top 3 lleva medalla y bonus de pts. Invita más competidores — sube el nivel.";
+  if(t.indexOf("power")>=0||t.indexOf("score")>=0) return "PowerScore = fuerza relativa a tu peso. Más peso × más reps = más Score. Maximiza cada levantada.";
+  if(t.indexOf("cuán")>=0||t.indexOf("termina")>=0||t.indexOf("fecha")>=0) return "La competencia corre hasta octubre. Más tiempo = más pts acumulados. No pares.";
+  return "León 007 en campo. Compite, invita y sube el ranking. ¿En qué más te ayudo?";
+}
+function cop007Finish(reply) {
+  var typing = document.getElementById("cop007Typing");
+  if(typing && typing.parentNode) typing.parentNode.removeChild(typing);
+  cop007Append("assistant", reply);
+  copMemory.push({ role:"assistant", content:reply });
+  cop007MemSave();
+  gameSound.tap(); haptic.light();
+}
+
+/* ══ INJECT RANKING EXTRAS ═══════════════════════════════════ */
+function injectRankingExtras() {
+  /* Mission widget — después del userHero */
+  if(!document.getElementById("vbcMissionWrap")) {
+    var hero = document.getElementById("userHero");
+    if(hero) {
+      var wrap = document.createElement("div");
+      wrap.className = "vbc-mission-wrap";
+      wrap.innerHTML = '<div id="vbcMissionWidget" class="vbc-mission-widget"></div>';
+      hero.parentNode.insertBefore(wrap, hero.nextSibling);
+      pickVbcMission();
+    }
+  }
+  /* Copilot FAB */
+  if(!document.getElementById("cop007Fab")) buildCop007UI();
+}
+
+</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+<!-- face-api para NERHIA +18 -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
 <style>
-/*
- * ═══════════════════════════════════════════════════════════════
- *  VBC PROTOCOL · SAO HOLO FUSION
- *  En el universo SAO, las pantallas holográficas son proyecciones
- *  sensoriales enviadas directamente al cerebro por el NerveGear /
- *  AmuSphere. Los jugadores interactúan con su inventario, stats y
- *  habilidades como si flotaran en el aire real.
- *  Aquí fusionamos esa estética con el sistema VBC Protocol.
- * ═══════════════════════════════════════════════════════════════
- */
-
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-:root{
-  --cyan:#00c8ff;--cyan2:rgba(0,200,255,0.15);--cyan3:rgba(0,200,255,0.05);
-  --green:#00ffaa;--green2:rgba(0,255,170,0.15);
-  --gold:#e2c36a;--gold2:rgba(226,195,106,0.15);
-  --purple:#9955ff;--purple2:rgba(153,85,255,0.15);
-  --violet:#b46fff;
-  --red:#ff4444;--orange:#ff7722;
-  --bg:#000810;--bg2:rgba(0,20,50,0.55);--bg3:rgba(0,0,0,0.4);
-  --s2:#0a0a1c;
-  --border:rgba(0,200,255,0.25);--border2:rgba(0,200,255,0.5);
-  --text:#c8eeff;--text2:rgba(0,200,255,0.6);--text3:rgba(0,200,255,0.35);
-  --muted:rgba(255,255,255,0.38);
-  --mono:'Share Tech Mono',monospace;--sans:'Rajdhani',sans-serif;
+/* ══════════════════════════════════════════════════════════
+   VBC PROTOCOL · PWA
+   Sistema de diseño VibraOS
+   Flujo vendedor: 45 segundos de QR a inscrito
+   ══════════════════════════════════════════════════════════ */
+:root {
+  --bg:      #080810;
+  --surface: #111120;
+  --s2:      #191930;
+  --border:  rgba(255,255,255,.06);
+  --b2:      rgba(0,217,255,.18);
+  --text:    #e4e4f0;
+  --muted:   rgba(255,255,255,.38);
+  --cyan:    #00d9ff;
+  --green:   #00e676;
+  --gold:    #ffd700;
+  --orange:  #ff8c00;
+  --red:     #ff4757;
+  --violet:  #a855f7;
+  --sans:    'DM Sans', system-ui, sans-serif;
+  --mono:    'DM Mono', monospace;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bot: env(safe-area-inset-bottom, 0px);
 }
-html,body{width:100%;min-height:100vh;background:var(--bg);font-family:var(--sans);color:var(--text);overflow-x:hidden;}
 
-/* Noise texture */
-body::after{
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { font-size:16px; -webkit-text-size-adjust:100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  padding-top: var(--safe-top);
+}
+
+/* Noise texture VibraOS */
+body::after {
   content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
-  background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
+  background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
 }
 
-#bgCanvas{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;}
-.app{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;}
+/* ── SCREENS ── */
+.screen { display:none; min-height:100vh; min-height:100dvh; flex-direction:column; }
+.screen.active { display:flex; }
 
-/* ══ TOP NAV ══ */
-.topnav{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:10px 20px;border-bottom:1px solid var(--border);
-  background:rgba(0,5,14,0.92);backdrop-filter:blur(16px);
-  position:sticky;top:0;z-index:100;
-  box-shadow:0 0 24px rgba(0,200,255,0.08);
-}
-.nav-brand{display:flex;align-items:center;gap:10px;}
-.core-dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green),0 0 24px rgba(0,255,170,0.3);animation:corePulse 2s ease-in-out infinite;flex-shrink:0;}
-@keyframes corePulse{0%,100%{box-shadow:0 0 8px var(--green),0 0 16px rgba(0,255,170,0.2);}50%{box-shadow:0 0 16px var(--green),0 0 32px rgba(0,255,170,0.5);}}
-.brand-txt{font-size:15px;font-weight:700;letter-spacing:.3em;color:#7be3ff;text-transform:uppercase;}
-.brand-sub{font-family:var(--mono);font-size:8px;color:rgba(180,100,255,0.6);letter-spacing:.2em;display:block;}
-
-.nav-tabs{display:flex;gap:4px;}
-.nav-tab{
-  padding:7px 13px;border:1px solid var(--border);border-radius:8px;
-  background:var(--bg3);color:var(--text2);font-family:var(--sans);font-size:11px;
-  font-weight:600;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;
-  transition:all .2s;white-space:nowrap;
-}
-.nav-tab:hover{border-color:var(--border2);color:var(--cyan);background:var(--cyan2);}
-.nav-tab.active{border-color:var(--green);color:var(--green);background:var(--green2);}
-
-.nav-right{display:flex;align-items:center;gap:10px;}
-
-/* 💎 Diamond VBC badge — SAO currency style */
-.vbc-badge{
-  display:flex;align-items:center;gap:7px;padding:6px 12px;
-  border:1px solid rgba(226,195,106,.45);border-radius:8px;
-  background:linear-gradient(135deg,rgba(226,195,106,.12),rgba(153,85,255,.08));
-  position:relative;overflow:hidden;cursor:pointer;
-  transition:all .25s;
-}
-.vbc-badge::before{
-  content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;
-  background:linear-gradient(90deg,transparent,rgba(226,195,106,0.2),transparent);
-  transition:left .5s;
-}
-.vbc-badge:hover::before{left:100%;}
-.vbc-badge:hover{border-color:rgba(226,195,106,.8);box-shadow:0 0 16px rgba(226,195,106,.2);}
-.diamond-icon{font-size:14px;animation:diamondSpin 4s ease-in-out infinite;}
-@keyframes diamondSpin{
-  0%,100%{transform:scale(1) rotate(0deg);filter:brightness(1);}
-  25%{transform:scale(1.15) rotate(5deg);filter:brightness(1.4);}
-  50%{transform:scale(1) rotate(0deg);filter:brightness(1);}
-  75%{transform:scale(1.1) rotate(-5deg);filter:brightness(1.3);}
-}
-.vbc-bal{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--gold);}
-.vbc-lbl{font-family:var(--mono);font-size:8px;color:rgba(226,195,106,.5);letter-spacing:.1em;}
-.nav-time{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:.1em;}
-
-/* ══ SAO HOLO OVERLAY TOGGLE ══ */
-.sao-toggle{
-  display:flex;align-items:center;gap:5px;padding:6px 11px;
-  border:1px solid rgba(180,100,255,.4);border-radius:8px;
-  background:rgba(80,0,160,0.15);color:var(--violet);
-  font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.08em;
-  cursor:pointer;transition:all .2s;
-}
-.sao-toggle:hover{border-color:rgba(180,100,255,.8);background:rgba(120,40,255,.25);box-shadow:0 0 14px rgba(140,60,255,.25);}
-.sao-toggle.active{border-color:var(--violet);background:rgba(180,100,255,.2);}
-
-/* ══ SCREENS ══ */
-.screen{display:none;padding:20px;max-width:1100px;margin:0 auto;width:100%;}
-.screen.active{display:block;}
-
-/* ══ SECTION TITLE ══ */
-.s-title{font-family:var(--mono);font-size:9px;letter-spacing:.25em;color:var(--text2);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:10px;}
-.s-title::before{content:'';display:block;width:20px;height:1px;background:rgba(0,200,255,.4);}
-.s-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(0,200,255,.2),transparent);}
-
-/* ══ PANEL ══ */
-.panel{
-  background:var(--bg2);border:1px solid var(--border);border-radius:12px;
-  overflow:hidden;position:relative;backdrop-filter:blur(12px);
-  box-shadow:0 0 0 1px rgba(0,200,255,.08),0 0 30px rgba(0,200,255,.06),inset 0 1px 0 rgba(255,255,255,.06);
-}
-.panel-h{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:12px 16px;border-bottom:1px solid var(--border);background:rgba(0,60,120,.08);
-}
-.panel-title{font-size:13px;font-weight:700;letter-spacing:.15em;color:#7be3ff;text-transform:uppercase;}
-.panel-sub{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.1em;}
-.panel-body{padding:16px;}
-.corner-d{position:absolute;width:10px;height:10px;pointer-events:none;}
-.corner-d.tl{top:6px;left:6px;border-top:1.5px solid var(--border2);border-left:1.5px solid var(--border2);}
-.corner-d.tr{top:6px;right:6px;border-top:1.5px solid var(--border2);border-right:1.5px solid var(--border2);}
-.corner-d.bl{bottom:6px;left:6px;border-bottom:1.5px solid var(--border2);border-left:1.5px solid var(--border2);}
-.corner-d.br{bottom:6px;right:6px;border-bottom:1.5px solid var(--border2);border-right:1.5px solid var(--border2);}
-
-/* ══ SCAN LINE ══ */
-.scan{position:absolute;top:0;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent 0%,rgba(0,200,255,.7) 50%,transparent 100%);animation:scanDown 4s linear infinite;pointer-events:none;z-index:10;}
-@keyframes scanDown{0%{top:0;opacity:1;}90%{opacity:.4;}100%{top:100%;opacity:0;}}
-
-/* ══ GRID ══ */
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
-.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
-@media(max-width:768px){.g2,.g3{grid-template-columns:1fr;}.g4{grid-template-columns:repeat(2,1fr);}.nav-tabs{gap:2px;}.nav-tab{padding:6px 9px;font-size:10px;}.sao-toggle{display:none;}}
-
-/* ══ PROFILE SCREEN ══ */
-.hero-row{display:flex;align-items:center;gap:20px;margin-bottom:20px;}
-.avatar-wrap{position:relative;flex-shrink:0;}
-.avatar{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,rgba(0,200,255,.15),rgba(153,85,255,.15));border:2px solid rgba(0,200,255,.3);display:flex;align-items:center;justify-content:center;font-size:28px;}
-.avatar-ring{position:absolute;inset:-4px;border-radius:50%;border:1.5px solid rgba(0,200,255,.3);animation:ringPulse 3s ease-in-out infinite;}
-@keyframes ringPulse{0%,100%{transform:scale(1);opacity:.6;}50%{transform:scale(1.06);opacity:1;}}
-.hero-info{flex:1;}
-.hero-name{font-size:20px;font-weight:800;letter-spacing:-.01em;margin-bottom:4px;}
-.hero-level{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-.level-badge{font-family:var(--mono);font-size:10px;padding:3px 8px;border:1px solid rgba(0,200,255,.3);border-radius:4px;color:var(--cyan);}
-.tier-badge{font-family:var(--mono);font-size:9px;padding:3px 8px;border-radius:4px;font-weight:700;letter-spacing:.05em;}
-.tier-badge.galactico{background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.3);color:var(--gold);}
-.tier-badge.platino{background:rgba(180,100,255,.12);border:1px solid rgba(180,100,255,.3);color:var(--violet);}
-.tier-badge.oro{background:rgba(226,195,106,.12);border:1px solid rgba(226,195,106,.3);color:var(--gold);}
-.tier-badge.plata{background:rgba(180,180,200,.1);border:1px solid rgba(180,180,200,.25);color:#b8c8d8;}
-.tier-badge.bronce{background:rgba(205,127,50,.1);border:1px solid rgba(205,127,50,.25);color:#cc8850;}
-.hero-tagline{font-family:var(--mono);font-size:9px;letter-spacing:.18em;color:var(--text3);text-transform:uppercase;}
-
-.stat-row{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;}
-.stat-item{}
-.stat-hdr{display:flex;justify-content:space-between;margin-bottom:4px;}
-.stat-name{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.14em;}
-.stat-val{font-family:var(--mono);font-size:10px;font-weight:600;}
-.bar-bg{height:4px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;}
-.bar-fill{height:100%;border-radius:3px;transition:width .8s ease;}
-.bar-fill.str{background:linear-gradient(90deg,#ff4422,#ff8844);}
-.bar-fill.xp{background:linear-gradient(90deg,var(--cyan),rgba(0,200,255,.5));}
-.bar-fill.cond{background:linear-gradient(90deg,var(--purple),rgba(153,85,255,.5));}
-
-.stat-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-.scard{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-align:center;}
-.scard-val{font-family:var(--mono);font-size:16px;font-weight:700;line-height:1;}
-.scard-val.gold{color:var(--gold);}
-.scard-val.cyan{color:var(--cyan);}
-.scard-val.green{color:var(--green);}
-.scard-lbl{font-family:var(--mono);font-size:7px;color:var(--text3);margin-top:4px;letter-spacing:.1em;}
-
-/* Equipped skill slots */
-.eq-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
-.eq-slot{
-  aspect-ratio:1;background:rgba(0,0,30,.5);border:1px solid rgba(0,200,255,.15);
-  border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  cursor:pointer;transition:all .2s;position:relative;
-}
-.eq-slot:hover{border-color:rgba(0,200,255,.4);background:rgba(0,30,80,.4);}
-.eq-slot.has-skill{border-color:rgba(0,255,170,.3);background:rgba(0,60,40,.25);}
-.eq-lbl{font-family:var(--mono);font-size:7px;color:var(--text3);letter-spacing:.06em;}
-.eq-dot{position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green);}
-
-/* Log area */
-.log-area{display:flex;flex-direction:column;gap:3px;}
-.log-line{font-family:var(--mono);font-size:10px;color:rgba(0,200,255,.45);padding:2px 0;border-bottom:1px solid rgba(255,255,255,.03);animation:logIn .3s ease;}
-@keyframes logIn{from{opacity:0;transform:translateX(-6px);}to{opacity:1;transform:none;}}
-.log-line .ok{color:var(--green);}
-.log-line .warn{color:var(--gold);}
-.log-line .err{color:var(--red);}
-.log-line .skill{color:var(--violet);}
-.log-line .info{color:var(--cyan);}
-
-/* Records panel */
-.preview-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(0,200,255,.06);}
-.preview-row:last-child{border-bottom:none;}
-.preview-key{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;}
-.preview-val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text);}
-
-/* ══ LIFT SCREEN ══ */
-.disc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;}
-.disc-btn{
-  padding:12px 8px;background:var(--bg3);border:1px solid var(--border);
-  border-radius:10px;text-align:center;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:4px;
-}
-.disc-btn:hover{border-color:var(--border2);background:var(--cyan2);}
-.disc-btn.active{border-color:var(--green);background:var(--green2);}
-.disc-icon{font-size:20px;}
-.disc-name{font-size:11px;font-weight:700;color:var(--text);letter-spacing:.05em;}
-.disc-rec{font-family:var(--mono);font-size:8px;color:var(--text3);}
-
-.input-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
-.input-group{display:flex;flex-direction:column;gap:5px;}
-.input-label{font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:.15em;text-transform:uppercase;}
-.holo-input{
-  background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:8px;
-  padding:10px 14px;color:var(--text);font-family:var(--mono);font-size:15px;font-weight:700;
-  outline:none;transition:border-color .2s;
-}
-.holo-input:focus{border-color:var(--cyan);box-shadow:0 0 12px rgba(0,200,255,.15);}
-.input-hint{font-family:var(--mono);font-size:8px;color:var(--text3);}
-
-.lift-btn{
-  width:100%;padding:14px;background:linear-gradient(135deg,rgba(0,200,255,.2),rgba(0,255,170,.15));
-  border:1px solid rgba(0,255,170,.5);border-radius:10px;color:var(--green);
-  font-family:var(--sans);font-size:14px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;
-  cursor:pointer;transition:all .25s;position:relative;overflow:hidden;
-}
-.lift-btn::before{content:'';position:absolute;top:50%;left:50%;width:0;height:0;background:rgba(0,255,170,.15);border-radius:50%;transform:translate(-50%,-50%);transition:width .4s,height .4s;}
-.lift-btn:hover::before{width:400px;height:400px;}
-.lift-btn:hover{box-shadow:0 0 24px rgba(0,255,170,.25);transform:translateY(-1px);}
-
-/* Preview card */
-.preview-card{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:10px;padding:14px;}
-
-/* Lift history */
-.tx-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);}
-.tx-item:last-child{border-bottom:none;}
-.tx-left{display:flex;align-items:center;gap:10px;}
-.tx-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;}
-.tx-icon.earn{background:rgba(0,255,170,.1);border:1px solid rgba(0,255,170,.2);}
-.tx-icon.spend{background:rgba(153,85,255,.1);border:1px solid rgba(153,85,255,.2);}
-.tx-desc{font-size:12px;font-weight:600;color:var(--text);}
-.tx-meta{font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:2px;}
-.tx-amount{font-family:var(--mono);font-size:12px;font-weight:700;}
-.tx-amount.pos{color:var(--green);}
-.tx-amount.neg{color:var(--violet);}
-
-/* Bonus panel */
-#bonusPanel{min-height:36px;}
-
-/* ══ SKILLS SCREEN ══ */
-.skills-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
-.skill-card{
-  background:var(--bg2);border:1px solid var(--border);border-radius:12px;
-  padding:14px;display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden;
-  transition:all .25s;
-}
-.skill-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,200,255,.1);}
-.skill-card.owned{border-color:rgba(0,255,170,.3);background:rgba(0,60,40,.15);}
-.skill-card.cant-afford{opacity:.5;}
-.skill-rarity{font-family:var(--mono);font-size:7px;letter-spacing:.14em;padding:2px 7px;border-radius:3px;align-self:flex-start;}
-.rarity-common{background:rgba(0,200,255,.12);border:1px solid rgba(0,200,255,.25);color:var(--cyan);}
-.rarity-rare{background:rgba(0,200,100,.12);border:1px solid rgba(0,200,100,.25);color:var(--green);}
-.rarity-epic{background:rgba(153,85,255,.15);border:1px solid rgba(153,85,255,.3);color:var(--violet);}
-.rarity-legendary{background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.3);color:var(--gold);}
-.skill-emoji{font-size:22px;}
-.skill-name{font-size:14px;font-weight:700;color:var(--text);}
-.skill-desc{font-family:var(--mono);font-size:9px;color:var(--text3);line-height:1.5;}
-.skill-cost{display:flex;align-items:center;justify-content:space-between;margin-top:auto;}
-.cost-val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--gold);}
-.cost-lbl{font-family:var(--mono);font-size:8px;color:rgba(226,195,106,.5);}
-.buy-btn{font-family:var(--mono);font-size:9px;padding:5px 12px;border-radius:6px;cursor:pointer;transition:all .2s;letter-spacing:.08em;font-weight:700;}
-.buy-btn.active{background:var(--green2);border:1px solid rgba(0,255,170,.4);color:var(--green);}
-.buy-btn.active:hover{background:rgba(0,255,170,.25);box-shadow:0 0 12px rgba(0,255,170,.2);}
-.buy-btn.disabled{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--text3);cursor:not-allowed;}
-.buy-btn.owned{background:rgba(0,255,170,.08);border:1px solid rgba(0,255,170,.2);color:rgba(0,255,170,.6);cursor:default;}
-
-/* ══ WALLET SCREEN ══ */
-.wallet-hero{text-align:center;padding:24px 20px;}
-.wh-bal{font-family:var(--mono);font-size:42px;font-weight:700;color:var(--gold);text-shadow:0 0 24px rgba(226,195,106,.3);line-height:1;}
-.wh-lbl{font-family:var(--mono);font-size:9px;letter-spacing:.18em;color:rgba(226,195,106,.5);text-transform:uppercase;margin-top:6px;}
-.wh-sub{font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px;}
-.condor-card{background:linear-gradient(135deg,rgba(153,85,255,.1),rgba(0,0,30,.5));border:1px solid rgba(153,85,255,.25);border-radius:12px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;}
-.condor-val{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--violet);}
-.condor-lbl{font-family:var(--mono);font-size:8px;letter-spacing:.15em;color:rgba(153,85,255,.5);margin-top:3px;}
-.tx-list{display:flex;flex-direction:column;}
-
-/* ══ RANKING SCREEN ══ */
-.lb-header{display:grid;grid-template-columns:40px 1fr 90px 60px 80px;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border);margin-bottom:4px;}
-.lb-hcol{font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:.12em;text-align:center;}
-.lb-hcol.left{text-align:left;}
-.lb-row{display:grid;grid-template-columns:40px 1fr 90px 60px 80px;gap:8px;align-items:center;padding:9px 10px;border-radius:8px;transition:background .2s;}
-.lb-row:hover{background:rgba(0,200,255,.04);}
-.lb-row.me{background:rgba(0,200,255,.06);border:1px solid rgba(0,200,255,.18);}
-.lb-rank{font-family:var(--mono);font-size:13px;font-weight:700;text-align:center;}
-.r1{color:var(--gold);}
-.r2{color:#c0c0c0;}
-.r3{color:#cd7f32;}
-.rn{color:var(--text3);}
-.lb-name{font-size:13px;font-weight:600;}
-.lb-tier-b{}
-.lb-score{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--cyan);text-align:center;}
-.lb-vbc{font-family:var(--mono);font-size:11px;color:var(--gold);text-align:right;}
-
-/* ══ SAO HOLOGRAPHIC OVERLAY ══════════════════════════════════
-   Inspirado en: ALfheim Online / SAO — pantallas flotantes del
-   menú de jugador. En el universo SAO, estas proyecciones sensoriales
-   aparecen al tocar el icono del menú en el brazo izquierdo.
-   ══════════════════════════════════════════════════════════════ */
-.sao-overlay{
-  position:fixed;inset:0;z-index:400;
-  display:flex;align-items:center;justify-content:center;
-  background:rgba(0,2,8,.85);backdrop-filter:blur(8px);
-  opacity:0;pointer-events:none;
-  transition:opacity .35s ease;
-}
-.sao-overlay.open{opacity:1;pointer-events:all;}
-
-/* Scanline overlay effect */
-.sao-overlay::after{
-  content:'';position:absolute;inset:0;pointer-events:none;
-  background:repeating-linear-gradient(0deg,transparent 0px,transparent 3px,rgba(0,200,255,.012) 4px);
-  animation:scanlines 12s linear infinite;
-}
-@keyframes scanlines{from{background-position:0 0;}to{background-position:0 100%;};}
-
-.sao-interface{
-  display:flex;align-items:flex-start;gap:16px;
-  animation:saoOpen .4s cubic-bezier(.2,0,.1,1) both;
-  perspective:800px;
-}
-@keyframes saoOpen{
-  from{opacity:0;transform:scale(.92) translateY(16px);}
-  to{opacity:1;transform:scale(1) translateY(0);}
+/* ══ SCREEN: SPLASH ════════════════════════════════════════ */
+#screen-splash {
+  align-items:center; justify-content:center;
+  background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(0,217,255,.07) 0%, transparent 70%), var(--bg);
+  padding: 2rem;
+  text-align: center;
+  gap: 2rem;
 }
 
-/* SAO Left menu panel */
-.sao-menu-panel{
-  width:210px;flex-shrink:0;
-  background:rgba(5,5,30,0.82);
-  border:1px solid rgba(140,60,255,.35);
-  border-radius:12px;overflow:hidden;
-  box-shadow:0 0 40px rgba(140,60,255,.15),inset 0 1px 0 rgba(255,255,255,.05);
-  animation:menuFloat 5s ease-in-out infinite;
+.splash-logo {
+  display:flex; flex-direction:column; align-items:center; gap:.6rem;
 }
-@keyframes menuFloat{0%,100%{transform:translateY(0) rotateX(2deg);}50%{transform:translateY(-5px) rotateX(-1deg);}}
+.splash-dot {
+  width:14px; height:14px; border-radius:50%;
+  background: var(--cyan);
+  box-shadow: 0 0 20px var(--cyan), 0 0 40px rgba(0,217,255,.3);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100%{transform:scale(1);box-shadow:0 0 20px var(--cyan),0 0 40px rgba(0,217,255,.3)}
+  50%{transform:scale(1.15);box-shadow:0 0 30px var(--cyan),0 0 60px rgba(0,217,255,.4)}
+}
+.splash-brand {
+  font-family: var(--sans); font-size: 2.4rem; font-weight:800;
+  letter-spacing:-.02em; line-height:1;
+}
+.splash-brand .vbc { color: var(--cyan); }
+.splash-brand .protocol { color: var(--text); }
 
-.sao-menu-header{
-  padding:12px 14px 10px;
-  border-bottom:1px solid rgba(160,80,255,.2);
-  background:rgba(80,0,160,.12);
+.splash-tag {
+  font-family: var(--mono); font-size:.65rem; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--muted);
+  display:flex; align-items:center; gap:.5rem;
 }
-.sao-player-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
-.sao-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,rgba(140,60,255,.3),rgba(0,200,255,.2));border:1.5px solid rgba(140,60,255,.4);display:flex;align-items:center;justify-content:center;font-size:16px;}
-.sao-player-name{font-size:13px;font-weight:700;color:#c8a8ff;}
-.sao-player-lvl{font-family:var(--mono);font-size:8px;color:rgba(180,130,255,.6);letter-spacing:.1em;}
-.sao-menu-tag{font-family:var(--mono);font-size:7px;letter-spacing:.25em;color:rgba(180,100,255,.5);text-transform:uppercase;}
+.splash-tag::before,.splash-tag::after { content:''; width:24px; height:1px; background:rgba(0,217,255,.3); }
 
-.sao-menu-items{padding:8px;}
-.sao-item{
-  display:flex;align-items:center;gap:10px;padding:10px 12px;
-  border-radius:7px;cursor:pointer;transition:all .18s;
-  border:1px solid transparent;margin-bottom:3px;position:relative;overflow:hidden;
+.splash-claim {
+  font-size:1.05rem; font-weight:500; color:var(--muted); line-height:1.5;
+  max-width:300px;
 }
-.sao-item::before{content:'';position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(160,80,255,.12);transition:width .3s;}
-.sao-item:hover::before{width:100%;}
-.sao-item:hover{border-color:rgba(160,100,255,.4);transform:translateX(3px);}
-.sao-item.active{background:rgba(120,40,255,.2);border-color:rgba(160,100,255,.55);border-left:2px solid #b46fff;}
-.sao-item-icon{font-size:15px;flex-shrink:0;position:relative;z-index:1;}
-.sao-item-text{font-size:12px;font-weight:600;color:#c8a8ff;letter-spacing:.06em;position:relative;z-index:1;}
-.sao-item-badge{
-  margin-left:auto;font-family:var(--mono);font-size:8px;
-  padding:2px 6px;border-radius:3px;
-  background:rgba(160,80,255,.18);border:1px solid rgba(160,80,255,.25);
-  color:rgba(180,130,255,.8);position:relative;z-index:1;
+.splash-claim strong { color:var(--text); }
+
+/* Botón Google Sign-In */
+.btn-google {
+  display:flex; align-items:center; justify-content:center; gap:.75rem;
+  width:100%; max-width:320px; padding:1rem 1.5rem;
+  background: #fff; border:none; border-radius:12px;
+  font-family:var(--sans); font-size:1rem; font-weight:700;
+  color:#1f1f1f; cursor:pointer;
+  box-shadow: 0 4px 24px rgba(0,0,0,.4);
+  transition:.2s;
+  -webkit-tap-highlight-color:transparent;
+}
+.btn-google:active { transform:scale(.97); }
+.google-icon { width:22px; height:22px; flex-shrink:0; }
+
+.splash-install-hint {
+  font-family:var(--mono); font-size:.6rem; letter-spacing:.1em;
+  color:rgba(0,217,255,.5); text-align:center; line-height:1.7;
+}
+.install-btn {
+  display:none; /* se muestra cuando el browser soporta install */
+  align-items:center; gap:.5rem;
+  font-family:var(--mono); font-size:.65rem; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--cyan);
+  background:rgba(0,217,255,.06); border:1px solid rgba(0,217,255,.2);
+  padding:.5rem 1.2rem; cursor:pointer; margin-top:.5rem;
+  transition:.2s;
+}
+.install-btn:hover { background:rgba(0,217,255,.1); }
+.install-btn.show { display:flex; }
+
+/* ══ SCREEN: NERHIA +18 (Portón cerebral) ══════════════════ */
+#screen-age {
+  align-items:center; justify-content:center;
+  background: var(--bg); padding:1.5rem;
+  gap:1.2rem;
+}
+.age-header {
+  text-align:center;
+}
+.age-header .tag {
+  font-family:var(--mono); font-size:.58rem; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--cyan);
+  padding:.25rem .7rem; border:1px solid rgba(0,217,255,.25);
+  background:rgba(0,217,255,.05); display:inline-block; margin-bottom:.8rem;
+}
+.age-title {
+  font-size:1.6rem; font-weight:800; letter-spacing:-.02em; line-height:1.1;
+}
+.age-sub { font-size:.85rem; color:var(--muted); margin-top:.4rem; }
+
+.age-cam-wrap {
+  position:relative; width:100%; max-width:340px;
+  aspect-ratio:4/3; border-radius:16px; overflow:hidden;
+  border:1px solid rgba(0,217,255,.15);
+  background:#000;
+}
+#age-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+#age-canvas { position:absolute; inset:0; width:100%; height:100%; transform:scaleX(-1); }
+
+/* Corner brackets */
+.age-cam-wrap::before,.age-cam-wrap::after {
+  content:''; position:absolute; width:24px; height:24px; z-index:10;
+}
+.age-cam-wrap::before { top:10px; left:10px; border-top:2px solid var(--cyan); border-left:2px solid var(--cyan); }
+.age-cam-wrap::after  { bottom:10px; right:10px; border-bottom:2px solid var(--cyan); border-right:2px solid var(--cyan); }
+
+.age-scanline {
+  position:absolute; left:0; right:0; height:2px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  box-shadow:0 0 8px var(--cyan); animation:scan 2.4s ease-in-out infinite;
+  opacity:0; z-index:11; pointer-events:none;
+}
+.age-scanline.active { opacity:1; }
+@keyframes scan { 0%{top:0%;opacity:0}5%{opacity:1}95%{opacity:1}100%{top:100%;opacity:0} }
+
+.age-result-overlay {
+  position:absolute; inset:0; z-index:20;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.5rem;
+  opacity:0; pointer-events:none; transition:opacity .3s;
+  border-radius:14px;
+}
+.age-result-overlay.granted { background:rgba(0,10,5,.88); opacity:1; pointer-events:auto; }
+.age-result-overlay.denied  { background:rgba(10,2,2,.88); opacity:1; pointer-events:auto; }
+.aro-icon { font-size:2.5rem; }
+.aro-age { font-family:var(--sans); font-size:3rem; font-weight:800; line-height:1; }
+.aro-label { font-size:.8rem; letter-spacing:.1em; text-transform:uppercase; font-weight:700; }
+.age-result-overlay.granted .aro-age,.age-result-overlay.granted .aro-label { color:var(--green); }
+.age-result-overlay.denied  .aro-age,.age-result-overlay.denied  .aro-label { color:var(--red); }
+.aro-note { font-size:.62rem; color:var(--muted); text-align:center; line-height:1.5; padding:0 1rem; }
+.aro-btn {
+  font-family:var(--mono); font-size:.65rem; letter-spacing:.1em;
+  padding:.5rem 1.4rem; border:1px solid rgba(0,217,255,.3);
+  background:transparent; color:var(--cyan); cursor:pointer; margin-top:.2rem;
 }
 
-/* SAO stats / detail panel */
-.sao-detail-panel{
-  width:300px;display:flex;flex-direction:column;gap:10px;
-  animation:detailFloat 5s ease-in-out infinite;
-  animation-delay:.5s;
+/* Loading models */
+.age-loading {
+  position:absolute; inset:0; z-index:30;
+  background:var(--bg); display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:.8rem;
+  border-radius:14px;
 }
-@keyframes detailFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
+.age-loading.gone { display:none; }
+.spin { width:28px; height:28px; border-radius:50%; border:2px solid rgba(0,217,255,.15); border-top-color:var(--cyan); animation:spin .8s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.age-loading-text { font-family:var(--mono); font-size:.62rem; letter-spacing:.12em; color:var(--muted); }
 
-.sao-stat-card{
-  background:rgba(3,5,28,0.82);border:1px solid rgba(100,200,255,.2);
-  border-radius:10px;padding:13px 15px;position:relative;overflow:hidden;
-  cursor:pointer;transition:all .22s;
+.age-status {
+  font-family:var(--mono); font-size:.7rem; letter-spacing:.08em;
+  color:var(--muted); text-align:center;
+  display:flex; align-items:center; gap:.5rem;
 }
-.sao-stat-card:hover{border-color:rgba(100,200,255,.5);box-shadow:0 0 20px rgba(0,150,255,.1);transform:translateY(-2px);}
-.sao-stat-card::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(100,200,255,.35),transparent);}
-.sao-stat-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
-.sao-stat-title{font-family:var(--mono);font-size:7px;letter-spacing:.2em;color:rgba(100,200,255,.5);text-transform:uppercase;}
-.sao-stat-value{font-size:24px;font-weight:700;letter-spacing:-.02em;}
-.sao-stat-value.hp{color:#ff6b6b;text-shadow:0 0 14px rgba(255,100,100,.35);}
-.sao-stat-value.mp{color:#6b9fff;text-shadow:0 0 14px rgba(100,150,255,.35);}
-.sao-stat-value.vbc{color:var(--gold);text-shadow:0 0 14px rgba(226,195,106,.3);}
-.sao-bar-wrap{height:4px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden;}
-.sao-bar-fill{height:100%;border-radius:3px;transition:width 1s ease;}
-.sao-bar-fill.hp{background:linear-gradient(90deg,#ff4444,#ff8888);}
-.sao-bar-fill.mp{background:linear-gradient(90deg,#4466ff,#88aaff);}
+.age-status-dot { width:6px; height:6px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+.age-status-dot.scanning { background:var(--cyan); box-shadow:0 0 6px var(--cyan); animation:pulse-dot 1s ease-in-out infinite; }
+.age-status-dot.ok { background:var(--green); box-shadow:0 0 6px var(--green); }
+.age-status-dot.deny { background:var(--red); box-shadow:0 0 6px var(--red); }
 
-/* Skills grid in SAO */
-.sao-skills-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
-.sao-skill-slot{
-  aspect-ratio:1;background:rgba(18,0,58,.5);border:1px solid rgba(120,60,255,.22);
-  border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;cursor:pointer;transition:all .18s;position:relative;
-}
-.sao-skill-slot:hover{border-color:rgba(160,100,255,.65);transform:scale(1.08);box-shadow:0 0 14px rgba(140,60,255,.22);z-index:2;}
-.sao-skill-slot.equipped{border-color:rgba(0,255,170,.35);background:rgba(0,60,40,.25);}
-.sao-skill-icon{font-size:17px;}
-.sao-skill-lvl{font-family:var(--mono);font-size:7px;color:rgba(160,120,255,.65);}
-.sao-equipped-dot{position:absolute;top:2px;right:2px;width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green);}
-
-.sao-section-lbl{font-family:var(--mono);font-size:7px;letter-spacing:.2em;color:rgba(140,80,255,.5);text-transform:uppercase;margin-bottom:6px;}
-
-/* SAO Log */
-.sao-log-line{font-family:var(--mono);font-size:9px;color:rgba(0,200,255,.4);padding:2px 0;border-bottom:1px solid rgba(255,255,255,.03);animation:logIn .35s ease;}
-.sao-log-line .ok{color:var(--green);}
-.sao-log-line .warn{color:var(--gold);}
-.sao-log-line .err{color:var(--red);}
-
-/* Hex background SVG */
-.sao-hex-bg{position:absolute;inset:0;overflow:hidden;pointer-events:none;opacity:.03;}
-
-/* SAO close button */
-.sao-close{
-  position:absolute;top:16px;right:16px;
-  width:32px;height:32px;border-radius:50%;
-  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
-  color:var(--muted);font-size:14px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  transition:all .2s;z-index:10;
-}
-.sao-close:hover{background:rgba(255,100,100,.15);border-color:rgba(255,100,100,.3);color:#ff6b6b;}
-
-/* Ripple effect (SAO touch feedback) */
-.sao-ripple-container{position:fixed;inset:0;pointer-events:none;z-index:500;overflow:hidden;}
-.sao-ripple{
-  position:absolute;border:1.5px solid rgba(160,100,255,.65);border-radius:50%;
-  animation:saoRipple .65s ease-out forwards;pointer-events:none;
-}
-@keyframes saoRipple{
-  0%{width:0;height:0;opacity:.9;transform:translate(-50%,-50%);}
-  100%{width:90px;height:90px;opacity:0;transform:translate(-50%,-50%);}
+.age-privacy {
+  font-family:var(--mono); font-size:.58rem; color:rgba(0,217,255,.4);
+  text-align:center; letter-spacing:.06em; line-height:1.6;
 }
 
-/* SAO floating menu button (arm-tap trigger) */
-.sao-fab{
-  position:fixed;right:20px;bottom:90px;z-index:350;
-  width:48px;height:48px;border-radius:50%;
-  background:linear-gradient(135deg,rgba(80,0,160,.8),rgba(40,0,100,.9));
-  border:1px solid rgba(180,100,255,.5);
-  box-shadow:0 0 24px rgba(140,60,255,.35),inset 0 1px 0 rgba(255,255,255,.08);
-  cursor:pointer;display:flex;align-items:center;justify-content:center;
-  font-size:18px;color:#c8a8ff;
-  transition:all .25s;animation:fabPulse 3s ease-in-out infinite;
+.btn-skip {
+  font-family:var(--mono); font-size:.6rem; letter-spacing:.1em;
+  color:rgba(255,255,255,.25); background:transparent; border:none; cursor:pointer; padding:.4rem;
+  text-decoration:underline;
 }
-@keyframes fabPulse{
-  0%,100%{box-shadow:0 0 24px rgba(140,60,255,.35),inset 0 1px 0 rgba(255,255,255,.08);}
-  50%{box-shadow:0 0 36px rgba(140,60,255,.55),0 0 60px rgba(140,60,255,.2),inset 0 1px 0 rgba(255,255,255,.08);}
-}
-.sao-fab:hover{transform:scale(1.1);border-color:rgba(200,140,255,.8);}
-.sao-fab:active{transform:scale(.94);}
 
-/* ══ RESULT OVERLAY ══ */
-.result-overlay{
-  position:fixed;inset:0;z-index:600;
-  background:rgba(0,0,8,.88);backdrop-filter:blur(12px);
-  display:none;align-items:center;justify-content:center;
+/* ══ SCREEN: ONBOARDING (datos) ════════════════════════════ */
+#screen-onboard {
+  padding:1.5rem 1.5rem calc(1.5rem + var(--safe-bot));
+  gap:1.2rem;
 }
-.result-overlay.show{display:flex;}
-.result-card{
-  background:rgba(0,10,30,.9);border:1px solid rgba(0,200,255,.35);border-radius:16px;
-  padding:30px;text-align:center;max-width:360px;width:90%;
-  position:relative;overflow:hidden;
-  box-shadow:0 0 60px rgba(0,200,255,.15);
-  animation:resultIn .4s cubic-bezier(.2,0,.1,1);
+.onboard-header {
+  display:flex; align-items:center; gap:.75rem; padding-top:.5rem;
 }
-@keyframes resultIn{from{transform:scale(.88);opacity:0;}to{transform:scale(1);opacity:1;}}
-.result-card::after{content:'';position:absolute;top:0;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);}
-.result-score{font-family:var(--mono);font-size:72px;font-weight:700;color:var(--cyan);text-shadow:0 0 30px rgba(0,200,255,.4);line-height:1;margin:12px 0 6px;}
-.result-tier{font-size:16px;font-weight:700;margin-bottom:14px;letter-spacing:.12em;}
-.result-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0;}
-.rg-item{background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:8px;padding:10px;}
-.rg-val{font-family:var(--mono);font-size:15px;font-weight:700;}
-.rg-val.cyan{color:var(--cyan);}
-.rg-val.gold{color:var(--gold);}
-.rg-val.green{color:var(--green);}
-.rg-lbl{font-family:var(--mono);font-size:7px;color:var(--text3);margin-top:4px;letter-spacing:.08em;}
-.result-close{
-  width:100%;padding:13px;background:linear-gradient(135deg,rgba(0,200,255,.2),rgba(0,255,170,.15));
-  border:1px solid rgba(0,255,170,.45);border-radius:9px;color:var(--green);
-  font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:.15em;
-  cursor:pointer;text-transform:uppercase;transition:all .2s;
+.oh-avatar {
+  width:44px; height:44px; border-radius:50%;
+  object-fit:cover; border:2px solid rgba(0,217,255,.3);
 }
-.result-close:hover{box-shadow:0 0 20px rgba(0,255,170,.25);}
-.result-streak{display:inline-block;margin-bottom:4px;}
+.oh-avatar-placeholder {
+  width:44px; height:44px; border-radius:50%;
+  background:var(--surface); border:2px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.2rem;
+}
+.oh-name { font-size:1rem; font-weight:700; }
+.oh-email { font-size:.72rem; color:var(--muted); }
 
-/* ══ Achievement popup (SAO-style logro) ══ */
-.vbc-achievement-popup{
-  position:fixed;bottom:7rem;left:50%;transform:translateX(-50%) translateY(20px);
-  background:rgba(5,5,30,.95);border:1px solid rgba(180,100,255,.4);border-radius:10px;
-  padding:12px 18px;display:flex;align-items:center;gap:12px;opacity:0;
-  transition:opacity .3s,transform .3s;z-index:9000;min-width:260px;
-  backdrop-filter:blur(8px);box-shadow:0 8px 32px rgba(140,60,255,.2);
-}
-.vbc-achievement-popup.show{opacity:1;transform:translateX(-50%) translateY(0);}
-.vbc-ach-icon{font-size:26px;}
-.vbc-ach-body{}
-.vbc-ach-title{font-family:var(--mono);font-size:7px;color:rgba(180,100,255,.55);letter-spacing:.12em;text-transform:uppercase;}
-.vbc-ach-name{font-size:13px;font-weight:700;color:#fff;margin-top:2px;}
-.vbc-ach-pts{font-family:var(--mono);color:var(--gold);font-size:16px;font-weight:700;margin-left:auto;white-space:nowrap;}
+.onboard-title { font-size:1.5rem; font-weight:800; letter-spacing:-.02em; line-height:1.2; }
+.onboard-title span { color:var(--cyan); }
 
-/* ══ VBC Mission widget ══ */
-.vbc-mission-wrap{padding:0 0 16px;}
-.vbc-mission-widget{background:rgba(0,20,50,.4);border:1px solid var(--border);border-radius:8px;padding:10px 14px;transition:border-color .4s;}
-.vbc-mission-widget.completed{border-color:var(--gold);}
-.vmw-row{display:flex;align-items:center;gap:7px;margin-bottom:6px;}
-.vmw-emoji{font-size:14px;}
-.vmw-label{font-size:11px;color:var(--text);}
-.vmw-bar-wrap{height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
-.vmw-bar{height:100%;background:var(--cyan);border-radius:2px;transition:width .45s ease;}
-
-/* ══ TOAST ══ */
-.toast-wrap{position:fixed;top:80px;right:16px;display:flex;flex-direction:column;gap:6px;z-index:9999;pointer-events:none;}
-.toast{
-  background:rgba(0,20,50,.92);border:1px solid var(--border);border-radius:8px;
-  padding:9px 15px;font-family:var(--sans);font-size:13px;color:var(--text);
-  animation:toastIn .25s ease;backdrop-filter:blur(8px);max-width:280px;
-  box-shadow:0 4px 20px rgba(0,0,0,.4);
+.form-group { display:flex; flex-direction:column; gap:.4rem; }
+.form-label { font-family:var(--mono); font-size:.65rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+.form-input {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:.85rem 1rem;
+  color:var(--text); font-family:var(--sans); font-size:1rem;
+  outline:none; transition:border-color .2s; -webkit-appearance:none;
 }
-.toast.success{background:rgba(0,40,30,.92);border-color:rgba(0,255,170,.3);color:var(--green);}
-.toast.warn{background:rgba(40,30,0,.92);border-color:rgba(226,195,106,.3);color:var(--gold);}
-.toast.skill{background:rgba(30,0,50,.92);border-color:rgba(153,85,255,.3);color:#cc99ff;}
-.toast.info{background:rgba(0,20,50,.92);border-color:rgba(0,200,255,.3);color:var(--cyan);}
-@keyframes toastIn{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:none;}}
-@keyframes toastOut{from{opacity:1;}to{opacity:0;transform:translateX(16px);}}
+.form-input:focus { border-color:rgba(0,217,255,.4); }
+.form-input::placeholder { color:var(--muted); }
 
-/* video upload section */
-.video-upload-area{
-  border:2px dashed rgba(0,200,255,.2);border-radius:12px;padding:24px;text-align:center;
-  background:rgba(0,200,255,.03);cursor:pointer;transition:all .2s;margin-top:12px;
+.form-select {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:.85rem 1rem;
+  color:var(--text); font-family:var(--sans); font-size:1rem;
+  outline:none; transition:border-color .2s; -webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,.3)' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 1rem center;
+  cursor:pointer;
 }
-.video-upload-area:hover{border-color:rgba(0,200,255,.45);background:rgba(0,200,255,.06);}
-.video-upload-area.drag-over{border-color:var(--green);background:rgba(0,255,170,.06);}
-.upload-icon{font-size:28px;margin-bottom:8px;}
-.upload-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;}
-.upload-sub{font-family:var(--mono);font-size:9px;color:var(--text3);}
-.upload-pts-badge{display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:4px 10px;border-radius:5px;background:var(--green2);border:1px solid rgba(0,255,170,.3);font-family:var(--mono);font-size:9px;color:var(--green);}
-#videoInput{display:none;}
 
-.video-preview-item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(0,255,170,.05);border:1px solid rgba(0,255,170,.15);border-radius:8px;margin-top:8px;}
-.vp-name{font-size:11px;font-weight:600;color:var(--text);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.vp-pts{font-family:var(--mono);font-size:11px;color:var(--green);font-weight:700;}
+.nerhia-badge-inline {
+  display:flex; align-items:center; gap:.5rem;
+  padding:.5rem .8rem; border:1px solid rgba(0,217,255,.18);
+  background:rgba(0,217,255,.04); font-family:var(--mono); font-size:.6rem;
+  letter-spacing:.1em; color:rgba(0,217,255,.7);
+}
+.nbi-dot { width:5px; height:5px; border-radius:50%; background:var(--green); box-shadow:0 0 6px var(--green); animation:pulse-dot 2s ease-in-out infinite; }
 
-/* ══ LOGIN SCREEN ══════════════════════════════ */
-#loginScreen{
-  position:fixed;inset:0;z-index:9998;
-  background:radial-gradient(ellipse at 50% 40%, rgba(0,20,50,0.98) 0%, #000810 100%);
-  display:flex;align-items:center;justify-content:center;
-  flex-direction:column;
-  transition:opacity .45s ease, visibility .45s;
+.btn-primary {
+  display:flex; align-items:center; justify-content:center; gap:.5rem;
+  width:100%; padding:1.05rem; background:var(--cyan);
+  border:none; border-radius:12px;
+  font-family:var(--sans); font-size:1rem; font-weight:800;
+  color:#020810; cursor:pointer; letter-spacing:.02em;
+  transition:.15s; margin-top:.4rem;
 }
-#loginScreen.hidden{opacity:0;visibility:hidden;pointer-events:none;}
-.login-box{
-  display:flex;flex-direction:column;align-items:center;gap:28px;
-  padding:44px 40px;max-width:380px;width:90%;
-  border:1px solid var(--border2);border-radius:18px;
-  background:rgba(0,10,28,0.85);backdrop-filter:blur(24px);
-  box-shadow:0 0 60px rgba(0,200,255,0.12),0 0 120px rgba(153,85,255,0.08);
-  position:relative;overflow:hidden;
-}
-.login-box::before{
-  content:'';position:absolute;inset:0;
-  background:linear-gradient(135deg,rgba(0,200,255,.04) 0%,transparent 60%,rgba(153,85,255,.04) 100%);
-  pointer-events:none;
-}
-.login-corner{position:absolute;width:18px;height:18px;border-color:var(--cyan);border-style:solid;opacity:.6;}
-.login-corner.tl{top:10px;left:10px;border-width:2px 0 0 2px;}
-.login-corner.tr{top:10px;right:10px;border-width:2px 2px 0 0;}
-.login-corner.bl{bottom:10px;left:10px;border-width:0 0 2px 2px;}
-.login-corner.br{bottom:10px;right:10px;border-width:0 2px 2px 0;}
+.btn-primary:active { transform:scale(.97); }
 
-.login-logo{display:flex;flex-direction:column;align-items:center;gap:6px;}
-.login-diamond{font-size:42px;filter:drop-shadow(0 0 18px rgba(0,200,255,.7));animation:corePulse 2s ease-in-out infinite;}
-.login-title{font-size:22px;font-weight:800;letter-spacing:.25em;color:#7be3ff;text-transform:uppercase;}
-.login-sub{font-family:var(--mono);font-size:9px;color:rgba(180,100,255,0.65);letter-spacing:.18em;text-transform:uppercase;}
-
-.login-divider{width:100%;height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent);}
-
-.btn-google{
-  display:flex;align-items:center;justify-content:center;gap:12px;
-  width:100%;padding:13px 20px;
-  border:1.5px solid rgba(0,200,255,.4);border-radius:12px;
-  background:linear-gradient(135deg,rgba(0,200,255,.1),rgba(153,85,255,.07));
-  color:#e0f4ff;font-family:var(--sans);font-size:14px;font-weight:700;
-  letter-spacing:.06em;cursor:pointer;
-  transition:all .25s;position:relative;overflow:hidden;
+/* ══ SCREEN: RANKING ══════════════════════════════════════ */
+#screen-ranking {
+  padding-bottom: calc(80px + var(--safe-bot));
 }
-.btn-google:hover:not(:disabled){
-  border-color:var(--cyan);
-  background:linear-gradient(135deg,rgba(0,200,255,.22),rgba(153,85,255,.14));
-  box-shadow:0 0 24px rgba(0,200,255,.2);
-  transform:translateY(-1px);
-}
-.btn-google:active:not(:disabled){transform:translateY(0);}
-.btn-google:disabled{opacity:.55;cursor:not-allowed;}
-.btn-google svg{flex-shrink:0;width:20px;height:20px;}
 
-.login-status{
-  font-family:var(--mono);font-size:9px;text-align:center;
-  min-height:14px;letter-spacing:.08em;transition:color .2s;
+.ranking-topbar {
+  position:sticky; top:0; z-index:50;
+  background:rgba(8,8,16,.94); backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  padding:.85rem 1.2rem;
+  display:flex; align-items:center; justify-content:space-between;
+  padding-top:calc(.85rem + var(--safe-top));
 }
-.login-status.ok{color:var(--green);}
-.login-status.err{color:var(--red);}
-.login-status.info{color:var(--cyan);}
+.rtb-brand {
+  display:flex; align-items:center; gap:.5rem;
+  font-family:var(--sans); font-size:1rem; font-weight:800;
+}
+.rtb-dot {
+  width:8px; height:8px; border-radius:50%;
+  background:var(--green); box-shadow:0 0 10px var(--green);
+  animation:pulse-dot 2s ease-in-out infinite;
+}
+.rtb-right { display:flex; align-items:center; gap:.6rem; }
+.rtb-avatar {
+  width:32px; height:32px; border-radius:50%;
+  object-fit:cover; border:2px solid rgba(0,217,255,.3);
+}
+.rtb-avatar-ph {
+  width:32px; height:32px; border-radius:50%;
+  background:var(--surface); border:2px solid var(--border);
+  display:flex; align-items:center; justify-content:center; font-size:.9rem;
+}
 
-.login-scan{
-  position:absolute;left:0;right:0;height:2px;
-  background:linear-gradient(90deg,transparent,rgba(0,200,255,.5),transparent);
-  animation:loginScan 3s linear infinite;top:0;
+/* Hero del usuario */
+.user-hero {
+  background: linear-gradient(180deg, rgba(0,217,255,.08) 0%, transparent 100%);
+  border-bottom:1px solid var(--border);
+  padding:1.4rem 1.2rem;
+  display:flex; align-items:center; gap:1rem;
 }
-@keyframes loginScan{0%{top:0;opacity:1;}100%{top:100%;opacity:0;}}
+.uh-rank {
+  font-family:var(--sans); font-size:2.8rem; font-weight:800;
+  color:var(--cyan); line-height:1; min-width:48px;
+}
+.uh-rank.gold { color:var(--gold); }
+.uh-rank.silver { color:#c0c0c0; }
+.uh-rank.bronze { color:#cd7f32; }
+.uh-info { flex:1; }
+.uh-name { font-size:1.1rem; font-weight:700; }
+.uh-sub { font-size:.72rem; color:var(--muted); margin-top:.15rem; }
+.uh-pts {
+  text-align:right;
+}
+.uh-pts-val { font-family:var(--mono); font-size:1.4rem; font-weight:500; color:var(--cyan); }
+.uh-pts-label { font-family:var(--mono); font-size:.55rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
 
-/* ══ NAV USER CHIP ══ */
-.nav-user{
-  display:flex;align-items:center;gap:8px;padding:5px 10px;
-  border:1px solid var(--border);border-radius:8px;
-  background:var(--bg3);cursor:pointer;transition:all .2s;
-  max-width:150px;overflow:hidden;
+/* NERHIA pulse strip */
+.nerhia-strip {
+  background:var(--surface); border-bottom:1px solid var(--border);
+  padding:.75rem 1.2rem;
+  display:flex; align-items:center; gap:1rem; overflow-x:auto;
+  scrollbar-width:none;
 }
-.nav-user:hover{border-color:var(--border2);background:rgba(0,200,255,.06);}
-.nav-user-photo{width:24px;height:24px;border-radius:50%;object-fit:cover;border:1.5px solid rgba(0,200,255,.4);flex-shrink:0;}
-.nav-user-photo-placeholder{width:24px;height:24px;border-radius:50%;background:rgba(153,85,255,.3);border:1.5px solid rgba(153,85,255,.5);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;}
-.nav-user-name{font-family:var(--sans);font-size:10px;font-weight:600;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.04em;}
+.nerhia-strip::-webkit-scrollbar { display:none; }
+.ns-item { flex-shrink:0; text-align:center; }
+.ns-val { font-family:var(--mono); font-size:.95rem; font-weight:500; }
+.ns-lbl { font-family:var(--mono); font-size:.5rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-top:.1rem; }
+.ns-div { width:1px; height:32px; background:var(--border); flex-shrink:0; }
 
-.btn-signout{
-  padding:5px 10px;border:1px solid rgba(255,68,68,.35);border-radius:8px;
-  background:rgba(255,68,68,.07);color:rgba(255,100,100,.75);
-  font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.06em;
-  cursor:pointer;transition:all .2s;white-space:nowrap;
+/* Ranking list */
+.ranking-section-title {
+  font-family:var(--mono); font-size:.6rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--muted);
+  padding:.75rem 1.2rem .4rem;
 }
-.btn-signout:hover{border-color:rgba(255,68,68,.6);background:rgba(255,68,68,.15);color:#ff6666;}
+
+.ranking-list { padding:0 1rem; display:flex; flex-direction:column; gap:.5rem; }
+.rank-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:.9rem 1rem;
+  display:flex; align-items:center; gap:.85rem;
+  transition:.2s; position:relative; overflow:hidden;
+}
+.rank-card.is-me {
+  background:rgba(0,217,255,.06); border-color:rgba(0,217,255,.2);
+}
+.rank-card.is-me::before {
+  content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:var(--cyan);
+}
+.rank-card.rank-1 { border-color:rgba(255,215,0,.25); background:rgba(255,215,0,.04); }
+.rank-card.rank-2 { border-color:rgba(192,192,192,.2); }
+.rank-card.rank-3 { border-color:rgba(205,127,50,.2); }
+
+.rc-pos {
+  font-family:var(--mono); font-size:.85rem; font-weight:500;
+  width:28px; text-align:center; flex-shrink:0;
+}
+.rank-1 .rc-pos { color:var(--gold); font-size:1.1rem; }
+.rank-2 .rc-pos { color:#c0c0c0; }
+.rank-3 .rc-pos { color:#cd7f32; }
+
+.rc-avatar {
+  width:36px; height:36px; border-radius:50%;
+  object-fit:cover; flex-shrink:0; border:1px solid var(--border);
+}
+.rc-avatar-ph {
+  width:36px; height:36px; border-radius:50%;
+  background:var(--s2); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:1rem; flex-shrink:0;
+}
+
+.rc-info { flex:1; min-width:0; }
+.rc-name { font-size:.9rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rc-meta { font-family:var(--mono); font-size:.58rem; color:var(--muted); margin-top:.15rem; }
+
+.rc-pts {
+  text-align:right; flex-shrink:0;
+}
+.rc-pts-val { font-family:var(--mono); font-size:1rem; font-weight:500; color:var(--cyan); }
+.rc-pts-lbl { font-family:var(--mono); font-size:.52rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+
+/* Bottom actions */
+.bottom-actions {
+  position:fixed; bottom:0; left:0; right:0; z-index:50;
+  background:rgba(8,8,16,.96); backdrop-filter:blur(20px);
+  border-top:1px solid var(--border);
+  padding:.8rem 1.2rem calc(.8rem + var(--safe-bot));
+  display:flex; gap:.6rem;
+}
+.ba-btn {
+  flex:1; padding:.85rem; border-radius:10px;
+  font-family:var(--sans); font-size:.85rem; font-weight:700;
+  border:none; cursor:pointer; transition:.15s;
+  display:flex; align-items:center; justify-content:center; gap:.4rem;
+}
+.ba-btn:active { transform:scale(.96); }
+.ba-primary { background:var(--cyan); color:#020810; }
+.ba-secondary { background:var(--surface); color:var(--text); border:1px solid var(--border); }
+
+/* Splash install banner (iOS) */
+.ios-install-banner {
+  display:none; position:fixed; bottom:0; left:0; right:0; z-index:200;
+  background:var(--surface); border-top:1px solid var(--b2);
+  padding:1rem 1.2rem calc(1rem + var(--safe-bot));
+  gap:.6rem; flex-direction:column;
+}
+.ios-install-banner.show { display:flex; }
+.iib-title { font-size:.9rem; font-weight:700; }
+.iib-sub { font-size:.72rem; color:var(--muted); line-height:1.5; }
+.iib-close { position:absolute; top:.8rem; right:1rem; font-size:1.2rem; cursor:pointer; color:var(--muted); }
+
+/* Toast */
+.toast {
+  position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:.6rem 1.2rem;
+  font-size:.78rem; color:var(--text); opacity:0;
+  transition:all .3s; pointer-events:none; white-space:nowrap;
+  z-index:300;
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* Loader full */
+.full-loader {
+  position:fixed; inset:0; z-index:500;
+  background:var(--bg); display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:1rem;
+}
+.full-loader.gone { display:none; }
+.fl-logo { font-family:var(--sans); font-size:1.6rem; font-weight:800; color:var(--cyan); }
+.fl-sub { font-family:var(--mono); font-size:.62rem; letter-spacing:.14em; color:var(--muted); text-transform:uppercase; }
+
+/* Animaciones de entrada */
+@keyframes slideUp {
+  from { opacity:0; transform:translateY(24px); }
+  to   { opacity:1; transform:none; }
+}
+.anim-in { animation: slideUp .45s cubic-bezier(.2,0,.1,1) both; }
+.anim-in-2 { animation: slideUp .45s .1s cubic-bezier(.2,0,.1,1) both; }
+.anim-in-3 { animation: slideUp .45s .2s cubic-bezier(.2,0,.1,1) both; }
+.anim-in-4 { animation: slideUp .45s .3s cubic-bezier(.2,0,.1,1) both; }
+
+/* ── Achievement popup (VW pattern) ─────────────────────────── */
+.vbc-achievement-popup {
+  position:fixed; bottom:6rem; left:50%;
+  transform:translateX(-50%) translateY(20px);
+  background:rgba(10,8,20,.95);
+  border:1px solid rgba(0,217,255,.3);
+  border-radius:.75rem; padding:.75rem 1.2rem;
+  display:flex; align-items:center; gap:.75rem;
+  opacity:0; transition:opacity .35s,transform .35s;
+  z-index:9999; min-width:260px;
+  backdrop-filter:blur(8px); box-shadow:0 8px 32px rgba(0,217,255,.12);
+}
+.vbc-achievement-popup.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.vbc-ach-icon { font-size:1.8rem; }
+.vbc-ach-title { font-size:.5rem; color:rgba(255,255,255,.45); letter-spacing:.1em; text-transform:uppercase; }
+.vbc-ach-name  { font-size:.75rem; color:#fff; font-weight:600; margin-top:.1rem; }
+.vbc-ach-pts   { font-family:var(--mono); color:#00d9ff; font-size:.9rem; font-weight:700; margin-left:auto; white-space:nowrap; }
+
+/* ── Ranking animation ───────────────────────────────────────── */
+@keyframes rankIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+.ranking-item { animation:rankIn .28s ease both; }
+.ranking-item:nth-child(1){animation-delay:.04s}
+.ranking-item:nth-child(2){animation-delay:.08s}
+.ranking-item:nth-child(3){animation-delay:.12s}
+.ranking-item:nth-child(4){animation-delay:.16s}
+.ranking-item:nth-child(5){animation-delay:.20s}
+.ranking-item:nth-child(n+6){animation-delay:.24s}
+
+/* ══ León 007 Copilot ════════════════════════════════════════ */
+.cop007-fab {
+  position:fixed; right:1.2rem; bottom:5.5rem;
+  width:3rem; height:3rem; border-radius:50%;
+  background:linear-gradient(135deg,#00d9ff,#0070ff);
+  border:none; color:#000; font-size:1.15rem; font-weight:700;
+  cursor:pointer; z-index:200; display:none;
+  box-shadow:0 4px 20px rgba(0,217,255,.45);
+  align-items:center; justify-content:center;
+}
+.cop007-fab.visible { display:flex; }
+.cop007-panel {
+  position:fixed; bottom:0; left:0; right:0; height:72vh;
+  background:var(--surface); border-top:1px solid var(--b2);
+  border-radius:1rem 1rem 0 0; z-index:300;
+  display:flex; flex-direction:column;
+  transform:translateY(100%); transition:transform .35s ease;
+}
+.cop007-panel.open { transform:translateY(0); }
+.cop007-header {
+  padding:.9rem 1.2rem .7rem; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:.5rem; position:relative;
+}
+.cop007-name { font-weight:700; color:var(--cyan); font-size:.88rem; }
+.cop007-sub  { font-size:.58rem; color:var(--muted); }
+.cop007-close {
+  position:absolute; right:1rem; top:50%; transform:translateY(-50%);
+  background:none; border:none; color:var(--muted); font-size:1rem; cursor:pointer;
+}
+.cop007-messages {
+  flex:1; overflow-y:auto; padding:.8rem 1.2rem;
+  display:flex; flex-direction:column; gap:.55rem;
+}
+.cop007-msg {
+  max-width:86%; padding:.5rem .85rem; border-radius:.7rem;
+  font-size:.78rem; line-height:1.5;
+}
+.cop007-msg-user {
+  align-self:flex-end;
+  background:rgba(0,217,255,.12); border:1px solid rgba(0,217,255,.22);
+}
+.cop007-msg-assistant {
+  align-self:flex-start;
+  background:var(--s2); border:1px solid var(--border);
+}
+.cop007-typing { align-self:flex-start; font-size:.68rem; color:var(--muted); font-style:italic; }
+.cop007-seeds { padding:0 1.2rem .5rem; display:flex; gap:.45rem; flex-wrap:wrap; }
+.cop007-seed {
+  font-family:var(--mono); font-size:.57rem; padding:.28rem .65rem;
+  border:1px solid rgba(0,217,255,.28); border-radius:2rem;
+  background:none; color:var(--cyan); cursor:pointer;
+}
+.cop007-input-row {
+  padding:.7rem 1.2rem; border-top:1px solid var(--border);
+  display:flex; gap:.55rem; align-items:center;
+}
+.cop007-input {
+  flex:1; background:var(--s2); border:1px solid var(--border);
+  border-radius:.5rem; color:var(--text); padding:.5rem .8rem; font-size:.8rem;
+}
+.cop007-send {
+  background:var(--cyan); color:#000; border:none;
+  border-radius:.5rem; padding:.5rem .9rem; font-weight:700; cursor:pointer;
+}
+
+/* ══ Mission Widget ══════════════════════════════════════════ */
+.vbc-mission-wrap { padding:.75rem 1rem 0; }
+.vbc-mission-widget {
+  background:var(--s2); border:1px solid var(--border);
+  border-radius:.6rem; padding:.6rem .9rem;
+  transition:border-color .4s;
+}
+.vbc-mission-widget.completed { border-color:var(--gold); }
+.vmw-row { display:flex; align-items:center; gap:.45rem; margin-bottom:.38rem; }
+.vmw-emoji { font-size:.85rem; }
+.vmw-label { font-size:.67rem; color:var(--text); }
+.vmw-bar-wrap { height:3px; background:var(--border); border-radius:2px; overflow:hidden; }
+.vmw-bar { height:100%; background:var(--cyan); border-radius:2px; transition:width .45s ease; }
 
 </style>
 </head>
 <body>
 
-<canvas id="bgCanvas"></canvas>
+<!-- FULL PAGE LOADER -->
+<div class="full-loader" id="fullLoader">
+  <div class="fl-logo">VBC</div>
+  <div class="spin"></div>
+  <div class="fl-sub">cargando protocolo…</div>
+</div>
 
-<!-- ══ LOGIN SCREEN ══ -->
-<div id="loginScreen">
-  <div class="login-scan"></div>
-  <div class="login-box">
-    <div class="login-scan"></div>
-    <div class="login-corner tl"></div>
-    <div class="login-corner tr"></div>
-    <div class="login-corner bl"></div>
-    <div class="login-corner br"></div>
-    <div class="login-logo">
-      <div class="login-diamond">💎</div>
-      <div class="login-title">VBC Protocol</div>
-      <div class="login-sub">SAO Holo Interface · VibraAlto</div>
+<!-- ══ SCREEN: SPLASH / LOGIN ═══════════════════════════════ -->
+<div class="screen" id="screen-splash">
+
+  <div class="splash-logo anim-in">
+    <div class="splash-dot"></div>
+    <div class="splash-brand">
+      <span class="vbc">VBC </span><span class="protocol">Protocol</span>
     </div>
-    <div class="login-divider"></div>
-    <button class="btn-google" id="btnGoogle" onclick="startGoogleLogin()">
-      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-      </svg>
-      Entrar con Google
+    <div class="splash-tag">VibraAlto · Powered by NERHIA</div>
+  </div>
+
+  <div class="splash-claim anim-in-2">
+    <strong>Compite. Aprende. Gana.</strong><br>
+    El ranking que te lleva a octubre.
+  </div>
+
+  <button class="btn-google anim-in-3" id="btnGoogleLogin">
+    <svg class="google-icon" viewBox="0 0 24 24">
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+    </svg>
+    Entrar con Google
+  </button>
+
+  <button class="install-btn" id="btnInstall">
+    ⬇ Instalar app
+  </button>
+
+  <div class="splash-install-hint anim-in-4">
+    Sin App Store · Sin registro · Solo Google<br>
+    Funciona offline · Se instala en 1 tap
+  </div>
+
+</div>
+
+<!-- ══ SCREEN: NERHIA +18 ════════════════════════════════════ -->
+<div class="screen" id="screen-age">
+
+  <div class="age-header anim-in">
+    <div class="tag">NERHIA · Portón +18</div>
+    <div class="age-title">Verificación de edad</div>
+    <div class="age-sub">Mira la cámara · listo en 3 seg</div>
+  </div>
+
+  <div class="age-cam-wrap anim-in-2">
+    <video id="age-video" autoplay muted playsinline></video>
+    <canvas id="age-canvas"></canvas>
+    <div class="age-scanline" id="ageScanline"></div>
+
+    <!-- Loading -->
+    <div class="age-loading" id="ageLoading">
+      <div class="spin"></div>
+      <div class="age-loading-text" id="ageLoadingText">Cargando IA…</div>
+    </div>
+
+    <!-- Result overlay -->
+    <div class="age-result-overlay" id="ageResult">
+      <div class="aro-icon" id="aroIcon"></div>
+      <div class="aro-age" id="aroAge"></div>
+      <div class="aro-label" id="aroLabel"></div>
+      <div class="aro-note" id="aroNote"></div>
+      <button class="aro-btn" id="aroBtn">Continuar →</button>
+    </div>
+  </div>
+
+  <div class="age-status">
+    <div class="age-status-dot" id="ageStatusDot"></div>
+    <span id="ageStatusText">Iniciando cámara…</span>
+  </div>
+
+  <div class="age-privacy">
+    0 imágenes al servidor · Edge AI · Privacy by Design<br>
+    NERHIA · VibraAlto.cl
+  </div>
+
+  <button class="btn-skip" id="ageSkip">Omitir verificación →</button>
+
+</div>
+
+<!-- ══ SCREEN: ONBOARDING ════════════════════════════════════ -->
+<div class="screen" id="screen-onboard">
+
+  <div class="onboard-header anim-in">
+    <div class="oh-avatar-placeholder" id="onboardAvatarPh">👤</div>
+    <div>
+      <div class="oh-name" id="onboardName">Bienvenido</div>
+      <div class="oh-email" id="onboardEmail">—</div>
+    </div>
+  </div>
+
+  <div class="onboard-title anim-in-2">
+    Último paso.<br>
+    <span>Completa tu perfil.</span>
+  </div>
+
+  <div class="nerhia-badge-inline anim-in-2">
+    <div class="nbi-dot"></div>
+    NERHIA confirma: mayor de 18 · acceso autorizado
+  </div>
+
+  <div class="form-group anim-in-3">
+    <label class="form-label">Nombre completo</label>
+    <input type="text" class="form-input" id="inputNombre" placeholder="Tu nombre" autocomplete="name">
+  </div>
+
+  <div class="form-group anim-in-3">
+    <label class="form-label">Teléfono</label>
+    <input type="tel" class="form-input" id="inputTel" placeholder="+56 9 xxxx xxxx" autocomplete="tel">
+  </div>
+
+  <div class="form-group anim-in-3">
+    <label class="form-label">¿Cómo te enteraste?</label>
+    <select class="form-select" id="inputSource">
+      <option value="">Seleccionar…</option>
+      <option value="gym">En el gym</option>
+      <option value="qr">Escaneé un QR</option>
+      <option value="leon">Me lo contó León</option>
+      <option value="rrss">Redes sociales</option>
+      <option value="otro">Otro</option>
+    </select>
+  </div>
+
+  <button class="btn-primary anim-in-4" id="btnConfirmar">
+    ENTRAR AL RANKING →
+  </button>
+
+</div>
+
+<!-- ══ SCREEN: RANKING ════════════════════════════════════════ -->
+<div class="screen" id="screen-ranking">
+
+  <div class="ranking-topbar">
+    <div class="rtb-brand">
+      <div class="rtb-dot"></div>
+      VBC Protocol
+    </div>
+    <div class="rtb-right">
+      <div id="rankingUserAvatarWrap">
+        <div class="rtb-avatar-ph">👤</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mi posición -->
+  <div class="user-hero" id="userHero">
+    <div class="uh-rank" id="userRankNum">#—</div>
+    <div class="uh-info">
+      <div class="uh-name" id="userHeroName">—</div>
+      <div class="uh-sub" id="userHeroSub">0 participaciones · inscrito hoy</div>
+    </div>
+    <div class="uh-pts">
+      <div class="uh-pts-val" id="userHeroPts">0</div>
+      <div class="uh-pts-label">pts</div>
+    </div>
+  </div>
+
+  <!-- NERHIA strip -->
+  <div class="nerhia-strip">
+    <div class="ns-item">
+      <div class="ns-val" id="strip-uvx" style="color:var(--cyan)">—</div>
+      <div class="ns-lbl">UVX</div>
+    </div>
+    <div class="ns-div"></div>
+    <div class="ns-item">
+      <div class="ns-val" id="strip-cai" style="color:var(--violet)">—</div>
+      <div class="ns-lbl">CAI</div>
+    </div>
+    <div class="ns-div"></div>
+    <div class="ns-item">
+      <div class="ns-val" id="strip-uei" style="color:var(--green)">—</div>
+      <div class="ns-lbl">UEI</div>
+    </div>
+    <div class="ns-div"></div>
+    <div class="ns-item">
+      <div class="ns-val" id="strip-health" style="color:var(--green);font-size:.72rem">Healthy</div>
+      <div class="ns-lbl">Estado</div>
+    </div>
+    <div class="ns-div"></div>
+    <div class="ns-item">
+      <div class="ns-val" id="strip-inscritos" style="color:var(--gold)">—</div>
+      <div class="ns-lbl">Inscritos</div>
+    </div>
+  </div>
+
+  <div class="ranking-section-title">Ranking global · VBC Protocol</div>
+  <div class="ranking-list" id="rankingList">
+    <!-- generado por JS -->
+  </div>
+
+  <!-- Bottom actions -->
+  <div class="bottom-actions">
+    <button class="ba-btn ba-primary" id="btnShareApp">
+      ↗ Compartir app
     </button>
-    <div class="login-status info" id="loginStatus">◈ AmuSphere · verificando sesión…</div>
+    <button class="ba-btn ba-secondary" id="btnInvitar">
+      + Invitar
+    </button>
   </div>
+
 </div>
 
-
-<!-- SAO Ripple container -->
-<div class="sao-ripple-container" id="saoRipples"></div>
-
-<div class="app">
-  <!-- ══ TOP NAV ══ -->
-  <nav class="topnav">
-    <div class="nav-brand">
-      <div class="core-dot"></div>
-      <div>
-        <span class="brand-txt">VBC Protocol</span>
-        <span class="brand-sub">SAO HOLO INTERFACE · VibraAlto</span>
-      </div>
-    </div>
-    <div class="nav-tabs">
-      <button class="nav-tab active" onclick="goScreen('perfil')">⚔ Perfil</button>
-      <button class="nav-tab" onclick="goScreen('lift')">💪 Lift</button>
-      <button class="nav-tab" onclick="goScreen('skills')">✨ Skills</button>
-      <button class="nav-tab" onclick="goScreen('wallet')">💎 Wallet</button>
-      <button class="nav-tab" onclick="goScreen('ranking')">🏆 Ranking</button>
-    </div>
-    <div class="nav-right">
-      <!-- 💎 Diamond sprite — moneda VBC */-->
-      <div class="vbc-badge" onclick="openSaoOverlay('wallet'); addSaoRipple(event);" title="Ver Wallet SAO">
-        <span class="diamond-icon">💎</span>
-        <div>
-          <div class="vbc-bal" id="navBal">0</div>
-          <div class="vbc-lbl">VBC</div>
-        </div>
-      </div>
-      <!-- SAO Menu toggle -->
-      <button class="sao-toggle" id="saoToggleBtn" onclick="openSaoOverlay('inventory'); addSaoRipple(event);">
-        ◈ Menú SAO
-      </button>
-            <div class="nav-user" id="navUserChip" style="display:none;" title="Tu cuenta">
-        <span class="nav-user-photo-placeholder" id="navUserPhoto">👤</span>
-        <span class="nav-user-name" id="navUserName">Usuario</span>
-      </div>
-      <button class="btn-signout" id="btnSignOut" style="display:none;" onclick="doSignOut()">✕ Salir</button>
-      <span class="nav-time" id="navTime">00:00:00</span>
-    </div>
-  </nav>
-
-  <!-- ══ SCREEN: PERFIL ══ -->
-  <div class="screen active" id="s-perfil">
-    <div class="g2" style="margin-top:8px;">
-      <div>
-        <!-- Mission widget -->
-        <div class="vbc-mission-wrap" id="missionWrap" style="display:none;">
-          <div id="vbcMissionWidget" class="vbc-mission-widget"></div>
-        </div>
-
-        <div class="panel" style="margin-bottom:16px;">
-          <div class="scan"></div>
-          <div class="corner-d tl"></div><div class="corner-d tr"></div>
-          <div class="corner-d bl"></div><div class="corner-d br"></div>
-          <div class="panel-h">
-            <span class="panel-title">Atleta SAO</span>
-            <span class="panel-sub" id="profileTime">NERVEGEAR · ONLINE</span>
-          </div>
-          <div class="panel-body">
-            <div class="hero-row">
-              <div class="avatar-wrap" id="profileAvatarWrap">
-                <div class="avatar" id="profileAvatar">🦁</div>
-                <div class="avatar-ring"></div>
-              </div>
-              <div class="hero-info">
-                <div class="hero-name" id="heroName">Atleta VBC</div>
-                <div class="hero-level">
-                  <span class="level-badge" id="heroLevel">LVL 1</span>
-                  <span class="tier-badge bronce" id="heroBadge">🥉 BRONCE</span>
-                </div>
-                <div class="hero-tagline">TU FUERZA ES TU FIRMA</div>
-              </div>
-            </div>
-            <div class="stat-row">
-              <div class="stat-item">
-                <div class="stat-hdr">
-                  <span class="stat-name">FUERZA · POWER SCORE</span>
-                  <span class="stat-val" style="color:#ff7722;" id="strVal">0 / 99</span>
-                </div>
-                <div class="bar-bg"><div class="bar-fill str" id="strBar" style="width:0%"></div></div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-hdr">
-                  <span class="stat-name">XP LIFT</span>
-                  <span class="stat-val" style="color:var(--cyan);" id="xpVal">0 / 100</span>
-                </div>
-                <div class="bar-bg"><div class="bar-fill xp" id="xpBar" style="width:0%"></div></div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-hdr">
-                  <span class="stat-name">CONDOR POWER</span>
-                  <span class="stat-val" style="color:var(--purple);" id="condorPct">0%</span>
-                </div>
-                <div class="bar-bg"><div class="bar-fill cond" id="condBar" style="width:0%"></div></div>
-              </div>
-            </div>
-            <div class="stat-cards">
-              <div class="scard"><div class="scard-val gold" id="sc-vbc">0</div><div class="scard-lbl">💎 VBC TOTAL</div></div>
-              <div class="scard"><div class="scard-val cyan" id="sc-ps">0</div><div class="scard-lbl">BEST SCORE</div></div>
-              <div class="scard"><div class="scard-val green" id="sc-lifts">0</div><div class="scard-lbl">LIFTS</div></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-h">
-            <span class="panel-title">Skills Equipadas</span>
-            <span class="panel-sub" id="equippedCount">0 / 5</span>
-          </div>
-          <div class="panel-body">
-            <div class="eq-grid" id="equippedSlots"></div>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <!-- Video Upload Panel (narrativa repo) -->
-        <div class="panel" style="margin-bottom:16px;">
-          <div class="panel-h">
-            <span class="panel-title">📹 Proof of Lift · Video</span>
-            <span class="panel-sub">SUBE TU LIFT · +50 VBC</span>
-          </div>
-          <div class="panel-body">
-            <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:8px;line-height:1.6;">
-              En el universo SAO, cada logro queda grabado en el <span style="color:var(--cyan);">AmuSphere Log</span>. Sube tu video de levantamiento y el sistema NERHIA te otorga VBC extra como prueba de fuerza verificada.
-            </div>
-            <div class="video-upload-area" id="uploadArea" onclick="document.getElementById('videoInput').click()">
-              <div class="upload-icon">📡</div>
-              <div class="upload-title">Subir video de lift</div>
-              <div class="upload-sub">MP4 · MOV · AVI · MAX 100MB</div>
-              <div class="upload-pts-badge">💎 +50 VBC por upload verificado</div>
-            </div>
-            <input type="file" id="videoInput" accept="video/*" onchange="handleVideoUpload(event)">
-            <div id="videoList"></div>
-          </div>
-        </div>
-
-        <div class="panel" style="margin-bottom:16px;">
-          <div class="panel-h">
-            <span class="panel-title">Records Personales</span>
-            <span class="panel-sub">EPLEY · EST 1RM</span>
-          </div>
-          <div class="panel-body" id="recordsPanel">
-            <div style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:20px;">
-              Aún no has registrado ningún lift.<br>¡Ve a LIFT para comenzar!
-            </div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-h">
-            <span class="panel-title">Sistema · AmuSphere Log</span>
-            <span class="panel-sub" id="logTime">—</span>
-          </div>
-          <div class="panel-body">
-            <div class="log-area" id="logArea">
-              <div class="log-line"><span class="info">▶</span> VBC Protocol SAO Fusion · v3.0</div>
-              <div class="log-line"><span class="info">▶</span> AmuSphere conectado · NERHIA activo</div>
-              <div class="log-line"><span class="ok">▶</span> Proof-of-Strength · EN ESPERA</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ SCREEN: LIFT ══ -->
-  <div class="screen" id="s-lift">
-    <div class="g2">
-      <div>
-        <div class="panel" style="margin-bottom:16px;">
-          <div class="scan"></div>
-          <div class="corner-d tl"></div><div class="corner-d tr"></div>
-          <div class="panel-h">
-            <span class="panel-title">Disciplina</span>
-            <span class="panel-sub">SELECCIONA EJERCICIO</span>
-          </div>
-          <div class="panel-body">
-            <div class="disc-grid">
-              <div class="disc-btn active" onclick="selectDisc(this,'bench')" data-disc="bench">
-                <span class="disc-icon">🏋️</span><span class="disc-name">Bench</span><span class="disc-rec">WR: 335 kg</span>
-              </div>
-              <div class="disc-btn" onclick="selectDisc(this,'deadlift')" data-disc="deadlift">
-                <span class="disc-icon">⚡</span><span class="disc-name">Deadlift</span><span class="disc-rec">WR: 501 kg</span>
-              </div>
-              <div class="disc-btn" onclick="selectDisc(this,'squat')" data-disc="squat">
-                <span class="disc-icon">🦵</span><span class="disc-name">Squat</span><span class="disc-rec">WR: 477 kg</span>
-              </div>
-              <div class="disc-btn" onclick="selectDisc(this,'overhead')" data-disc="overhead">
-                <span class="disc-icon">🙌</span><span class="disc-name">OHP</span><span class="disc-rec">WR: 225 kg</span>
-              </div>
-            </div>
-            <div class="input-row">
-              <div class="input-group">
-                <label class="input-label">Peso (kg)</label>
-                <input class="holo-input" type="number" id="inWeight" placeholder="ej: 100" min="1" max="600" oninput="updatePreview()">
-                <span class="input-hint">Kg levantados</span>
-              </div>
-              <div class="input-group">
-                <label class="input-label">Repeticiones</label>
-                <input class="holo-input" type="number" id="inReps" placeholder="ej: 8" min="1" max="30" oninput="updatePreview()">
-                <span class="input-hint">Máx 30 reps</span>
-              </div>
-            </div>
-            <button class="lift-btn" onclick="registerLift()" id="liftBtn">⟶ REGISTRAR LIFT · CALCULAR SCORE</button>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <div class="panel" style="margin-bottom:16px;">
-          <div class="panel-h">
-            <span class="panel-title">Preview en Vivo</span>
-            <span class="panel-sub" id="previewDisc">BENCH PRESS</span>
-          </div>
-          <div class="panel-body">
-            <div class="preview-card">
-              <div class="preview-row"><span class="preview-key">EST 1RM (Epley)</span><span class="preview-val" id="prev1rm">—</span></div>
-              <div class="preview-row"><span class="preview-key">% Récord Mundial</span><span class="preview-val" id="prevPct">—</span></div>
-              <div class="preview-row"><span class="preview-key">Power Score</span><span class="preview-val" style="color:var(--cyan);font-size:22px;" id="prevScore">—</span></div>
-              <div class="preview-row"><span class="preview-key">Tier SAO</span><span class="preview-val" id="prevTier">—</span></div>
-              <div class="preview-row"><span class="preview-key">⚡ VBC que ganarás</span><span class="preview-val" style="color:var(--gold);" id="prevVBC">—</span></div>
-              <div class="preview-row"><span class="preview-key">💎 CONDOR tokens</span><span class="preview-val" style="color:var(--purple);" id="prevCOND">—</span></div>
-            </div>
-            <div class="panel" style="margin-top:12px;">
-              <div class="panel-h"><span class="panel-title">Bonus Activo</span><span class="panel-sub">SKILLS EQUIPADAS</span></div>
-              <div class="panel-body" id="bonusPanel"><div style="color:var(--text3);font-family:var(--mono);font-size:10px;">Equipa skills para obtener bonus</div></div>
-            </div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-h"><span class="panel-title">Historial Reciente</span><span class="panel-sub">ÚLTIMOS 5 LIFTS</span></div>
-          <div class="panel-body"><div id="liftHistory" style="display:flex;flex-direction:column;gap:6px;"><div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:12px;">Sin lifts aún</div></div></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ SCREEN: SKILLS ══ -->
-  <div class="screen" id="s-skills">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-      <div>
-        <div style="font-size:18px;font-weight:700;color:#c8a8ff;margin-bottom:2px;">Tienda de Skills · Interface SAO</div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);">Gasta VBC · Desbloquea poder digital en el protocolo</div>
-      </div>
-      <div class="vbc-badge" style="cursor:default;">
-        <span class="diamond-icon">💎</span>
-        <div><span class="vbc-bal" id="shopBal">0</span><div class="vbc-lbl">VBC SALDO</div></div>
-      </div>
-    </div>
-    <div class="skills-grid" id="skillsGrid"></div>
-  </div>
-
-  <!-- ══ SCREEN: WALLET ══ -->
-  <div class="screen" id="s-wallet">
-    <div class="g2">
-      <div>
-        <div class="wallet-hero panel" style="margin-bottom:16px;">
-          <div class="scan"></div>
-          <div style="font-size:10px;font-family:var(--mono);letter-spacing:.2em;color:rgba(226,195,106,.45);margin-bottom:6px;">💎 VBC DIAMONDS · BALANCE</div>
-          <div class="wh-bal" id="walletBal">0</div>
-          <div class="wh-lbl">VBC FUEL · WALLET SAO</div>
-          <div class="wh-sub" id="walletSub">0 lifts · 0 skills</div>
-        </div>
-        <div class="condor-card panel">
-          <div><div class="condor-val" id="condorBal">0</div><div class="condor-lbl">CONDOR TOKENS · BASE L2</div></div>
-          <div style="text-align:right;"><div style="font-family:var(--mono);font-size:10px;color:var(--text3);">Base L2</div><div style="font-family:var(--mono);font-size:9px;color:rgba(153,85,255,.4);margin-top:2px;">VBC × 980 (2% burn)</div></div>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-h"><span class="panel-title">Historial de TX</span><span class="panel-sub" id="txCount">0 TX</span></div>
-        <div class="panel-body"><div class="tx-list" id="txList"><div style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:20px;">Sin transacciones aún</div></div></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ SCREEN: RANKING ══ -->
-  <div class="screen" id="s-ranking">
-    <div class="panel">
-      <div class="scan"></div>
-      <div class="panel-h"><span class="panel-title">Leaderboard Global · SAO</span><span class="panel-sub">PROOF-OF-STRENGTH RANKING</span></div>
-      <div class="panel-body" style="padding:12px 16px;">
-        <div class="lb-header">
-          <div class="lb-hcol">#</div>
-          <div class="lb-hcol left">ATLETA</div>
-          <div class="lb-hcol">TIER</div>
-          <div class="lb-hcol">SCORE</div>
-          <div class="lb-hcol">💎 VBC</div>
-        </div>
-        <div id="lbRows"></div>
-      </div>
-    </div>
-  </div>
+<!-- iOS Install Banner -->
+<div class="ios-install-banner" id="iosBanner">
+  <div class="iib-close" id="iosBannerClose">✕</div>
+  <div class="iib-title">📲 Instala VBC Protocol</div>
+  <div class="iib-sub">Toca <strong>Compartir</strong> → "<strong>Agregar a inicio</strong>" para instalar sin App Store.</div>
 </div>
 
-<!-- ══ SAO HOLOGRAPHIC OVERLAY
-     En el universo SAO, esta pantalla aparece cuando el jugador
-     toca el icono del menú en su brazo izquierdo virtual.
-     Las pantallas flotan a ~80cm del ojo como proyecciones del AmuSphere.
-══ -->
-<div class="sao-overlay" id="saoOverlay">
-  <svg class="sao-hex-bg" viewBox="0 0 800 640" xmlns="http://www.w3.org/2000/svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;">
-    <defs><pattern id="saoHex" width="52" height="60" patternUnits="userSpaceOnUse">
-      <polygon points="26,2 50,15 50,45 26,58 2,45 2,15" fill="none" stroke="rgba(140,60,255,1)" stroke-width="0.7"/>
-    </pattern></defs>
-    <rect width="100%" height="100%" fill="url(#saoHex)" opacity="0.5"/>
-  </svg>
-
-  <button class="sao-close" onclick="closeSaoOverlay()">✕</button>
-
-  <div class="sao-interface">
-    <!-- Left: SAO Menu (estilo ALO/SAO panel del jugador) -->
-    <div class="sao-menu-panel">
-      <div class="sao-menu-header">
-        <div class="sao-player-row">
-          <div class="sao-avatar">🦁</div>
-          <div>
-            <div class="sao-player-name" id="saoPlayerName">Atleta VBC</div>
-            <div class="sao-player-lvl" id="saoPlayerLvl">LVL 1 · BRONCE</div>
-          </div>
-        </div>
-        <div class="sao-menu-tag">Sistema · Menú SAO</div>
-      </div>
-      <div class="sao-menu-items">
-        <div class="sao-item active" id="sao-item-inventory" onclick="openSaoTab('inventory',this)">
-          <span class="sao-item-icon">🎒</span><span class="sao-item-text">Inventario</span>
-          <span class="sao-item-badge" id="saoBadgeInv">—</span>
-        </div>
-        <div class="sao-item" id="sao-item-skills" onclick="openSaoTab('skills',this)">
-          <span class="sao-item-icon">⚔️</span><span class="sao-item-text">Habilidades</span>
-          <span class="sao-item-badge" id="saoBadgeSkills">0</span>
-        </div>
-        <div class="sao-item" id="sao-item-status" onclick="openSaoTab('status',this)">
-          <span class="sao-item-icon">📊</span><span class="sao-item-text">Estado</span>
-        </div>
-        <div class="sao-item" id="sao-item-wallet" onclick="openSaoTab('wallet',this)">
-          <span class="sao-item-icon">💎</span><span class="sao-item-text">VBC Wallet</span>
-          <span class="sao-item-badge" id="saoBadgeVBC">0</span>
-        </div>
-        <div class="sao-item" id="sao-item-logros" onclick="openSaoTab('logros',this)">
-          <span class="sao-item-icon">🏆</span><span class="sao-item-text">Logros</span>
-          <span class="sao-item-badge" id="saoBadgeLogros">0</span>
-        </div>
-        <div class="sao-item" id="sao-item-log" onclick="openSaoTab('log',this)">
-          <span class="sao-item-icon">📡</span><span class="sao-item-text">AmuSphere Log</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Right: Detail panel (changes with tab) -->
-    <div class="sao-detail-panel" id="saoDetailPanel">
-      <!-- Filled by JS -->
-    </div>
-  </div>
-</div>
-
-<!-- SAO floating action button (tap arm to open menu) -->
-<div class="sao-fab" onclick="openSaoOverlay('inventory'); addSaoRipple(event);" title="Abrir Menú SAO · Toca el brazo">
-  ◈
-</div>
-
-<!-- Result overlay -->
-<div class="result-overlay" id="resultOverlay">
-  <div class="result-card">
-    <div class="corner-d tl"></div><div class="corner-d tr"></div>
-    <div class="corner-d bl"></div><div class="corner-d br"></div>
-    <div style="font-family:var(--mono);font-size:9px;color:var(--text2);letter-spacing:.25em;margin-bottom:4px;">PROOF · OF · STRENGTH · SAO</div>
-    <span class="result-streak" id="resStreak"></span>
-    <div class="result-score" id="resScore">0</div>
-    <div class="result-tier" id="resTier"></div>
-    <div class="result-grid">
-      <div class="rg-item"><div class="rg-val cyan" id="res1rm">—</div><div class="rg-lbl">EST 1RM</div></div>
-      <div class="rg-item"><div class="rg-val gold" id="resVBC">—</div><div class="rg-lbl">💎 VBC</div></div>
-      <div class="rg-item"><div class="rg-val green" id="resCOND">—</div><div class="rg-lbl">CONDOR</div></div>
-    </div>
-    <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:14px;" id="resPct"></div>
-    <button class="result-close" onclick="closeResult()">✓ RECLAMAR TOKENS · SAO LOG</button>
-  </div>
-</div>
-
-<div class="toast-wrap" id="toastWrap"></div>
+<!-- Toast -->
+<div class="toast" id="toast"></div>
 
 <script>
+void function VBCProtocol() { "use strict";
 
-  // ════════════════════════════════════════════════════
-  // FIREBASE CONFIG + AUTH
-  // ════════════════════════════════════════════════════
-  var _fbApp, _db, _auth, _currentUser = null;
-
-  const _FC = {
-    apiKey:       "AIzaSyA-PBjiR6uJtXg00JZnsC78Aqy4yUK__g8",
-    authDomain:   "vibraaltoai-11f55.firebaseapp.com",
-    projectId:    "vibraaltoai-11f55",
-    storageBucket:"vibraaltoai-11f55.appspot.com",
+  /* ══ FIREBASE CONFIG ════════════════════════════════════════ */
+  /* Reemplazar con tu config real de Firebase */
+  var _FC = {
+    apiKey:            "AIzaSyA-PBjiR6uJtXg00JZnsC78Aqy4yUK__g8",
+    authDomain:        "vibraaltoai-11f55.firebaseapp.com",
+    projectId:         "vibraaltoai-11f55",
+    storageBucket:     "vibraaltoai-11f55.appspot.com",
     messagingSenderId: "482078525826",
-    appId:        "1:482078525826:web:6a1a3e2f4f1a3e2f"
+    appId:             "1:482078525826:web:6a1a3e2f4f1a3e2f"
   };
 
+  var app = null, db = null, auth = null;
   try {
-    _fbApp = firebase.initializeApp(_FC);
-    _db    = firebase.firestore();
-    _auth  = firebase.auth();
+    app  = firebase.initializeApp(_FC);
+    db   = firebase.firestore();
+    auth = firebase.auth();
+    db.enablePersistence({synchronizeTabs:false}).catch(function(){});
   } catch(e) {
-    console.warn('[VBC] Firebase init:', e.message);
+    console.warn("[VBC] Firebase init:", e.message);
   }
 
-  // ── Google Sign-In (popup → redirect fallback) ──
-  function setLoginStatus(msg, type) {
-    var el = document.getElementById('loginStatus');
-    if (!el) return;
+  /* ══ STATE ══════════════════════════════════════════════════ */
+  var state = {
+    user:       null,
+    profile:    null,
+    ageVerified:false,
+    ageValue:   null,
+    screen:     "splash",
+  };
+
+  var nerhia = { uvx:73, mpi:71, cai:64, iei:61, uei:76, health:"Healthy" };
+
+  /* ══ HELPERS ════════════════════════════════════════════════ */
+  function $$(id){ return document.getElementById(id); }
+
+  function showScreen(name) {
+    document.querySelectorAll(".screen").forEach(function(s){
+      s.classList.remove("active");
+    });
+    var el = $$("screen-" + name);
+    if(el) el.classList.add("active");
+    state.screen = name;
+    $$("fullLoader").classList.add("gone");
+  }
+
+  function toast(msg, ms) {
+    var el = $$("toast");
     el.textContent = msg;
-    el.className = 'login-status ' + (type || 'info');
+    el.classList.add("show");
+    setTimeout(function(){ el.classList.remove("show"); }, ms || 2500);
   }
 
-  function startGoogleLogin() {
-    var btn = document.getElementById('btnGoogle');
-    if (btn) { btn.disabled = true; btn.textContent = '◈ Conectando…'; }
-    setLoginStatus('◈ Iniciando sesión con Google…', 'info');
+  /* ══ NERHIA ENGINE ══════════════════════════════════════════ */
+  function computeNerhia() {
+    var j = function(v){ return Math.min(99,Math.max(20,v+Math.floor((Math.random()-.5)*10))); };
+    nerhia.uvx=j(73); nerhia.mpi=j(71); nerhia.cai=j(64);
+    nerhia.iei=j(61); nerhia.uei=j(76);
+    nerhia.health = nerhia.uvx>=80?"⚡ Hyperactive"
+                  : nerhia.uvx>=60?"● Healthy"
+                  : nerhia.uvx>=40?"◌ Slow":"⚠ Critical";
+  }
 
-    if (!_auth) {
-      setLoginStatus('✕ Firebase no disponible', 'err');
-      if (btn) { btn.disabled = false; btn.innerHTML = getGoogleBtnHTML(); }
-      return;
-    }
-    var provider = new firebase.auth.GoogleAuthProvider();
-    _auth.signInWithPopup(provider)
-      .then(function(result) {
-        setLoginStatus('✔ Sesión iniciada · cargando AmuSphere…', 'ok');
-      })
-      .catch(function(err) {
-        if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-          setLoginStatus('◈ Redirigiendo a Google…', 'info');
-          _auth.signInWithRedirect(provider);
-        } else if (err.code === 'auth/unauthorized-domain') {
-          setLoginStatus('✕ Dominio no autorizado — verifica Firebase Console', 'err');
-          resetLoginBtn();
-        } else if (err.code === 'auth/network-request-failed') {
-          setLoginStatus('✕ Sin conexión — verifica tu red', 'err');
-          resetLoginBtn();
-        } else {
-          setLoginStatus('✕ Error: ' + err.message, 'err');
-          resetLoginBtn();
-        }
+  function updateNerhiaStrip() {
+    function s(id,v){ var el=$$(id); if(el) el.textContent=v; }
+    s("strip-uvx", nerhia.uvx);
+    s("strip-cai", nerhia.cai);
+    s("strip-uei", nerhia.uei);
+    s("strip-health", nerhia.health);
+  }
+
+  computeNerhia();
+  setInterval(function(){ computeNerhia(); updateNerhiaStrip(); }, 8000);
+
+  /* ══ PWA INSTALL ════════════════════════════════════════════ */
+  var deferredInstallPrompt = null;
+
+  window.addEventListener("beforeinstallprompt", function(e) {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    var btn = $$("btnInstall");
+    if(btn) btn.classList.add("show");
+  });
+
+  var btnInstall = $$("btnInstall");
+  if(btnInstall) {
+    btnInstall.addEventListener("click", function() {
+      if(!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      deferredInstallPrompt.userChoice.then(function(r){
+        if(r.outcome === "accepted") toast("✓ App instalada");
+        deferredInstallPrompt = null;
+        btnInstall.classList.remove("show");
       });
+    });
   }
 
-  function resetLoginBtn() {
-    var btn = document.getElementById('btnGoogle');
-    if (!btn) return;
-    btn.disabled = false;
-    btn.innerHTML = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width:20px;height:20px;flex-shrink:0;"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>Entrar con Google';
+  /* iOS: mostrar banner al llegar al ranking */
+  var isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+  var isInStandaloneMode = window.navigator.standalone === true;
+  if(isIOS && !isInStandaloneMode) {
+    setTimeout(function(){
+      var b = $$("iosBanner");
+      if(b) b.classList.add("show");
+    }, 3000);
+  }
+  var iosBannerClose = $$("iosBannerClose");
+  if(iosBannerClose) {
+    iosBannerClose.addEventListener("click",function(){
+      var b = $$("iosBanner"); if(b) b.classList.remove("show");
+    });
   }
 
-  function doSignOut() {
-    if (!_auth) return;
-    _auth.signOut().catch(function(e){ console.warn('[VBC] signOut:', e); });
+  /* ══ GOOGLE AUTH ════════════════════════════════════════════ */
+  var btnGoogle = $$("btnGoogleLogin");
+  if(btnGoogle) {
+    btnGoogle.addEventListener("click", function() {
+      if(!auth) { toast("Error de conexión"); return; }
+      btnGoogle.textContent = "Conectando…";
+      var provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider)
+        .then(function(result) {
+          state.user = result.user;
+          updateUserUI();
+          checkUserProfile(result.user);
+        })
+        .catch(function(e) {
+          console.error("[VBC] Auth error:", e);
+          btnGoogle.innerHTML = '<svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Entrar con Google';
+          toast("Error al iniciar sesión");
+        });
+    });
   }
 
-  function onUserSignedIn(user) {
-    _currentUser = user;
-    // Update state name
-    if (user.displayName) state.name = user.displayName.split(' ')[0];
-
-    // Nav user chip
-    var chip = document.getElementById('navUserChip');
-    var nameEl = document.getElementById('navUserName');
-    var photoEl = document.getElementById('navUserPhoto');
-    var signOutBtn = document.getElementById('btnSignOut');
-    if (chip) chip.style.display = 'flex';
-    if (signOutBtn) signOutBtn.style.display = 'block';
-    if (nameEl) nameEl.textContent = user.displayName ? user.displayName.split(' ')[0] : user.email;
-    if (photoEl && user.photoURL) {
-      photoEl.outerHTML = '<img class="nav-user-photo" id="navUserPhoto" src="' + user.photoURL + '" alt="avatar">';
-    }
-
-    // Hide login screen with fade
-    var ls = document.getElementById('loginScreen');
-    if (ls) ls.classList.add('hidden');
-    setTimeout(function(){ if(ls) ls.style.display = 'none'; }, 500);
-
-    // Update profile screen
-    renderPerfil();
-    addLog('<span class="ok">▶</span> ' + (user.displayName||user.email) + ' · sesión iniciada');
-    unlockAchievement('firstEntry');
-  }
-
-  function onUserSignedOut() {
-    _currentUser = null;
-    var chip = document.getElementById('navUserChip');
-    var signOutBtn = document.getElementById('btnSignOut');
-    if (chip) chip.style.display = 'none';
-    if (signOutBtn) signOutBtn.style.display = 'none';
-
-    // Show login screen
-    var ls = document.getElementById('loginScreen');
-    if (ls) { ls.style.display = 'flex'; ls.classList.remove('hidden'); }
-    resetLoginBtn();
-    setLoginStatus('◈ AmuSphere · en espera de autenticación', 'info');
-    state.name = 'Atleta VBC';
-  }
-
-  // ── Auth state observer ──
-  if (_auth) {
-    // Handle redirect result first
-    _auth.getRedirectResult()
-      .then(function(result) {
-        if (result && result.user) {
-          // user will be handled by onAuthStateChanged below
-        }
-      })
-      .catch(function(err) {
-        if (err.code === 'auth/unauthorized-domain') {
-          setLoginStatus('✕ Dominio no autorizado — verifica Firebase Console', 'err');
-        } else if (err.code !== 'auth/no-auth-event') {
-          setLoginStatus('✕ Error de redirect: ' + err.code, 'err');
-          resetLoginBtn();
-        }
-      });
-
-    _auth.onAuthStateChanged(function(user) {
-      if (user) {
-        onUserSignedIn(user);
+  /* Auth state listener */
+  if(auth) {
+    auth.onAuthStateChanged(function(user) {
+      if(user) {
+        state.user = user;
+        updateUserUI();
+        checkUserProfile(user);
       } else {
-        onUserSignedOut();
+        $$("fullLoader").classList.add("gone");
+        showScreen("splash");
       }
     });
   } else {
-    // Firebase unavailable — show app anyway in dev mode
-    console.warn('[VBC] Firebase unavailable — running in offline mode');
-    var ls = document.getElementById('loginScreen');
-    if (ls) ls.style.display = 'none';
+    $$("fullLoader").classList.add("gone");
+    showScreen("splash");
   }
 
-/* ══════════════════════════════════════════════════════════
-   VBC PROTOCOL · SAO HOLO FUSION
-   Narrativa: Los jugadores usan tecnología SAO (AmuSphere /
-   NerveGear) para interactuar con su inventario de habilidades,
-   stats de fuerza y moneda VBC mediante pantallas holográficas
-   que flotan como proyecciones sensoriales.
-   💎 VBC = Diamond tokens — la moneda del protocolo.
-   ══════════════════════════════════════════════════════════ */
+  function updateUserUI() {
+    var u = state.user; if(!u) return;
+    /* Onboarding header */
+    var ph = $$("onboardAvatarPh");
+    if(ph && u.photoURL) {
+      ph.outerHTML = '<img class="oh-avatar" src="'+u.photoURL+'" id="onboardAvatarPh">';
+    }
+    var nm = $$("onboardName"); if(nm) nm.textContent = u.displayName || "Bienvenido";
+    var em = $$("onboardEmail"); if(em) em.textContent = u.email || "";
+    var ni = $$("inputNombre"); if(ni && !ni.value) ni.value = u.displayName || "";
 
-// ══ WORLD RECORDS ══
-const WR = {bench:335,deadlift:501,squat:477,overhead:225};
-const DISC_NAMES = {bench:'Bench Press',deadlift:'Deadlift',squat:'Squat',overhead:'OHP'};
-
-// ══ GAME STATE ══
-let state = {
-  name:'Atleta VBC', vbc:0, condor:0, totalVBC:0, lifts:0,
-  bestScore:0, bestTier:'BRONCE', xp:0, level:1,
-  records:{}, liftHistory:[], txHistory:[],
-  ownedSkills:[], equippedSkills:[], streak:0, lastLiftTime:null,
-  videosUploaded:0,
-};
-
-// ══ ACHIEVEMENTS — SAO narrative ══
-const SAO_ACHIEVEMENTS = {
-  firstEntry:  {done:false, label:'Primera conexión al AmuSphere',  emoji:'⚡', pts:10, narrative:'Has entrado al mundo por primera vez. El NerveGear registra tu presencia.'},
-  firstLift:   {done:false, label:'Primer Proof-of-Strength',        emoji:'💪', pts:15, narrative:'Tu primer lift queda grabado en el log del servidor. La fuerza no miente.'},
-  pts100:      {done:false, label:'100 VBC acumulados',              emoji:'💎', pts:20, narrative:'Cien diamantes. El inventario comienza a llenarse. El protocolo te reconoce.'},
-  pts500:      {done:false, label:'500 VBC — Élite VBC',             emoji:'🏆', pts:50, narrative:'Quinientos diamantes. Eres uno de los pocos que el sistema cataloga como Élite.'},
-  firstSkill:  {done:false, label:'Primera Skill comprada',          emoji:'✨', pts:10, narrative:'Has adquirido tu primera habilidad holográfica. El árbol de skills se desbloquea.'},
-  maxEquipped: {done:false, label:'5 Skills equipadas',              emoji:'⚔️', pts:30, narrative:'Cinco skills activas. Tu build está completo. El AmuSphere proyecta tu poder total.'},
-  firstVideo:  {done:false, label:'Primer video subido',             emoji:'📹', pts:25, narrative:'NERHIA ha verificado tu lift. El Oracle confirma: movimiento auténtico.'},
-  topTier:     {done:false, label:'Tier PLATINO o superior',         emoji:'💎', pts:40, narrative:'Has alcanzado PLATINO. Muy pocos atletas en el servidor llegan a este nivel.'},
-  galactico:   {done:false, label:'Tier GALÁCTICO',                  emoji:'⭐', pts:100, narrative:'GALÁCTICO. Eres la leyenda que el protocolo SAO esperaba. El servidor te recuerda.'},
-};
-
-function unlockAchievement(key) {
-  const a = SAO_ACHIEVEMENTS[key];
-  if(!a || a.done) return;
-  a.done = true;
-  
-  // Count unlocked
-  const count = Object.values(SAO_ACHIEVEMENTS).filter(x=>x.done).length;
-  const badgeEl = document.getElementById('saoBadgeLogros');
-  if(badgeEl) badgeEl.textContent = count;
-
-  // VBC reward
-  state.vbc += a.pts;
-  state.totalVBC += a.pts;
-  state.txHistory.unshift({type:'earn',desc:'Logro: '+a.label,amount:a.pts,meta:a.emoji+' Achievement',time:new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})});
-  updateNavBal();
-
-  // SAO-style popup
-  const el = document.createElement('div');
-  el.className = 'vbc-achievement-popup';
-  el.innerHTML =
-    '<div class="vbc-ach-icon">'+a.emoji+'</div>'+
-    '<div class="vbc-ach-body">'+
-      '<div class="vbc-ach-title">Logro SAO desbloqueado</div>'+
-      '<div class="vbc-ach-name">'+a.label+'</div>'+
-      '<div style="font-family:var(--mono);font-size:8px;color:rgba(180,100,255,.55);margin-top:3px;max-width:180px;line-height:1.4;">'+a.narrative+'</div>'+
-    '</div>'+
-    '<div class="vbc-ach-pts">+'+a.pts+' 💎</div>';
-  document.body.appendChild(el);
-  setTimeout(()=>el.classList.add('show'), 20);
-  setTimeout(()=>{el.classList.remove('show');setTimeout(()=>el.remove(),400);}, 4500);
-  addLog(`<span class="ok">▶</span> Logro: ${a.emoji} ${a.label} · +${a.pts} VBC`);
-}
-
-// ══ SKILLS DATABASE ══
-const SKILLS = [
-  {id:'ia_vision',name:'IA Vision',emoji:'🤖',desc:'Análisis automático de forma y técnica. NERHIA detecta errores en tiempo real.',cost:300,rarity:'common',bonus:'Análisis IA activo',effect:'form_analysis'},
-  {id:'turbo_sync',name:'Turbo Sync',emoji:'⚡',desc:'Sincronización ultrarrápida con el oracle. +5% VBC en todos los lifts.',cost:250,rarity:'common',bonus:'+5% VBC',effect:'vbc_boost_5'},
-  {id:'combo_multi',name:'Combo Multiplier',emoji:'🔥',desc:'×1.5 VBC al hacer 3+ lifts seguidos. El fuego del AmuSphere no para.',cost:500,rarity:'rare',bonus:'×1.5 VBC en combos',effect:'combo_mult'},
-  {id:'anti_cheat_pro',name:'Anti-Cheat PRO',emoji:'🛡️',desc:'Sello Oracle avanzado. Tus scores blindados en el servidor SAO.',cost:600,rarity:'rare',bonus:'Verificación express',effect:'oracle_fast'},
-  {id:'condor_boost',name:'CONDOR Boost',emoji:'💎',desc:'Ratio CONDOR ×1.2. Más tokens on-chain, menos burn del AmuSphere.',cost:1000,rarity:'epic',bonus:'Ratio CONDOR ×1.2',effect:'condor_boost'},
-  {id:'precision_mode',name:'Precision Mode',emoji:'🎯',desc:'+8% VBC con cálculo extendido de Power Score. Precisión holográfica.',cost:700,rarity:'rare',bonus:'+8% VBC precisión',effect:'vbc_boost_8'},
-  {id:'global_rank',name:'Global Rank Access',emoji:'🌐',desc:'Leaderboard global SAO. Compite con atletas de todo el servidor.',cost:1200,rarity:'epic',bonus:'Ranking mundial',effect:'global_rank'},
-  {id:'analytics_pro',name:'Analytics PRO',emoji:'📊',desc:'Dashboard avanzado del AmuSphere: historial, predicciones, métricas.',cost:400,rarity:'common',bonus:'Stats avanzadas',effect:'analytics'},
-  {id:'whatsapp_007',name:'007 WhatsApp',emoji:'📱',desc:'Controla tu wallet desde WhatsApp. "007 balance" y listo.',cost:800,rarity:'rare',bonus:'Control WhatsApp',effect:'whatsapp'},
-  {id:'legendary_aura',name:'Legendary Aura',emoji:'👑',desc:'Halo legendario en el leaderboard SAO. Solo para los más dedicados.',cost:2500,rarity:'legendary',bonus:'Aura legendaria',effect:'legendary_skin'},
-  {id:'lift_oracle',name:'Lift Oracle',emoji:'🔮',desc:'El oráculo del AmuSphere predice tu próximo PR óptimo.',cost:900,rarity:'epic',bonus:'Predicción PR',effect:'pr_predict'},
-  {id:'stealth_burn',name:'Stealth Burn',emoji:'🌑',desc:'Burn CONDOR al 0.5% en lugar del 2%. El protocolo no te cobra.',cost:1500,rarity:'legendary',bonus:'Burn reducido 0.5%',effect:'low_burn'},
-];
-const RARITY_LABELS = {common:'Común',rare:'Raro',epic:'Épico',legendary:'Legendario'};
-const RARITY_CLASS = {common:'rarity-common',rare:'rarity-rare',epic:'rarity-epic',legendary:'rarity-legendary'};
-
-// ══ LEADERBOARD ══
-const LB_DATA = [
-  {name:'Hafthor B.',tier:'GALÁCTICO',score:94,vbc:48200,disc:'deadlift'},
-  {name:'Julius M.',tier:'GALÁCTICO',score:88,vbc:42100,disc:'bench'},
-  {name:'Ray W.',tier:'GALÁCTICO',score:82,vbc:38700,disc:'squat'},
-  {name:'Lasha T.',tier:'PLATINO',score:71,vbc:31500,disc:'overhead'},
-  {name:'Brian S.',tier:'PLATINO',score:68,vbc:28900,disc:'deadlift'},
-  {name:'Blaine S.',tier:'ORO',score:52,vbc:19400,disc:'bench'},
-  {name:'Chris J.',tier:'ORO',score:46,vbc:15200,disc:'squat'},
-  {name:'Dana W.',tier:'PLATA',score:38,vbc:12100,disc:'overhead'},
-  {name:'Eduardo R.',tier:'PLATA',score:31,vbc:8800,disc:'bench'},
-];
-
-// ══ STATE ══
-let selectedDisc = 'bench';
-let pendingResult = null;
-let currentSaoTab = 'inventory';
-
-// SESSION MISSIONS
-const VBC_MISSIONS = [
-  {id:'lift3',label:'Registra 3 lifts en esta sesión',goal:3,type:'lifts',reward:20,emoji:'💪'},
-  {id:'vbc50',label:'Gana 50 VBC en esta sesión',goal:50,type:'vbc',reward:15,emoji:'💎'},
-  {id:'skill1',label:'Compra una skill',goal:1,type:'skills',reward:25,emoji:'✨'},
-  {id:'video1',label:'Sube un video de lift',goal:1,type:'video',reward:30,emoji:'📹'},
-];
-let sessionMission = null;
-let sessionMissionProgress = 0;
-
-function pickMission() {
-  const avail = VBC_MISSIONS.filter(m=>!m.done);
-  if(!avail.length) return;
-  sessionMission = avail[Math.floor(Math.random()*avail.length)];
-  sessionMissionProgress = 0;
-  const wrap = document.getElementById('missionWrap');
-  if(wrap) wrap.style.display = '';
-  renderMissionWidget();
-}
-function advanceMission(type, amount) {
-  if(!sessionMission||sessionMission.completed) return;
-  if(sessionMission.type !== type) return;
-  sessionMissionProgress += (amount||1);
-  renderMissionWidget();
-  if(sessionMissionProgress >= sessionMission.goal) completeMission();
-}
-function completeMission() {
-  if(!sessionMission) return;
-  sessionMission.completed = true;
-  sessionMission.done = true;
-  state.vbc += sessionMission.reward;
-  state.totalVBC += sessionMission.reward;
-  updateNavBal();
-  showToast('🎯 Misión cumplida · +'+sessionMission.reward+' 💎 VBC','success');
-  addLog(`<span class="ok">▶</span> Misión: ${sessionMission.emoji} ${sessionMission.label} · +${sessionMission.reward} VBC`);
-  const w = document.getElementById('vbcMissionWidget');
-  if(w) w.classList.add('completed');
-  setTimeout(pickMission, 7000);
-}
-function renderMissionWidget() {
-  const w = document.getElementById('vbcMissionWidget');
-  if(!w || !sessionMission) return;
-  const pct = Math.min(100, Math.round((sessionMissionProgress/sessionMission.goal)*100));
-  w.innerHTML =
-    '<div class="vmw-row"><span class="vmw-emoji">'+sessionMission.emoji+'</span><span class="vmw-label">'+sessionMission.label+'</span></div>'+
-    '<div class="vmw-bar-wrap"><div class="vmw-bar" style="width:'+pct+'%"></div></div>';
-  if(sessionMission.completed) w.classList.add('completed');
-}
-
-// ════════════════════════════════════════
-// CANVAS BACKGROUND
-// ════════════════════════════════════════
-const canvas = document.getElementById('bgCanvas');
-const ctx = canvas.getContext('2d');
-let particles = [];
-function initCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-  particles = [];
-  for(let i=0;i<60;i++) particles.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*1.2+.3,vy:-(Math.random()*.35+.08),vx:(Math.random()-.5)*.15,op:Math.random()*.3+.05});
-}
-function drawCanvas() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.strokeStyle='rgba(0,100,200,0.04)';ctx.lineWidth=.5;
-  for(let x=0;x<canvas.width;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke();}
-  for(let y=0;y<canvas.height;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();}
-  particles.forEach(p=>{
-    p.y+=p.vy;p.x+=p.vx;
-    if(p.y<-5){p.y=canvas.height+5;p.x=Math.random()*canvas.width;}
-    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
-    ctx.fillStyle=`rgba(0,200,255,${p.op})`;ctx.fill();
-  });
-  requestAnimationFrame(drawCanvas);
-}
-initCanvas();drawCanvas();
-window.addEventListener('resize',initCanvas);
-
-// ════════════════════════════════════════
-// NAVIGATION
-// ════════════════════════════════════════
-function goScreen(id) {
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
-  document.getElementById('s-'+id).classList.add('active');
-  document.querySelectorAll('.nav-tab').forEach(t=>{
-    if((id==='perfil'&&t.textContent.includes('Perfil'))||
-       (id==='lift'&&t.textContent.includes('Lift'))||
-       (id==='skills'&&t.textContent.includes('Skills'))||
-       (id==='wallet'&&t.textContent.includes('Wallet'))||
-       (id==='ranking'&&t.textContent.includes('Ranking'))) t.classList.add('active');
-  });
-  if(id==='skills') renderSkills();
-  if(id==='wallet') renderWallet();
-  if(id==='ranking') renderRanking();
-  if(id==='perfil') renderPerfil();
-}
-
-// ════════════════════════════════════════
-// CLOCK
-// ════════════════════════════════════════
-function tick() {
-  const n=new Date();
-  const t=[n.getHours(),n.getMinutes(),n.getSeconds()].map(x=>String(x).padStart(2,'0')).join(':');
-  document.getElementById('navTime').textContent=t+' · ACTIVO';
-  document.getElementById('profileTime').textContent=t+' · AMOSPHERE ONLINE';
-  document.getElementById('logTime').textContent=t;
-}
-setInterval(tick,1000);tick();
-
-// ════════════════════════════════════════
-// VBC SCORE FORMULA
-// ════════════════════════════════════════
-function calcScore(disc,weight,reps) {
-  const est1RM = weight*(1+reps/30);
-  const wr = WR[disc];
-  const pct = est1RM/wr;
-  if(pct>0.90) return {ok:false,error:'Excede 90% del récord mundial. Verifica los datos.'};
-  const ps = Math.max(1,Math.min(99,Math.round(pct*99)));
-  const tier = pct>0.75?'GALÁCTICO':pct>0.55?'PLATINO':pct>0.40?'ORO':pct>0.25?'PLATA':'BRONCE';
-  const tierEmoji = {GALÁCTICO:'⭐',PLATINO:'💎',ORO:'🥇',PLATA:'🥈',BRONCE:'🥉'}[tier];
-  const vbc = ps*10;
-  const burnRate = state.ownedSkills.includes('stealth_burn')?0.005:0.02;
-  const condor = Math.floor(vbc*1000*(state.ownedSkills.includes('condor_boost')?1.2:1)*(1-burnRate));
-  return {ok:true,ps,tier,tierEmoji,est1RM:Math.round(est1RM*100)/100,pct:Math.round(pct*1000)/1000,vbc,condor};
-}
-
-function selectDisc(el,disc) {
-  document.querySelectorAll('.disc-btn').forEach(b=>b.classList.remove('active'));
-  el.classList.add('active'); selectedDisc=disc;
-  document.getElementById('previewDisc').textContent=DISC_NAMES[disc].toUpperCase();
-  updatePreview();
-}
-
-function updatePreview() {
-  const w=parseFloat(document.getElementById('inWeight').value);
-  const r=parseInt(document.getElementById('inReps').value);
-  if(!w||!r||w<=0||r<=0){clearPreview();return;}
-  const res=calcScore(selectedDisc,w,r);
-  if(!res.ok){document.getElementById('prevScore').textContent='❌ INVÁLIDO';document.getElementById('prevTier').textContent=res.error;return;}
-  let vbc=res.vbc;
-  if(state.ownedSkills.includes('turbo_sync')) vbc=Math.round(vbc*1.05);
-  if(state.ownedSkills.includes('precision_mode')) vbc=Math.round(vbc*1.08);
-  document.getElementById('prev1rm').textContent=res.est1RM+' kg';
-  document.getElementById('prevPct').textContent=(res.pct*100).toFixed(1)+'%';
-  document.getElementById('prevScore').textContent=res.ps;
-  document.getElementById('prevTier').textContent=res.tierEmoji+' '+res.tier;
-  document.getElementById('prevVBC').textContent='+'+vbc+' 💎 VBC';
-  document.getElementById('prevCOND').textContent='+'+res.condor.toLocaleString('es-CL')+' CONDOR';
-  const bonuses=[];
-  if(state.ownedSkills.includes('turbo_sync')) bonuses.push('⚡ Turbo Sync: +5% VBC');
-  if(state.ownedSkills.includes('precision_mode')) bonuses.push('🎯 Precision Mode: +8% VBC');
-  if(state.ownedSkills.includes('combo_multi')&&state.streak>=2) bonuses.push('🔥 Combo: ×1.5 VBC activo!');
-  if(state.ownedSkills.includes('condor_boost')) bonuses.push('💎 CONDOR Boost: ratio ×1.2');
-  if(state.ownedSkills.includes('stealth_burn')) bonuses.push('🌑 Stealth Burn: solo 0.5% burn');
-  document.getElementById('bonusPanel').innerHTML=bonuses.length
-    ?bonuses.map(b=>`<div style="font-family:var(--mono);font-size:10px;color:var(--green);padding:3px 0;">✓ ${b}</div>`).join('')
-    :'<div style="color:var(--text3);font-family:var(--mono);font-size:10px;">Equipa skills para bonus</div>';
-}
-function clearPreview() {
-  ['prev1rm','prevPct','prevScore','prevTier','prevVBC','prevCOND'].forEach(id=>{document.getElementById(id).textContent='—';});
-}
-
-function registerLift() {
-  const w=parseFloat(document.getElementById('inWeight').value);
-  const r=parseInt(document.getElementById('inReps').value);
-  if(!w||!r){showToast('Ingresa peso y reps primero','warn');return;}
-  if(w<=0||w>600){showToast('Peso inválido (1-600 kg)','warn');return;}
-  if(r<1||r>30){showToast('Reps inválidas (1-30)','warn');return;}
-  const res=calcScore(selectedDisc,w,r);
-  if(!res.ok){showToast(res.error,'warn');return;}
-  let finalVBC=res.vbc;
-  if(state.ownedSkills.includes('turbo_sync')) finalVBC=Math.round(finalVBC*1.05);
-  if(state.ownedSkills.includes('precision_mode')) finalVBC=Math.round(finalVBC*1.08);
-  if(state.ownedSkills.includes('combo_multi')&&state.streak>=2) finalVBC=Math.round(finalVBC*1.5);
-  const now=Date.now();
-  if(state.lastLiftTime&&now-state.lastLiftTime<3600000) state.streak++;
-  else state.streak=1;
-  state.lastLiftTime=now;
-  pendingResult={...res,finalVBC,finalCondor:res.condor,disc:selectedDisc,weight:w,reps:r};
-  showResult(res,finalVBC,res.condor);
-}
-
-function showResult(res,vbc,condor) {
-  document.getElementById('resScore').textContent=res.ps;
-  const tierColors={GALÁCTICO:'var(--gold)',PLATINO:'#aaddff',ORO:'var(--gold)',PLATA:'#b8c8d8',BRONCE:'#cc8850'};
-  document.getElementById('resTier').textContent=res.tierEmoji+' '+res.tier;
-  document.getElementById('resTier').style.color=tierColors[res.tier];
-  document.getElementById('res1rm').textContent=res.est1RM+' kg';
-  document.getElementById('resVBC').textContent='+'+vbc+' 💎';
-  document.getElementById('resCOND').textContent='+'+condor.toLocaleString('es-CL');
-  document.getElementById('resPct').textContent=(res.pct*100).toFixed(2)+'% del récord mundial · Power Score '+res.ps+'/99';
-  const streakEl=document.getElementById('resStreak');
-  if(state.streak>=3){
-    streakEl.textContent='🔥 COMBO ×'+state.streak+' STREAK';
-    streakEl.style.cssText='border:1px solid rgba(255,120,30,.4);background:rgba(255,120,30,.1);color:#ff8844;padding:4px 12px;border-radius:5px;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.1em;';
-  } else {streakEl.textContent='';streakEl.style.cssText='';}
-  document.getElementById('resultOverlay').classList.add('show');
-}
-
-function closeResult() {
-  if(!pendingResult) return;
-  document.getElementById('resultOverlay').classList.remove('show');
-  const r=pendingResult; pendingResult=null;
-  state.vbc+=r.finalVBC; state.condor+=r.finalCondor;
-  state.totalVBC+=r.finalVBC; state.lifts++;
-  state.xp=Math.min(100,state.xp+Math.round(r.ps/10));
-  if(state.xp>=100){state.level++;state.xp=0;showToast('⚡ LEVEL UP! Nivel '+state.level,'success');}
-  if(r.ps>state.bestScore){state.bestScore=r.ps;state.bestTier=r.tier;}
-  if(!state.records[r.disc]||r.est1RM>state.records[r.disc].est1RM)
-    state.records[r.disc]={weight:r.weight,reps:r.reps,est1RM:r.est1RM,ps:r.ps,tier:r.tier,tierEmoji:r.tierEmoji};
-  state.liftHistory.unshift({disc:r.disc,weight:r.weight,reps:r.reps,ps:r.ps,tier:r.tier,tierEmoji:r.tierEmoji,vbc:r.finalVBC,time:new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})});
-  if(state.liftHistory.length>20) state.liftHistory.pop();
-  state.txHistory.unshift({type:'earn',desc:DISC_NAMES[r.disc]+' · PS '+r.ps,amount:r.finalVBC,meta:r.tierEmoji+' '+r.tier,time:new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})});
-  updateUI();
-  showToast('⚡ +'+r.finalVBC+' 💎 VBC ganados!','success');
-  if(state.ownedSkills.includes('ia_vision')) setTimeout(()=>showToast('🤖 IA Vision: técnica correcta detectada','info'),600);
-  addLog(`<span class="ok">▶</span> ${DISC_NAMES[r.disc]} ${r.weight}kg×${r.reps} · PS ${r.ps} · +${r.finalVBC} 💎 VBC`);
-  renderLiftHistory(); renderRecords();
-  // Achievement checks
-  if(state.lifts===1) unlockAchievement('firstLift');
-  if(state.totalVBC>=100) unlockAchievement('pts100');
-  if(state.totalVBC>=500) unlockAchievement('pts500');
-  if(r.tier==='PLATINO'||r.tier==='GALÁCTICO') unlockAchievement('topTier');
-  if(r.tier==='GALÁCTICO') unlockAchievement('galactico');
-  // Advance missions
-  advanceMission('lifts',1);
-  advanceMission('vbc',r.finalVBC);
-  // Update SAO badges
-  updateSaoBadges();
-}
-
-// ════════════════════════════════════════
-// VIDEO UPLOAD
-// ════════════════════════════════════════
-function handleVideoUpload(event) {
-  const files = event.target.files;
-  if(!files.length) return;
-  const file = files[0];
-  const maxSize = 100 * 1024 * 1024;
-  if(file.size > maxSize) { showToast('Archivo muy grande (máx 100MB)','warn'); return; }
-  
-  state.videosUploaded++;
-  const ptsEarned = 50;
-  state.vbc += ptsEarned;
-  state.totalVBC += ptsEarned;
-  state.txHistory.unshift({type:'earn',desc:'Video lift verificado: '+file.name.substring(0,30),amount:ptsEarned,meta:'📹 NERHIA verified',time:new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})});
-  updateUI();
-  showToast('📹 Video recibido · +'+ptsEarned+' 💎 VBC del oracle NERHIA','success');
-  addLog(`<span class="ok">▶</span> Video lift subido: ${file.name.substring(0,20)} · +${ptsEarned} VBC`);
-  
-  // Show in list
-  const vl = document.getElementById('videoList');
-  const item = document.createElement('div');
-  item.className = 'video-preview-item';
-  item.innerHTML = `<span class="vp-name">📹 ${file.name}</span><span class="vp-pts">+${ptsEarned} 💎 VBC</span>`;
-  vl.appendChild(item);
-  
-  // Reset input
-  event.target.value = '';
-  
-  // Achievements and missions
-  if(state.videosUploaded===1) unlockAchievement('firstVideo');
-  advanceMission('video',1);
-  updateSaoBadges();
-}
-
-// Drag & drop
-const ua = document.getElementById('uploadArea');
-if(ua) {
-  ua.addEventListener('dragover',e=>{e.preventDefault();ua.classList.add('drag-over');});
-  ua.addEventListener('dragleave',()=>ua.classList.remove('drag-over'));
-  ua.addEventListener('drop',e=>{
-    e.preventDefault();ua.classList.remove('drag-over');
-    const dt=e.dataTransfer;if(dt.files.length) handleVideoUpload({target:{files:dt.files,value:''}});
-  });
-}
-
-// ════════════════════════════════════════
-// SKILLS SHOP
-// ════════════════════════════════════════
-function renderSkills() {
-  document.getElementById('shopBal').textContent=state.vbc.toLocaleString('es-CL');
-  const g=document.getElementById('skillsGrid');
-  g.innerHTML=SKILLS.map(sk=>{
-    const owned=state.ownedSkills.includes(sk.id);
-    const canAfford=state.vbc>=sk.cost;
-    let cardClass='skill-card';
-    if(owned) cardClass+=' owned';
-    else if(!canAfford) cardClass+=' cant-afford';
-    const btnClass=owned?'buy-btn owned':canAfford?'buy-btn active':'buy-btn disabled';
-    const btnTxt=owned?'✓ EQUIPADA':canAfford?'COMPRAR':'SIN VBC';
-    return `<div class="${cardClass}">
-      <span class="skill-rarity ${RARITY_CLASS[sk.rarity]}">${RARITY_LABELS[sk.rarity]}</span>
-      <span class="skill-emoji">${sk.emoji}</span>
-      <div class="skill-name">${sk.name}</div>
-      <div class="skill-desc">${sk.desc}</div>
-      <div class="skill-cost">
-        <div><div class="cost-val">💎 ${sk.cost.toLocaleString('es-CL')}</div><div class="cost-lbl">VBC</div></div>
-        <button class="${btnClass}" onclick="buySkill('${sk.id}')">${btnTxt}</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function buySkill(id) {
-  const sk=SKILLS.find(s=>s.id===id);
-  if(!sk) return;
-  if(state.ownedSkills.includes(id)){showToast('Ya posees esta skill','warn');return;}
-  if(state.vbc<sk.cost){showToast('💎 VBC insuficiente. ¡Haz más lifts!','warn');return;}
-  state.vbc-=sk.cost;
-  state.ownedSkills.push(id);
-  if(state.equippedSkills.length<5) state.equippedSkills.push(id);
-  state.txHistory.unshift({type:'spend',desc:'Skill: '+sk.name,amount:sk.cost,meta:sk.emoji+' '+RARITY_LABELS[sk.rarity],time:new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})});
-  updateUI();
-  renderSkills();
-  renderEquipped();
-  showToast(sk.emoji+' '+sk.name+' desbloqueada!','skill');
-  addLog(`<span class="skill">★</span> Skill: ${sk.name} · -${sk.cost} 💎 VBC`);
-  if(state.ownedSkills.length===1) unlockAchievement('firstSkill');
-  if(state.equippedSkills.length>=5) unlockAchievement('maxEquipped');
-  advanceMission('skills',1);
-  updateSaoBadges();
-}
-
-// ════════════════════════════════════════
-// RENDER FUNCTIONS
-// ════════════════════════════════════════
-function renderPerfil() {
-  var displayName = (_currentUser && _currentUser.displayName) ? _currentUser.displayName.split(' ')[0] : state.name;
-  document.getElementById('heroName').textContent = displayName;
-  // Update avatar
-  var avatarEl = document.getElementById('profileAvatar');
-  if (avatarEl && _currentUser && _currentUser.photoURL) {
-    avatarEl.innerHTML = '<img src="' + _currentUser.photoURL + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" alt="avatar">';
-  }
-  document.getElementById('heroLevel').textContent='LVL '+state.level;
-  const tierClass={GALÁCTICO:'galactico',PLATINO:'platino',ORO:'oro',PLATA:'plata',BRONCE:'bronce'}[state.bestTier]||'bronce';
-  const tierEmoji={GALÁCTICO:'⭐',PLATINO:'💎',ORO:'🥇',PLATA:'🥈',BRONCE:'🥉'}[state.bestTier]||'🥉';
-  const badge=document.getElementById('heroBadge');
-  badge.textContent=tierEmoji+' '+state.bestTier;
-  badge.className='tier-badge '+tierClass;
-  document.getElementById('sc-vbc').textContent=state.totalVBC.toLocaleString('es-CL');
-  document.getElementById('sc-ps').textContent=state.bestScore;
-  document.getElementById('sc-lifts').textContent=state.lifts;
-  const ps=state.bestScore;
-  document.getElementById('strVal').textContent=ps+' / 99';
-  document.getElementById('strBar').style.width=(ps/99*100)+'%';
-  document.getElementById('xpVal').textContent=state.xp+' / 100';
-  document.getElementById('xpBar').style.width=state.xp+'%';
-  const condPct=Math.min(100,Math.round(state.condor/1000));
-  document.getElementById('condorPct').textContent=condPct+'%';
-  document.getElementById('condBar').style.width=condPct+'%';
-  renderEquipped();renderRecords();
-}
-
-function renderEquipped() {
-  const slots=document.getElementById('equippedSlots');
-  if(!slots) return;
-  let html='';
-  for(let i=0;i<5;i++){
-    const sid=state.equippedSkills[i];
-    if(sid){
-      const sk=SKILLS.find(s=>s.id===sid);
-      html+=`<div class="eq-slot has-skill" title="${sk.name}: ${sk.bonus}"><span style="font-size:18px;">${sk.emoji}</span><span class="eq-lbl">${sk.name.split(' ')[0].substring(0,6).toUpperCase()}</span><div class="eq-dot"></div></div>`;
-    } else {
-      html+=`<div class="eq-slot"><span style="font-size:14px;color:var(--text3);">+</span><span class="eq-lbl">VACÍO</span></div>`;
+    /* Ranking avatar */
+    var rawWrap = $$("rankingUserAvatarWrap");
+    if(rawWrap && u.photoURL) {
+      rawWrap.innerHTML = '<img class="rtb-avatar" src="'+u.photoURL+'">';
     }
   }
-  slots.innerHTML=html;
-  document.getElementById('equippedCount').textContent=state.equippedSkills.length+' / 5';
-}
 
-function renderRecords() {
-  const p=document.getElementById('recordsPanel');
-  const discs=Object.keys(state.records);
-  if(!discs.length){p.innerHTML='<div style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:20px;">Sin récords. ¡A levantar!</div>';return;}
-  p.innerHTML=discs.map(d=>{
-    const r=state.records[d];
-    return `<div class="preview-row"><span class="preview-key">${DISC_NAMES[d].toUpperCase()}</span><div style="display:flex;align-items:center;gap:10px;"><span style="font-family:var(--mono);font-size:11px;color:var(--text2);">${r.weight}kg×${r.reps}</span><span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--cyan);">PS ${r.ps}</span><span style="font-family:var(--mono);font-size:11px;">${r.tierEmoji} ${r.tier}</span></div></div>`;
-  }).join('');
-}
-
-function renderLiftHistory() {
-  const c=document.getElementById('liftHistory');
-  if(!state.liftHistory.length){c.innerHTML='<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:12px;">Sin lifts aún</div>';return;}
-  c.innerHTML=state.liftHistory.slice(0,5).map(l=>`
-    <div class="tx-item">
-      <div class="tx-left">
-        <div class="tx-icon earn" style="font-size:14px;">${{bench:'🏋️',deadlift:'⚡',squat:'🦵',overhead:'🙌'}[l.disc]}</div>
-        <div><div class="tx-desc">${DISC_NAMES[l.disc]} · ${l.weight}kg×${l.reps}</div><div class="tx-meta">${l.tierEmoji} ${l.tier} · PS ${l.ps} · ${l.time}</div></div>
-      </div>
-      <div class="tx-amount pos">+${l.vbc} 💎</div>
-    </div>`).join('');
-}
-
-function renderWallet() {
-  document.getElementById('walletBal').textContent=state.vbc.toLocaleString('es-CL');
-  document.getElementById('condorBal').textContent=state.condor.toLocaleString('es-CL');
-  document.getElementById('walletSub').textContent=state.lifts+' lifts · '+state.ownedSkills.length+' skills · '+state.videosUploaded+' videos';
-  document.getElementById('txCount').textContent=state.txHistory.length+' TX';
-  const txList=document.getElementById('txList');
-  if(!state.txHistory.length){txList.innerHTML='<div style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:20px;">Sin transacciones aún</div>';return;}
-  txList.innerHTML=state.txHistory.slice(0,15).map(tx=>`
-    <div class="tx-item">
-      <div class="tx-left">
-        <div class="tx-icon ${tx.type}"><span style="font-size:14px;">${tx.type==='earn'?'💎':'✨'}</span></div>
-        <div><div class="tx-desc">${tx.desc}</div><div class="tx-meta">${tx.meta} · ${tx.time}</div></div>
-      </div>
-      <div class="tx-amount ${tx.type==='earn'?'pos':'neg'}">${tx.type==='earn'?'+':'-'}${tx.amount.toLocaleString('es-CL')} 💎</div>
-    </div>`).join('');
-}
-
-function renderRanking() {
-  const rows=[...LB_DATA];
-  const myEntry={name:state.name+' (TÚ)',tier:state.bestTier,score:state.bestScore,vbc:state.totalVBC,me:true};
-  rows.push(myEntry);
-  rows.sort((a,b)=>b.score-a.score||b.vbc-a.vbc);
-  const tierEmoji={GALÁCTICO:'⭐',PLATINO:'💎',ORO:'🥇',PLATA:'🥈',BRONCE:'🥉'};
-  const tierClass={'GALÁCTICO':'galactico','PLATINO':'platino','ORO':'oro','PLATA':'plata','BRONCE':'bronce'};
-  document.getElementById('lbRows').innerHTML=rows.map((r,i)=>{
-    const rank=i+1;
-    const rankClass=rank===1?'r1':rank===2?'r2':rank===3?'r3':'rn';
-    const rankTxt=rank<=3?['🥇','🥈','🥉'][rank-1]:rank;
-    return `<div class="lb-row ${r.me?'me':''}">
-      <div class="lb-rank ${rankClass}">${rankTxt}</div>
-      <div><div class="lb-name">${r.name}</div></div>
-      <div><span class="lb-tier-b tier-badge ${tierClass[r.tier]||'bronce'}" style="font-size:8px;">${tierEmoji[r.tier]||'🥉'} ${r.tier}</span></div>
-      <div class="lb-score">${r.score}</div>
-      <div class="lb-vbc">${r.vbc.toLocaleString('es-CL')}</div>
-    </div>`;
-  }).join('');
-}
-
-// ════════════════════════════════════════
-// UI SYNC
-// ════════════════════════════════════════
-function updateNavBal() {
-  document.getElementById('navBal').textContent=state.vbc.toLocaleString('es-CL');
-}
-function updateUI() {
-  updateNavBal();
-  document.getElementById('sc-vbc').textContent=state.totalVBC.toLocaleString('es-CL');
-  document.getElementById('sc-ps').textContent=state.bestScore;
-  document.getElementById('sc-lifts').textContent=state.lifts;
-  const ps=state.bestScore;
-  document.getElementById('strVal').textContent=ps+' / 99';
-  document.getElementById('strBar').style.width=(ps/99*100)+'%';
-  document.getElementById('xpVal').textContent=state.xp+' / 100';
-  document.getElementById('xpBar').style.width=state.xp+'%';
-  const condPct=Math.min(100,Math.round(state.condor/1000));
-  document.getElementById('condorPct').textContent=condPct+'%';
-  document.getElementById('condBar').style.width=condPct+'%';
-  const tierClass={GALÁCTICO:'galactico',PLATINO:'platino',ORO:'oro',PLATA:'plata',BRONCE:'bronce'}[state.bestTier]||'bronce';
-  const tierEmoji={GALÁCTICO:'⭐',PLATINO:'💎',ORO:'🥇',PLATA:'🥈',BRONCE:'🥉'}[state.bestTier]||'🥉';
-  const badge=document.getElementById('heroBadge');
-  if(badge){badge.textContent=tierEmoji+' '+state.bestTier;badge.className='tier-badge '+tierClass;}
-  document.getElementById('heroLevel').textContent='LVL '+state.level;
-  updatePreview();
-  // SAO overlay badges
-  updateSaoBadges();
-}
-
-function addLog(html) {
-  const area=document.getElementById('logArea');
-  const d=document.createElement('div');
-  d.className='log-line';d.innerHTML=html;
-  area.insertBefore(d,area.firstChild);
-  while(area.children.length>6) area.removeChild(area.lastChild);
-}
-
-function showToast(msg,type='info') {
-  const wrap=document.getElementById('toastWrap');
-  const t=document.createElement('div');
-  t.className='toast '+type;t.textContent=msg;
-  wrap.appendChild(t);
-  setTimeout(()=>{t.style.animation='toastOut .3s ease forwards';setTimeout(()=>t.remove(),300);},2800);
-}
-
-// ════════════════════════════════════════
-// SAO HOLOGRAPHIC OVERLAY
-// Sistema de menú flotante al estilo SAO/ALO.
-// En el universo SAO, el jugador abre el menú tocando
-// el icono en su brazo izquierdo virtual.
-// ════════════════════════════════════════
-function openSaoOverlay(tab) {
-  unlockAchievement('firstEntry');
-  document.getElementById('saoOverlay').classList.add('open');
-  document.getElementById('saoToggleBtn').classList.add('active');
-  document.getElementById('saoPlayerName').textContent = state.name;
-  document.getElementById('saoPlayerLvl').textContent = 'LVL '+state.level+' · '+state.bestTier;
-  updateSaoBadges();
-  if(tab) {
-    const item = document.getElementById('sao-item-'+tab);
-    if(item) openSaoTab(tab, item);
-  } else {
-    openSaoTab('inventory', document.getElementById('sao-item-inventory'));
-  }
-}
-function closeSaoOverlay() {
-  document.getElementById('saoOverlay').classList.remove('open');
-  document.getElementById('saoToggleBtn').classList.remove('active');
-}
-
-function updateSaoBadges() {
-  const navEl = document.getElementById('saoBadgeVBC');
-  if(navEl) navEl.textContent = state.vbc.toLocaleString('es-CL');
-  const skillsEl = document.getElementById('saoBadgeSkills');
-  if(skillsEl) skillsEl.textContent = state.ownedSkills.length;
-  const invEl = document.getElementById('saoBadgeInv');
-  if(invEl) invEl.textContent = state.lifts+' lifts';
-  const logrosEl = document.getElementById('saoBadgeLogros');
-  if(logrosEl) logrosEl.textContent = Object.values(SAO_ACHIEVEMENTS).filter(a=>a.done).length;
-}
-
-function openSaoTab(tab, el) {
-  currentSaoTab = tab;
-  document.querySelectorAll('.sao-item').forEach(i=>i.classList.remove('active'));
-  if(el) el.classList.add('active');
-  renderSaoDetail(tab);
-}
-
-function renderSaoDetail(tab) {
-  const panel = document.getElementById('saoDetailPanel');
-  
-  if(tab === 'inventory') {
-    // Stats overview — HP, MP, VBC, skills grid
-    const ps = state.bestScore;
-    const hp = 5000 + ps*50;
-    const mp = 2000 + state.level*200;
-    panel.innerHTML = `
-      <div class="sao-stat-card" onclick="addSaoRipple(event)">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">HP · Resistencia física</span>
-          <span class="sao-stat-value hp">${hp.toLocaleString('es-CL')}</span>
-        </div>
-        <div class="sao-bar-wrap"><div class="sao-bar-fill hp" style="width:${Math.min(100,ps)}%;"></div></div>
-      </div>
-      <div class="sao-stat-card" onclick="addSaoRipple(event)">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">MP · Maná de habilidades</span>
-          <span class="sao-stat-value mp">${mp.toLocaleString('es-CL')}</span>
-        </div>
-        <div class="sao-bar-wrap"><div class="sao-bar-fill mp" style="width:${Math.min(100,state.ownedSkills.length/12*100)}%;"></div></div>
-      </div>
-      <div class="sao-stat-card" onclick="addSaoRipple(event)">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">💎 VBC · Diamonds balance</span>
-          <span class="sao-stat-value vbc">${state.vbc.toLocaleString('es-CL')}</span>
-        </div>
-      </div>
-      <div>
-        <div class="sao-section-lbl">Skills equipadas · ${state.equippedSkills.length}/5 activas</div>
-        <div class="sao-skills-grid">
-          ${renderSaoSkillSlots()}
-        </div>
-      </div>
-      <div>
-        <div class="sao-section-lbl">AmuSphere Log</div>
-        <div id="saoLogMini"></div>
-      </div>`;
-    // Populate log
-    const logMini = document.getElementById('saoLogMini');
-    const mainLog = document.getElementById('logArea');
-    if(logMini && mainLog) {
-      [...mainLog.children].slice(0,4).forEach(l=>{
-        const d=document.createElement('div');d.className='sao-log-line';d.innerHTML=l.innerHTML;logMini.appendChild(d);
+  function checkUserProfile(user) {
+    if(!db) { showScreen("age"); return; }
+    db.collection("vbc_participants").doc(user.uid).get()
+      .then(function(doc) {
+        if(doc.exists) {
+          state.profile = doc.data();
+          state.ageVerified = true;
+          showRanking();
+        } else {
+          showScreen("age");
+        }
+      })
+      .catch(function() {
+        showScreen("age");
       });
+  }
+
+  /* ══ NERHIA +18 (Portón cerebral) ══════════════════════════ */
+  var modelsLoaded = false;
+  var detecting = false;
+  var detectTimer = null;
+  var trackId = 1;
+
+  var MODEL_URL = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights";
+
+  function startAgeScreen() {
+    $$("ageScanline").classList.add("active");
+    setAgeStatus("Cargando modelos IA…","");
+
+    if(typeof faceapi === "undefined") {
+      setAgeStatus("Sin conexión — omitir verificación","deny");
+      $$("ageSkip").style.display="block";
+      $$("ageLoading").classList.add("gone");
+      return;
+    }
+
+    Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL)
+    ]).then(function() {
+      modelsLoaded = true;
+      $$("ageLoading").classList.add("gone");
+      setAgeStatus("Mira la cámara…","scanning");
+      startAgeCam();
+    }).catch(function(e) {
+      $$("ageLoading").classList.add("gone");
+      setAgeStatus("Error — usa omitir","deny");
+      $$("ageSkip").style.display="block";
+    });
+  }
+
+  function startAgeCam() {
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setAgeStatus("Cámara no disponible","deny");
+      $$("ageSkip").style.display="block"; return;
+    }
+    navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:320},height:{ideal:240}},audio:false})
+      .then(function(stream) {
+        var video = $$("age-video");
+        video.srcObject = stream;
+        video.onloadedmetadata = function() {
+          video.play().then(function() {
+            var cv = $$("age-canvas");
+            cv.width = video.videoWidth||320; cv.height = video.videoHeight||240;
+            setAgeStatus("Acerca tu rostro…","scanning");
+            detecting = true;
+            detectTimer = setInterval(runAgeDetect, 700);
+          });
+        };
+      })
+      .catch(function(e) {
+        setAgeStatus("Cámara bloqueada — omitir","deny");
+        $$("ageSkip").style.display="block";
+        $$("ageLoading").classList.add("gone");
+      });
+  }
+
+  function runAgeDetect() {
+    if(!modelsLoaded||!detecting) return;
+    var video = $$("age-video");
+    if(!video||video.readyState<2) return;
+    var t0 = performance.now();
+    faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:.4}))
+      .withAgeAndGender()
+      .then(function(detections) {
+        if(!detections||!detections.length) {
+          setAgeStatus("No te veo — acércate un poco…","scanning"); return;
+        }
+        var primary = detections.reduce(function(a,b){ return a.detection.box.area>b.detection.box.area?a:b; });
+        var age  = Math.round(primary.age);
+        var conf = Math.round(primary.detection.score*100);
+        if(conf < 60) { setAgeStatus("Mantén la posición ("+conf+"%)…","scanning"); return; }
+        detecting = false; clearInterval(detectTimer);
+        showAgeResult(age, conf);
+      }).catch(function(){});
+  }
+
+  function showAgeResult(age, conf) {
+    var overlay = $$("ageResult");
+    var granted = age >= 18;
+    $$("aroIcon").textContent  = granted ? "✓" : "✗";
+    $$("aroAge").textContent   = age;
+    $$("aroLabel").textContent = granted ? "ACCESO AUTORIZADO" : "ACCESO DENEGADO";
+    $$("aroNote").textContent  = granted
+      ? "Edad: "+age+" años · Confianza: "+conf+"% · Imagen: nunca almacenada"
+      : "Debes ser mayor de 18 años para participar.";
+    overlay.className = "age-result-overlay " + (granted?"granted":"denied");
+
+    if(granted) {
+      state.ageVerified = true; state.ageValue = age;
+      setAgeStatus("✓ Verificado · "+age+" años","ok");
+      $$("ageResultBtn")||0; // handled below
+    } else {
+      $$("aroBtn").style.display="none";
+      setTimeout(function(){ resetAgeScreen(); },4000);
     }
   }
-  
-  else if(tab === 'skills') {
-    const skillSlots = SKILLS.map(sk=>{
-      const owned = state.ownedSkills.includes(sk.id);
-      const equipped = state.equippedSkills.includes(sk.id);
-      return `<div class="sao-skill-slot ${equipped?'equipped':''}" title="${sk.name}: ${sk.desc}" onclick="addSaoRipple(event)">
-        <span class="sao-skill-icon">${sk.emoji}</span>
-        <span class="sao-skill-lvl">${owned?(equipped?'EQ':'OK'):'—'}</span>
-        ${equipped?'<div class="sao-equipped-dot"></div>':''}
-      </div>`;
-    }).join('');
-    panel.innerHTML = `
-      <div class="sao-stat-card">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">Skills · Habilidades digitales</span>
-          <span class="sao-stat-value" style="color:var(--violet);font-size:22px;">${state.ownedSkills.length}/${SKILLS.length}</span>
-        </div>
-        <div class="sao-bar-wrap"><div class="sao-bar-fill mp" style="width:${state.ownedSkills.length/SKILLS.length*100}%;"></div></div>
-      </div>
-      <div>
-        <div class="sao-section-lbl">Árbol de skills SAO · Toca para equipar</div>
-        <div class="sao-skills-grid">${skillSlots}</div>
-      </div>
-      <div class="sao-stat-card">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">💎 VBC disponible para skills</span>
-          <span class="sao-stat-value vbc">${state.vbc.toLocaleString('es-CL')}</span>
-        </div>
-      </div>`;
+
+  var aroBtn = $$("aroBtn");
+  if(aroBtn) {
+    aroBtn.addEventListener("click", function(){
+      stopAgeCam();
+      showScreen("onboard");
+    });
   }
-  
-  else if(tab === 'status') {
-    const tierEmoji={GALÁCTICO:'⭐',PLATINO:'💎',ORO:'🥇',PLATA:'🥈',BRONCE:'🥉'}[state.bestTier]||'🥉';
-    panel.innerHTML = `
-      <div class="sao-stat-card">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">Power Score · Fuerza relativa</span>
-          <span class="sao-stat-value" style="color:var(--cyan);font-size:28px;">${state.bestScore}<span style="font-size:14px;color:var(--text3);">/99</span></span>
-        </div>
-        <div class="sao-bar-wrap"><div class="sao-bar-fill hp" style="width:${state.bestScore}%;"></div></div>
-      </div>
-      <div class="sao-stat-card">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">XP · Experiencia del atleta</span>
-          <span class="sao-stat-value" style="color:var(--green);">LVL ${state.level}</span>
-        </div>
-        <div class="sao-bar-wrap"><div class="sao-bar-fill mp" style="width:${state.xp}%;"></div></div>
-      </div>
-      <div class="sao-stat-card" onclick="addSaoRipple(event)">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">Tier · Clasificación SAO</span>
-          <span class="sao-stat-value" style="color:var(--gold);font-size:20px;">${tierEmoji} ${state.bestTier}</span>
-        </div>
-      </div>
-      <div class="sao-stat-card" onclick="addSaoRipple(event)">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">Lifts realizados</span>
-          <span class="sao-stat-value" style="color:var(--orange);font-size:24px;">${state.lifts}</span>
-        </div>
-      </div>`;
+
+  var ageSkip = $$("ageSkip");
+  if(ageSkip) {
+    ageSkip.addEventListener("click",function(){
+      state.ageVerified = true; state.ageValue = 0;
+      stopAgeCam(); showScreen("onboard");
+    });
   }
-  
-  else if(tab === 'wallet') {
-    panel.innerHTML = `
-      <div class="sao-stat-card" onclick="addSaoRipple(event)">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">💎 VBC · Diamond tokens</span>
-          <span class="sao-stat-value vbc">${state.vbc.toLocaleString('es-CL')}</span>
-        </div>
-      </div>
-      <div class="sao-stat-card" onclick="addSaoRipple(event)">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">CONDOR · Base L2 tokens</span>
-          <span class="sao-stat-value" style="color:var(--violet);font-size:20px;">${state.condor.toLocaleString('es-CL')}</span>
-        </div>
-      </div>
-      <div class="sao-stat-card">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">💎 VBC total ganado</span>
-          <span class="sao-stat-value" style="color:var(--gold);font-size:20px;">${state.totalVBC.toLocaleString('es-CL')}</span>
-        </div>
-      </div>
-      <div>
-        <div class="sao-section-lbl">Últimas transacciones SAO</div>
-        ${state.txHistory.slice(0,4).map(tx=>`
-          <div class="sao-log-line">
-            <span class="${tx.type==='earn'?'ok':'err'}">${tx.type==='earn'?'▶':'◀'}</span>
-            ${tx.desc} · ${tx.type==='earn'?'+':'-'}${tx.amount} 💎
-          </div>`).join('')||'<div class="sao-log-line"><span class="warn">▲</span> Sin transacciones aún</div>'}
-      </div>`;
+
+  function resetAgeScreen() {
+    $$("ageResult").className = "age-result-overlay";
+    setAgeStatus("Inténtalo de nuevo…","scanning");
+    detecting = true;
+    detectTimer = setInterval(runAgeDetect, 700);
   }
-  
-  else if(tab === 'logros') {
-    // SAO-narrative achievements
-    const achHTML = Object.entries(SAO_ACHIEVEMENTS).map(([key,a])=>`
-      <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);">
-        <span style="font-size:20px;opacity:${a.done?1:.3};">${a.emoji}</span>
-        <div style="flex:1;">
-          <div style="font-size:11px;font-weight:600;color:${a.done?'#fff':'rgba(255,255,255,.3)'};">${a.label}</div>
-          <div style="font-family:var(--mono);font-size:8px;color:${a.done?'rgba(180,100,255,.65)':'rgba(255,255,255,.2)'};margin-top:2px;line-height:1.4;">${a.narrative}</div>
-        </div>
-        <div style="font-family:var(--mono);font-size:10px;font-weight:700;color:${a.done?'var(--gold)':'rgba(255,255,255,.15)'};">+${a.pts}💎</div>
-      </div>`).join('');
-    
-    const doneCount = Object.values(SAO_ACHIEVEMENTS).filter(a=>a.done).length;
-    panel.innerHTML = `
-      <div class="sao-stat-card">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">Logros · Historial SAO</span>
-          <span class="sao-stat-value" style="color:var(--violet);font-size:22px;">${doneCount}/${Object.keys(SAO_ACHIEVEMENTS).length}</span>
-        </div>
-        <div class="sao-bar-wrap"><div class="sao-bar-fill mp" style="width:${doneCount/Object.keys(SAO_ACHIEVEMENTS).length*100}%;"></div></div>
-      </div>
-      <div style="overflow-y:auto;max-height:320px;padding-right:4px;">${achHTML}</div>`;
+
+  function stopAgeCam() {
+    detecting = false; clearInterval(detectTimer);
+    var v = $$("age-video");
+    if(v&&v.srcObject) v.srcObject.getTracks().forEach(function(t){t.stop();});
   }
-  
-  else if(tab === 'log') {
-    const mainLog = document.getElementById('logArea');
-    const logItems = mainLog ? [...mainLog.children].map(l=>`<div class="sao-log-line">${l.innerHTML}</div>`).join('') : '';
-    panel.innerHTML = `
-      <div class="sao-stat-card">
-        <div class="sao-stat-header">
-          <span class="sao-stat-title">📡 AmuSphere · System Log</span>
-          <span style="font-family:var(--mono);font-size:8px;color:var(--green);">ONLINE</span>
-        </div>
-      </div>
-      <div style="overflow-y:auto;max-height:340px;">
-        ${logItems||'<div class="sao-log-line"><span class="info">▶</span> AmuSphere log vacío</div>'}
-      </div>`;
+
+  function setAgeStatus(text, state2) {
+    var dot = $$("ageStatusDot"), txt = $$("ageStatusText");
+    if(txt) txt.textContent = text;
+    if(dot) { dot.className = "age-status-dot"+(state2?" "+state2:""); }
   }
-}
 
-function renderSaoSkillSlots() {
-  return SKILLS.map(sk=>{
-    const equipped = state.equippedSkills.includes(sk.id);
-    const owned = state.ownedSkills.includes(sk.id);
-    return `<div class="sao-skill-slot ${equipped?'equipped':''}" onclick="addSaoRipple(event)" title="${sk.name}">
-      <span class="sao-skill-icon" style="opacity:${owned?1:.3};">${sk.emoji}</span>
-      <span class="sao-skill-lvl">${owned?(equipped?'EQ':'OK'):'—'}</span>
-      ${equipped?'<div class="sao-equipped-dot"></div>':''}
-    </div>`;
-  }).slice(0,8).join('');
-}
+  /* ══ ONBOARDING ═════════════════════════════════════════════ */
+  var btnConfirmar = $$("btnConfirmar");
+  if(btnConfirmar) {
+    btnConfirmar.addEventListener("click", function() {
+      var u      = state.user;
+      var nombre = $$("inputNombre").value.trim();
+      var tel    = $$("inputTel").value.trim();
+      var source = $$("inputSource").value;
+      if(!nombre) { toast("Escribe tu nombre"); return; }
+      btnConfirmar.textContent = "Guardando…";
+      var profile = {
+        uid:          u ? u.uid    : "anon-"+Date.now(),
+        name:         nombre,
+        email:        u ? u.email  : "anon",
+        photoURL:     u ? (u.photoURL||null) : null,
+        tel:          tel,
+        source:       source,
+        ageVerified:  state.ageVerified,
+        ageValue:     state.ageValue,
+        nerhiaUVX:    nerhia.uvx,
+        pts:          10,
+        participaciones: 1,
+        createdAt:    new Date().toISOString(),
+        updatedAt:    new Date().toISOString(),
+      };
+      state.profile = profile;
+      var saveAndShow = function() {
+        showRanking();
+        toast("¡Bienvenido " + nombre + "! +10 pts por inscribirse 🎉");
+      };
+      if(db && u) {
+        db.collection("vbc_participants").doc(u.uid).set(profile)
+          .then(saveAndShow)
+          .catch(saveAndShow);
+      } else {
+        saveAndShow();
+      }
+    });
+  }
 
-// Close overlay on background click
-document.getElementById('saoOverlay').addEventListener('click', function(e) {
-  if(e.target === this) closeSaoOverlay();
-});
+  /* ══ RANKING ════════════════════════════════════════════════ */
+  var DEMO_RANKING = [
+    {name:"Carlos M.",   pts:520, participaciones:12, photoURL:null, isDemo:true},
+    {name:"Valentina R.",pts:480, participaciones:11, photoURL:null, isDemo:true},
+    {name:"Rodrigo T.",  pts:410, participaciones:9,  photoURL:null, isDemo:true},
+    {name:"Camila L.",   pts:380, participaciones:8,  photoURL:null, isDemo:true},
+    {name:"Felipe S.",   pts:310, participaciones:7,  photoURL:null, isDemo:true},
+    {name:"Javiera P.",  pts:290, participaciones:6,  photoURL:null, isDemo:true},
+    {name:"Diego F.",    pts:240, participaciones:5,  photoURL:null, isDemo:true},
+  ];
 
-// ESC key closes overlay
-document.addEventListener('keydown', e => {
-  if(e.key === 'Escape') closeSaoOverlay();
-});
+  var rankingData = [];
+  var rankingUnsub = null;
 
-// ════════════════════════════════════════
-// SAO RIPPLE EFFECT (touch feedback)
-// ════════════════════════════════════════
-function addSaoRipple(event) {
-  const container = document.getElementById('saoRipples');
-  const r = document.createElement('div');
-  r.className = 'sao-ripple';
-  r.style.left = (event.clientX||event.pageX||0) + 'px';
-  r.style.top = (event.clientY||event.pageY||0) + 'px';
-  container.appendChild(r);
-  setTimeout(()=>r.remove(), 650);
-}
+  function showRanking() {
+    showScreen("ranking");
+    updateNerhiaStrip();
+    loadRanking();
+    updateUserHero();
+  }
 
-// ════════════════════════════════════════
-// LOG & AMBIENT
-// ════════════════════════════════════════
-const ambientLogs=[
-  ['info','Oracle VBC · sincronizando…'],
-  ['info','AmuSphere · bloque L2 confirmado'],
-  ['ok','Red estable · latencia 12ms'],
-  ['info','Precio CONDOR actualizado'],
-  ['ok','Validación Epley · ok'],
-  ['info','NERHIA UVX · recalibrado'],
-  ['ok','Holo-interface · proyección estable'],
-];
-let ambIdx=0;
-setInterval(()=>{
-  const l=ambientLogs[ambIdx%ambientLogs.length];ambIdx++;
-  addLog(`<span class="${l[0]}">▶</span> ${l[1]}`);
-},5500);
+  function updateUserHero() {
+    var p = state.profile; if(!p) return;
+    var n = $$("userHeroName"); if(n) n.textContent = p.name || "—";
+    var s = $$("userHeroSub");  if(s) s.textContent = (p.participaciones||1) + " participaciones · inscrito hoy";
+    var pv = $$("userHeroPts"); if(pv) pv.textContent = p.pts || 10;
+  }
 
-// ════════════════════════════════════════
-// INIT
-// ════════════════════════════════════════
-renderEquipped();
-renderPerfil();
-renderLiftHistory();
-updateUI();
-updateSaoBadges();
-pickMission();
+  function loadRanking() {
+    if(!db) {
+      renderRanking(DEMO_RANKING);
+      $$("strip-inscritos").textContent = DEMO_RANKING.length;
+      return;
+    }
+    if(rankingUnsub) rankingUnsub();
+    rankingUnsub = db.collection("vbc_participants")
+      .orderBy("pts","desc")
+      .limit(50)
+      .onSnapshot(function(snap) {
+        rankingData = snap.docs.map(function(d){ return d.data(); });
+        if(!rankingData.length) rankingData = DEMO_RANKING;
+        renderRanking(rankingData);
+        $$("strip-inscritos").textContent = snap.size || rankingData.length;
+        updateUserPosition(rankingData);
+      }, function() {
+        renderRanking(DEMO_RANKING);
+        $$("strip-inscritos").textContent = DEMO_RANKING.length;
+      });
+  }
 
-// First entry achievement
-setTimeout(()=>unlockAchievement('firstEntry'), 1200);
+  function updateUserPosition(list) {
+    if(!state.profile) return;
+    var myUid = state.profile.uid;
+    var pos = list.findIndex(function(x){ return x.uid===myUid; });
+    var rn = $$("userRankNum");
+    if(!rn) return;
+    if(pos >= 0) {
+      rn.textContent = "#" + (pos+1);
+      rn.className = "uh-rank" + (pos===0?" gold":pos===1?" silver":pos===2?" bronze":"");
+    } else {
+      rn.textContent = "#" + (list.length+1);
+    }
+    var pv = $$("userHeroPts");
+    if(pv && state.profile.pts) pv.textContent = state.profile.pts;
+  }
 
-console.log('[VBC Protocol · SAO Fusion] Booting · AmuSphere Online · NERHIA Active');
+  function renderRanking(list) {
+    var container = $$("rankingList"); if(!container) return;
+    var myUid = state.profile ? state.profile.uid : null;
+    var html = list.slice(0,30).map(function(p, i) {
+      var pos = i+1;
+      var isMe = (p.uid && p.uid===myUid);
+      var posEmoji = pos===1?"🥇":pos===2?"🥈":pos===3?"🥉":"#"+pos;
+      var avatar = p.photoURL
+        ? '<img class="rc-avatar" src="'+p.photoURL+'" onerror="this.style.display=\'none\'">'
+        : '<div class="rc-avatar-ph">👤</div>';
+      return '<div class="rank-card rank-'+(pos<=3?pos:"x")+(isMe?" is-me":"")+'">'
+        + '<div class="rc-pos">'+posEmoji+'</div>'
+        + avatar
+        + '<div class="rc-info">'
+          + '<div class="rc-name">'+(isMe?"<strong>"+p.name+"</strong>":p.name)+'</div>'
+          + '<div class="rc-meta">'+(p.participaciones||1)+' participaciones'+(isMe?' · Tú':'')+'</div>'
+        + '</div>'
+        + '<div class="rc-pts">'
+          + '<div class="rc-pts-val">'+(p.pts||0)+'</div>'
+          + '<div class="rc-pts-lbl">pts</div>'
+        + '</div>'
+        + '</div>';
+    }).join("");
+    container.innerHTML = html;
+  }
+
+  /* ══ COMPARTIR ══════════════════════════════════════════════ */
+  var APP_URL = "https://vibraalto.cl/vbc-protocol/";
+
+  var btnShare = $$("btnShareApp");
+  if(btnShare) {
+    btnShare.addEventListener("click", function() {
+      var data = {
+        title: "VBC Protocol",
+        text: "Únete al ranking VBC Protocol — compite hasta octubre 🏆",
+        url:  APP_URL
+      };
+      if(navigator.share) {
+        navigator.share(data).catch(function(){});
+      } else {
+        navigator.clipboard && navigator.clipboard.writeText(APP_URL).then(function(){
+          toast("Link copiado: " + APP_URL);
+        });
+      }
+    });
+  }
+
+  var btnInvitar = $$("btnInvitar");
+  if(btnInvitar) {
+    btnInvitar.addEventListener("click", function() {
+      var url = "https://wa.me/?text=" + encodeURIComponent("Entra al ranking VBC Protocol: " + APP_URL);
+      window.open(url, "_blank"); advanceVbcMission("shares", 1); unlockVbcAchievement("shared");
+    });
+  }
+
+  /* ══ SERVICE WORKER REGISTER ════════════════════════════════ */
+  if("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/vbc-protocol/sw.js").catch(function(){});
+  }
+
+  /* ══ BOOT ════════════════════════════════════════════════════ */
+  /* Si no hay Firebase, mostrar splash rápido */
+  setTimeout(function() {
+    if(!auth) {
+      $$("fullLoader").classList.add("gone");
+      showScreen("splash");
+    }
+  }, 1500);
+
+  /* Iniciar IA cuando entre a screen-age */
+  var ageObs = new MutationObserver(function(muts) {
+    muts.forEach(function(m) {
+      if(m.type==="attributes" && m.target.id==="screen-age") {
+        if(m.target.classList.contains("active")) startAgeScreen();
+      }
+    });
+  });
+  var ageScreen = $$("screen-age");
+  if(ageScreen) ageObs.observe(ageScreen, {attributes:true, attributeFilter:["class"]});
+
+  console.log("[VBC Protocol] booting · VibraAlto · NERHIA UVX=" + nerhia.uvx);
+
+}();
 </script>
 </body>
 </html>
