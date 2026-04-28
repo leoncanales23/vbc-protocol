@@ -493,6 +493,73 @@ body::after {
 .anim-in-2 { animation: slideUp .45s .1s cubic-bezier(.2,0,.1,1) both; }
 .anim-in-3 { animation: slideUp .45s .2s cubic-bezier(.2,0,.1,1) both; }
 .anim-in-4 { animation: slideUp .45s .3s cubic-bezier(.2,0,.1,1) both; }
+
+/* ══ SAO HOLO OVERLAY TOGGLE ══ */
+.sao-toggle{display:flex;align-items:center;gap:5px;padding:6px 11px;border:1px solid rgba(180,100,255,.4);border-radius:8px;background:rgba(80,0,160,0.15);color:var(--violet);font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.08em;cursor:pointer;transition:all .2s;}
+.sao-toggle:hover{border-color:rgba(180,100,255,.8);background:rgba(120,40,255,.25);box-shadow:0 0 14px rgba(140,60,255,.25);}
+.sao-toggle.active{border-color:var(--violet);background:rgba(180,100,255,.2);}
+
+/* ══ SAO HOLOGRAPHIC OVERLAY ══ */
+.sao-overlay{position:fixed;inset:0;z-index:400;display:flex;align-items:center;justify-content:center;background:rgba(0,2,8,.85);backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .35s ease;}
+.sao-overlay.open{opacity:1;pointer-events:all;}
+.sao-overlay::after{content:'';position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0px,transparent 3px,rgba(0,200,255,.012) 4px);animation:scanlines 12s linear infinite;}
+@keyframes scanlines{from{background-position:0 0;}to{background-position:0 100%;};}
+.sao-interface{display:flex;align-items:flex-start;gap:16px;animation:saoOpen .4s cubic-bezier(.2,0,.1,1) both;perspective:800px;}
+@keyframes saoOpen{from{opacity:0;transform:scale(.92) translateY(16px);}to{opacity:1;transform:scale(1) translateY(0);}}
+.sao-menu-panel{width:210px;flex-shrink:0;background:rgba(5,5,30,0.82);border:1px solid rgba(140,60,255,.35);border-radius:12px;overflow:hidden;box-shadow:0 0 40px rgba(140,60,255,.15),inset 0 1px 0 rgba(255,255,255,.05);animation:menuFloat 5s ease-in-out infinite;}
+@keyframes menuFloat{0%,100%{transform:translateY(0) rotateX(2deg);}50%{transform:translateY(-5px) rotateX(-1deg);}}
+.sao-menu-header{padding:12px 14px 10px;border-bottom:1px solid rgba(160,80,255,.2);background:rgba(80,0,160,.12);}
+.sao-player-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.sao-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,rgba(140,60,255,.3),rgba(0,200,255,.2));border:1.5px solid rgba(140,60,255,.4);display:flex;align-items:center;justify-content:center;font-size:16px;}
+.sao-player-name{font-size:13px;font-weight:700;color:#c8a8ff;}
+.sao-player-lvl{font-family:var(--mono);font-size:8px;color:rgba(180,130,255,.6);letter-spacing:.1em;}
+.sao-menu-tag{font-family:var(--mono);font-size:7px;letter-spacing:.25em;color:rgba(180,100,255,.5);text-transform:uppercase;}
+.sao-menu-items{padding:8px;}
+.sao-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:7px;cursor:pointer;transition:all .18s;border:1px solid transparent;margin-bottom:3px;position:relative;overflow:hidden;}
+.sao-item::before{content:'';position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(160,80,255,.12);transition:width .3s;}
+.sao-item:hover::before{width:100%;}
+.sao-item:hover{border-color:rgba(160,100,255,.4);transform:translateX(3px);}
+.sao-item.active{background:rgba(120,40,255,.2);border-color:rgba(160,100,255,.55);border-left:2px solid #b46fff;}
+.sao-item-icon{font-size:15px;flex-shrink:0;position:relative;z-index:1;}
+.sao-item-text{font-size:12px;font-weight:600;color:#c8a8ff;letter-spacing:.06em;position:relative;z-index:1;}
+.sao-item-badge{margin-left:auto;font-family:var(--mono);font-size:8px;padding:2px 6px;border-radius:3px;background:rgba(160,80,255,.18);border:1px solid rgba(160,80,255,.25);color:rgba(180,130,255,.8);position:relative;z-index:1;}
+.sao-detail-panel{width:300px;display:flex;flex-direction:column;gap:10px;animation:detailFloat 5s ease-in-out infinite;animation-delay:.5s;}
+@keyframes detailFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
+.sao-stat-card{background:rgba(3,5,28,0.82);border:1px solid rgba(100,200,255,.2);border-radius:10px;padding:13px 15px;position:relative;overflow:hidden;cursor:pointer;transition:all .22s;}
+.sao-stat-card:hover{border-color:rgba(100,200,255,.5);box-shadow:0 0 20px rgba(0,150,255,.1);transform:translateY(-2px);}
+.sao-stat-card::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(100,200,255,.35),transparent);}
+.sao-stat-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.sao-stat-title{font-family:var(--mono);font-size:7px;letter-spacing:.2em;color:rgba(100,200,255,.5);text-transform:uppercase;}
+.sao-stat-value{font-size:24px;font-weight:700;letter-spacing:-.02em;}
+.sao-stat-value.hp{color:#ff6b6b;text-shadow:0 0 14px rgba(255,100,100,.35);}
+.sao-stat-value.mp{color:#6b9fff;text-shadow:0 0 14px rgba(100,150,255,.35);}
+.sao-stat-value.vbc{color:var(--gold);text-shadow:0 0 14px rgba(226,195,106,.3);}
+.sao-bar-wrap{height:4px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden;}
+.sao-bar-fill{height:100%;border-radius:3px;transition:width 1s ease;}
+.sao-bar-fill.hp{background:linear-gradient(90deg,#ff4444,#ff8888);}
+.sao-bar-fill.mp{background:linear-gradient(90deg,#4466ff,#88aaff);}
+.sao-skills-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+.sao-skill-slot{aspect-ratio:1;background:rgba(18,0,58,.5);border:1px solid rgba(120,60,255,.22);border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;transition:all .18s;position:relative;}
+.sao-skill-slot:hover{border-color:rgba(160,100,255,.65);transform:scale(1.08);box-shadow:0 0 14px rgba(140,60,255,.22);z-index:2;}
+.sao-skill-slot.equipped{border-color:rgba(0,255,170,.35);background:rgba(0,60,40,.25);}
+.sao-skill-icon{font-size:17px;}
+.sao-skill-lvl{font-family:var(--mono);font-size:7px;color:rgba(160,120,255,.65);}
+.sao-equipped-dot{position:absolute;top:2px;right:2px;width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green);}
+.sao-section-lbl{font-family:var(--mono);font-size:7px;letter-spacing:.2em;color:rgba(140,80,255,.5);text-transform:uppercase;margin-bottom:6px;}
+.sao-log-line{font-family:var(--mono);font-size:9px;color:rgba(0,200,255,.4);padding:2px 0;border-bottom:1px solid rgba(255,255,255,.03);}
+.sao-log-line .ok{color:var(--green);}
+.sao-log-line .warn{color:var(--gold);}
+.sao-log-line .err{color:var(--red);}
+.sao-hex-bg{position:absolute;inset:0;overflow:hidden;pointer-events:none;opacity:.03;}
+.sao-close{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--muted);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;z-index:10;}
+.sao-close:hover{background:rgba(255,100,100,.15);border-color:rgba(255,100,100,.3);color:#ff6b6b;}
+.sao-ripple-container{position:fixed;inset:0;pointer-events:none;z-index:500;overflow:hidden;}
+.sao-ripple{position:absolute;border:1.5px solid rgba(160,100,255,.65);border-radius:50%;animation:saoRipple .65s ease-out forwards;pointer-events:none;}
+@keyframes saoRipple{0%{width:0;height:0;opacity:.9;transform:translate(-50%,-50%);}100%{width:90px;height:90px;opacity:0;transform:translate(-50%,-50%);}}
+.sao-fab{position:fixed;right:20px;bottom:90px;z-index:350;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,rgba(80,0,160,.8),rgba(40,0,100,.9));border:1px solid rgba(180,100,255,.5);box-shadow:0 0 24px rgba(140,60,255,.35),inset 0 1px 0 rgba(255,255,255,.08);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;color:#c8a8ff;transition:all .25s;animation:fabPulse 3s ease-in-out infinite;}
+@keyframes fabPulse{0%,100%{box-shadow:0 0 24px rgba(140,60,255,.35),inset 0 1px 0 rgba(255,255,255,.08);}50%{box-shadow:0 0 36px rgba(140,60,255,.55),0 0 60px rgba(140,60,255,.2),inset 0 1px 0 rgba(255,255,255,.08);}}
+.sao-fab:hover{transform:scale(1.1);border-color:rgba(200,140,255,.8);}
+.sao-fab:active{transform:scale(.94);}
 </style>
 </head>
 <body>
@@ -1231,6 +1298,155 @@ void function VBCProtocol() { "use strict";
   console.log("[VBC Protocol] booting · VibraAlto · NERHIA UVX=" + nerhia.uvx);
 
 }();
+</script>
+
+<!-- ══ SAO HOLOGRAPHIC OVERLAY ══ -->
+<div class="sao-ripple-container" id="saoRipples"></div>
+
+<div class="sao-overlay" id="saoOverlay">
+  <svg class="sao-hex-bg" viewBox="0 0 800 640" xmlns="http://www.w3.org/2000/svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;">
+    <defs><pattern id="saoHex" width="52" height="60" patternUnits="userSpaceOnUse">
+      <polygon points="26,2 50,15 50,45 26,58 2,45 2,15" fill="none" stroke="rgba(140,60,255,1)" stroke-width="0.7"/>
+    </pattern></defs>
+    <rect width="100%" height="100%" fill="url(#saoHex)" opacity="0.5"/>
+  </svg>
+  <button class="sao-close" onclick="closeSaoOverlay()">✕</button>
+  <div class="sao-interface">
+    <div class="sao-menu-panel">
+      <div class="sao-menu-header">
+        <div class="sao-player-row">
+          <div class="sao-avatar">🦁</div>
+          <div>
+            <div class="sao-player-name" id="saoPlayerName">Atleta VBC</div>
+            <div class="sao-player-lvl" id="saoPlayerLvl">LVL 1 · BRONCE</div>
+          </div>
+        </div>
+        <div class="sao-menu-tag">Sistema · Menú SAO</div>
+      </div>
+      <div class="sao-menu-items">
+        <div class="sao-item active" id="sao-item-inventory" onclick="openSaoTab('inventory',this)">
+          <span class="sao-item-icon">🎒</span><span class="sao-item-text">Inventario</span>
+          <span class="sao-item-badge" id="saoBadgeInv">—</span>
+        </div>
+        <div class="sao-item" id="sao-item-skills" onclick="openSaoTab('skills',this)">
+          <span class="sao-item-icon">⚔️</span><span class="sao-item-text">Habilidades</span>
+          <span class="sao-item-badge" id="saoBadgeSkills">0</span>
+        </div>
+        <div class="sao-item" id="sao-item-status" onclick="openSaoTab('status',this)">
+          <span class="sao-item-icon">📊</span><span class="sao-item-text">Estado</span>
+        </div>
+        <div class="sao-item" id="sao-item-wallet" onclick="openSaoTab('wallet',this)">
+          <span class="sao-item-icon">💎</span><span class="sao-item-text">VBC Wallet</span>
+          <span class="sao-item-badge" id="saoBadgeVBC">0</span>
+        </div>
+        <div class="sao-item" id="sao-item-logros" onclick="openSaoTab('logros',this)">
+          <span class="sao-item-icon">🏆</span><span class="sao-item-text">Logros</span>
+          <span class="sao-item-badge" id="saoBadgeLogros">0</span>
+        </div>
+        <div class="sao-item" id="sao-item-log" onclick="openSaoTab('log',this)">
+          <span class="sao-item-icon">📡</span><span class="sao-item-text">AmuSphere Log</span>
+        </div>
+      </div>
+    </div>
+    <div class="sao-detail-panel" id="saoDetailPanel"></div>
+  </div>
+</div>
+
+<div class="sao-fab" onclick="openSaoOverlay('inventory'); addSaoRipple(event);" title="Abrir Menú SAO">◈</div>
+
+<script>
+/* ══ SAO HOLOGRAM JS ══ */
+var currentSaoTab = 'inventory';
+var SAO_ACHIEVEMENTS = {
+  firstEntry:  { emoji:'🌐', label:'Primera Conexión',    narrative:'Entraste al AmuSphere por primera vez.',  pts:50,  done:false },
+  lift5:       { emoji:'⚔️', label:'5 Lifts registrados', narrative:'Completaste 5 sesiones de fuerza.',        pts:100, done:false },
+  bronce:      { emoji:'🥉', label:'Tier BRONCE',          narrative:'Alcanzaste el rango inicial.',              pts:25,  done:false },
+  plata:       { emoji:'🥈', label:'Tier PLATA',            narrative:'Superaste el percentil 60.',               pts:150, done:false },
+  oro:         { emoji:'🥇', label:'Tier ORO',              narrative:'Top 25% del servidor.',                    pts:300, done:false },
+  platino:     { emoji:'💎', label:'Tier PLATINO',          narrative:'Top 10% — casi inalcanzable.',             pts:500, done:false },
+  galactico:   { emoji:'⭐', label:'Tier GALÁCTICO',        narrative:'Leyenda del sistema VBC.',                 pts:1000,done:false },
+};
+var saoState = { vbc:0, condor:0, totalVBC:0, lifts:0, level:1, xp:0, bestScore:0, bestTier:'BRONCE', name:'Atleta VBC', ownedSkills:[], equippedSkills:[], txHistory:[] };
+
+function openSaoOverlay(tab) {
+  unlockSaoAchievement('firstEntry');
+  document.getElementById('saoOverlay').classList.add('open');
+  document.getElementById('saoPlayerName').textContent = saoState.name;
+  document.getElementById('saoPlayerLvl').textContent = 'LVL '+saoState.level+' · '+saoState.bestTier;
+  updateSaoBadges();
+  var item = document.getElementById('sao-item-'+(tab||'inventory'));
+  openSaoTab(tab||'inventory', item);
+}
+function closeSaoOverlay() {
+  document.getElementById('saoOverlay').classList.remove('open');
+}
+function updateSaoBadges() {
+  var n;
+  n=document.getElementById('saoBadgeVBC'); if(n) n.textContent=saoState.vbc.toLocaleString('es-CL');
+  n=document.getElementById('saoBadgeSkills'); if(n) n.textContent=saoState.ownedSkills.length;
+  n=document.getElementById('saoBadgeInv'); if(n) n.textContent=saoState.lifts+' lifts';
+  n=document.getElementById('saoBadgeLogros'); if(n) n.textContent=Object.values(SAO_ACHIEVEMENTS).filter(function(a){return a.done;}).length;
+}
+function openSaoTab(tab, el) {
+  currentSaoTab = tab;
+  document.querySelectorAll('.sao-item').forEach(function(i){i.classList.remove('active');});
+  if(el) el.classList.add('active');
+  renderSaoDetail(tab);
+}
+function renderSaoDetail(tab) {
+  var panel = document.getElementById('saoDetailPanel');
+  if(tab === 'inventory') {
+    var ps = saoState.bestScore, hp = 5000+ps*50, mp = 2000+saoState.level*200;
+    panel.innerHTML = '<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">HP · Resistencia física</span><span class="sao-stat-value hp">'+hp.toLocaleString('es-CL')+'</span></div><div class="sao-bar-wrap"><div class="sao-bar-fill hp" style="width:'+Math.min(100,ps)+'%;"></div></div></div>'
+      +'<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">MP · Maná de habilidades</span><span class="sao-stat-value mp">'+mp.toLocaleString('es-CL')+'</span></div><div class="sao-bar-wrap"><div class="sao-bar-fill mp" style="width:'+Math.min(100,saoState.ownedSkills.length/12*100)+'%;"></div></div></div>'
+      +'<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">💎 VBC · Diamonds balance</span><span class="sao-stat-value vbc">'+saoState.vbc.toLocaleString('es-CL')+'</span></div></div>'
+      +'<div><div class="sao-section-lbl">Skills equipadas · '+saoState.equippedSkills.length+'/5 activas</div><div class="sao-skills-grid">'+renderSaoSkillSlots()+'</div></div>';
+  } else if(tab === 'status') {
+    panel.innerHTML = '<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">Power Score</span><span class="sao-stat-value" style="color:var(--cyan);font-size:28px;">'+saoState.bestScore+'<span style="font-size:14px;color:var(--muted);">/99</span></span></div><div class="sao-bar-wrap"><div class="sao-bar-fill hp" style="width:'+saoState.bestScore+'%;"></div></div></div>'
+      +'<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">XP · Nivel del atleta</span><span class="sao-stat-value" style="color:var(--green);">LVL '+saoState.level+'</span></div><div class="sao-bar-wrap"><div class="sao-bar-fill mp" style="width:'+saoState.xp+'%;"></div></div></div>'
+      +'<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">Tier · Clasificación SAO</span><span class="sao-stat-value" style="color:var(--gold);font-size:20px;">'+saoState.bestTier+'</span></div></div>'
+      +'<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">Lifts realizados</span><span class="sao-stat-value" style="color:var(--orange);font-size:24px;">'+saoState.lifts+'</span></div></div>';
+  } else if(tab === 'wallet') {
+    panel.innerHTML = '<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">💎 VBC · Diamond tokens</span><span class="sao-stat-value vbc">'+saoState.vbc.toLocaleString('es-CL')+'</span></div></div>'
+      +'<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">CONDOR · Base L2 tokens</span><span class="sao-stat-value" style="color:var(--violet);font-size:20px;">'+saoState.condor.toLocaleString('es-CL')+'</span></div></div>'
+      +'<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">💎 VBC total ganado</span><span class="sao-stat-value" style="color:var(--gold);font-size:20px;">'+saoState.totalVBC.toLocaleString('es-CL')+'</span></div></div>';
+  } else if(tab === 'logros') {
+    var doneCount = Object.values(SAO_ACHIEVEMENTS).filter(function(a){return a.done;}).length;
+    var achHTML = Object.entries(SAO_ACHIEVEMENTS).map(function(e){
+      var a=e[1];
+      return '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);"><span style="font-size:20px;opacity:'+(a.done?1:.3)+';">'+a.emoji+'</span><div style="flex:1;"><div style="font-size:11px;font-weight:600;color:'+(a.done?'#fff':'rgba(255,255,255,.3)')+';">'+a.label+'</div><div style="font-family:var(--mono);font-size:8px;color:'+(a.done?'rgba(180,100,255,.65)':'rgba(255,255,255,.2)')+';margin-top:2px;">'+a.narrative+'</div></div><div style="font-family:var(--mono);font-size:10px;font-weight:700;color:'+(a.done?'var(--gold)':'rgba(255,255,255,.15)')+';">+'+a.pts+'💎</div></div>';
+    }).join('');
+    panel.innerHTML = '<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">Logros · Historial SAO</span><span class="sao-stat-value" style="color:var(--violet);font-size:22px;">'+doneCount+'/'+Object.keys(SAO_ACHIEVEMENTS).length+'</span></div><div class="sao-bar-wrap"><div class="sao-bar-fill mp" style="width:'+(doneCount/Object.keys(SAO_ACHIEVEMENTS).length*100)+'%;"></div></div></div><div style="overflow-y:auto;max-height:320px;padding-right:4px;">'+achHTML+'</div>';
+  } else if(tab === 'log') {
+    panel.innerHTML = '<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">📡 AmuSphere · System Log</span><span style="font-family:var(--mono);font-size:8px;color:var(--green);">ONLINE</span></div></div><div style="overflow-y:auto;max-height:340px;"><div class="sao-log-line"><span class="ok">▶</span> AmuSphere conectado · VBC Protocol</div></div>';
+  } else if(tab === 'skills') {
+    panel.innerHTML = '<div class="sao-stat-card"><div class="sao-stat-header"><span class="sao-stat-title">Skills · Habilidades digitales</span><span class="sao-stat-value" style="color:var(--violet);font-size:22px;">'+saoState.ownedSkills.length+'/12</span></div><div class="sao-bar-wrap"><div class="sao-bar-fill mp" style="width:'+(saoState.ownedSkills.length/12*100)+'%;"></div></div></div><div><div class="sao-section-lbl">Árbol de skills SAO</div><div class="sao-skills-grid">'+renderSaoSkillSlots()+'</div></div>';
+  }
+}
+function renderSaoSkillSlots() {
+  var skills = ['⚡','🔥','❄️','🌀','⚔️','🛡️','🎯','💥'];
+  return skills.map(function(e,i){
+    var equipped = saoState.equippedSkills.indexOf(i) !== -1;
+    var owned = saoState.ownedSkills.indexOf(i) !== -1;
+    return '<div class="sao-skill-slot '+(equipped?'equipped':'')+'" title="Skill '+(i+1)+'"><span class="sao-skill-icon" style="opacity:'+(owned?1:.3)+';">'+e+'</span><span class="sao-skill-lvl">'+(owned?(equipped?'EQ':'OK'):'—')+'</span>'+(equipped?'<div class="sao-equipped-dot"></div>':'')+'</div>';
+  }).join('');
+}
+function unlockSaoAchievement(key) {
+  if(SAO_ACHIEVEMENTS[key] && !SAO_ACHIEVEMENTS[key].done) {
+    SAO_ACHIEVEMENTS[key].done = true;
+  }
+}
+function addSaoRipple(event) {
+  var container = document.getElementById('saoRipples');
+  var r = document.createElement('div');
+  r.className = 'sao-ripple';
+  r.style.left = (event.clientX||event.pageX||0)+'px';
+  r.style.top  = (event.clientY||event.pageY||0)+'px';
+  container.appendChild(r);
+  setTimeout(function(){r.remove();}, 650);
+}
+document.getElementById('saoOverlay').addEventListener('click', function(e){ if(e.target===this) closeSaoOverlay(); });
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeSaoOverlay(); });
 </script>
 </body>
 </html>
