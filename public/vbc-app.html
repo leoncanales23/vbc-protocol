@@ -1134,6 +1134,8 @@ body::after{
     var fbApp = firebase.initializeApp(_FC);
     auth = firebase.auth();
     db   = firebase.firestore();
+    window._fbAuth = auth;
+    window._fbDb = db;
     db.enablePersistence({synchronizeTabs:false}).catch(function(){});
   } catch(e) {
     console.warn("[VBC] Firebase init:", e.message);
@@ -1181,7 +1183,12 @@ body::after{
   /* Login exitoso */
   function onLoginOk(user) {
     updateUserNav(user);
+    // Sync Google name into SAO state
+    if(user.displayName) {
+      state.name = user.displayName.split(' ')[0];
+    }
     hideLogin();
+    loadFirestoreRanking();
   }
 
   /* Botón logout (si existe) */
@@ -1789,8 +1796,27 @@ function renderWallet() {
     </div>`).join('');
 }
 
+function loadFirestoreRanking() {
+  if(!window._fbAuth || !window._fbDb) return;
+  window._fbDb.collection('vbc_participants')
+    .orderBy('vbc','desc').limit(50)
+    .onSnapshot(function(snap) {
+      if(snap && snap.docs && snap.docs.length > 0) {
+        window._firestoreRanking = snap.docs.map(function(d){ return d.data(); });
+      } else {
+        window._firestoreRanking = null;
+      }
+      if(document.getElementById('s-ranking') &&
+         document.getElementById('s-ranking').classList.contains('active')) {
+        renderRanking();
+      }
+    }, function(){ window._firestoreRanking = null; });
+}
+
 function renderRanking() {
-  const rows=[...LB_DATA];
+  const rows = (window._firestoreRanking && window._firestoreRanking.length)
+    ? window._firestoreRanking.map(function(p){ return {name: p.name||'Atleta', tier: p.bestTier||'BRONCE', score: p.bestScore||0, vbc: p.totalVBC||p.vbc||0, photoURL: p.photoURL||null, me: false}; })
+    : [...LB_DATA];
   const myEntry={name:state.name+' (TÚ)',tier:state.bestTier,score:state.bestScore,vbc:state.totalVBC,me:true};
   rows.push(myEntry);
   rows.sort((a,b)=>b.score-a.score||b.vbc-a.vbc);
