@@ -2029,7 +2029,7 @@ function renderWallet() {
 function loadFirestoreRanking() {
   if(!window._fbAuth || !window._fbDb) return;
   window._fbDb.collection('vbc_participants')
-    .orderBy('vbc','desc').limit(50)
+    .orderBy('pts','desc').limit(50)
     .onSnapshot(function(snap) {
       if(snap && snap.docs && snap.docs.length > 0) {
         window._firestoreRanking = snap.docs.map(function(d){ return d.data(); });
@@ -2045,7 +2045,7 @@ function loadFirestoreRanking() {
 
 function renderRanking() {
   const rows = (window._firestoreRanking && window._firestoreRanking.length)
-    ? window._firestoreRanking.map(function(p){ return {name: p.name||'Atleta', tier: p.bestTier||'BRONCE', score: p.bestScore||0, vbc: p.totalVBC||p.vbc||0, photoURL: p.photoURL||null, me: false}; })
+    ? window._firestoreRanking.map(function(p){ return {name: p.name||'Atleta', tier: p.bestTier||'BRONCE', score: p.bestScore||p.pts||0, vbc: p.totalVBC||p.vbc||p.pts||0, photoURL: p.photoURL||null, uid: p.uid||'', me: false}; })
     : [...LB_DATA];
   const myEntry={name:state.name+' (TÚ)',tier:state.bestTier,score:state.bestScore,vbc:state.totalVBC,me:true};
   rows.push(myEntry);
