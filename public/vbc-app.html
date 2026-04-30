@@ -680,6 +680,164 @@ body::after{
 .anim-in-3 { animation: splashSlideUp .45s .2s cubic-bezier(.2,0,.1,1) both; }
 .anim-in-4 { animation: splashSlideUp .45s .3s cubic-bezier(.2,0,.1,1) both; }
 
+
+/* ══ SETUP OVERLAY ═══════════════════════════════════════════ */
+#setup-overlay {
+  position: fixed; inset: 0; z-index: 99997;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(0,200,255,.06) 0%, transparent 70%), #000810;
+  padding: 1.5rem; overflow-y: auto;
+  transition: opacity .4s ease;
+}
+#setup-overlay.gone { opacity: 0; pointer-events: none; }
+
+.setup-card {
+  width: 100%; max-width: 400px;
+  background: rgba(0,20,50,.7);
+  border: 1px solid rgba(0,200,255,.18);
+  border-radius: 16px;
+  padding: 2rem 1.75rem;
+  box-shadow: 0 0 40px rgba(0,200,255,.06), inset 0 1px 0 rgba(0,200,255,.1);
+  position: relative;
+}
+
+.setup-step { display: none; flex-direction: column; gap: 1.2rem; }
+.setup-step.active { display: flex; animation: splashSlideUp .35s cubic-bezier(.2,0,.1,1) both; }
+
+/* Header */
+.setup-sys-tag {
+  font-family: 'Share Tech Mono', monospace; font-size: .6rem;
+  letter-spacing: .2em; text-transform: uppercase;
+  color: rgba(0,200,255,.5);
+  display: flex; align-items: center; gap: .5rem;
+}
+.setup-sys-tag::before { content: ''; width: 20px; height: 1px; background: rgba(0,200,255,.3); }
+
+.setup-title {
+  font-family: 'Rajdhani', sans-serif; font-size: 1.5rem;
+  font-weight: 800; color: #c8eeff; letter-spacing: -.01em; line-height: 1.1;
+}
+.setup-sub {
+  font-family: 'Share Tech Mono', monospace; font-size: .72rem;
+  color: rgba(255,255,255,.38); line-height: 1.6;
+}
+
+/* Step dots */
+.setup-dots {
+  display: flex; gap: 6px; justify-content: center; margin-bottom: .5rem;
+}
+.setup-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(0,200,255,.2); transition: .3s;
+}
+.setup-dot.on { background: #00c8ff; box-shadow: 0 0 8px rgba(0,200,255,.6); }
+
+/* Input */
+.setup-input {
+  width: 100%; box-sizing: border-box;
+  background: rgba(0,200,255,.05);
+  border: 1px solid rgba(0,200,255,.2);
+  border-radius: 10px; padding: .85rem 1rem;
+  font-family: 'Rajdhani', sans-serif; font-size: 1rem; font-weight: 600;
+  color: #c8eeff; outline: none; transition: border-color .2s;
+}
+.setup-input:focus { border-color: rgba(0,200,255,.6); }
+.setup-input::placeholder { color: rgba(0,200,255,.3); }
+
+/* Discipline grid */
+.disc-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.disc-opt {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: .9rem .5rem;
+  background: rgba(0,200,255,.04);
+  border: 1px solid rgba(0,200,255,.15);
+  border-radius: 12px; cursor: pointer; transition: .2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.disc-opt:hover { border-color: rgba(0,200,255,.4); background: rgba(0,200,255,.08); }
+.disc-opt.selected {
+  border-color: #00c8ff;
+  background: rgba(0,200,255,.12);
+  box-shadow: 0 0 16px rgba(0,200,255,.15);
+}
+.disc-emoji { font-size: 1.8rem; }
+.disc-label {
+  font-family: 'Share Tech Mono', monospace; font-size: .62rem;
+  letter-spacing: .1em; text-transform: uppercase; color: rgba(0,200,255,.7);
+  text-align: center;
+}
+
+/* Goal select */
+.goal-opts {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.goal-opt {
+  display: flex; align-items: center; gap: 12px;
+  padding: .8rem 1rem;
+  background: rgba(0,200,255,.04);
+  border: 1px solid rgba(0,200,255,.15);
+  border-radius: 10px; cursor: pointer; transition: .2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.goal-opt:hover { border-color: rgba(0,200,255,.35); }
+.goal-opt.selected { border-color: #00c8ff; background: rgba(0,200,255,.1); }
+.goal-icon { font-size: 1.3rem; }
+.goal-text { font-family: 'Rajdhani', sans-serif; font-size: .9rem; font-weight: 600; color: #c8eeff; }
+
+/* Progress bar on step 3 */
+.setup-progress-wrap {
+  width: 100%; background: rgba(0,200,255,.08);
+  border-radius: 99px; height: 4px; overflow: hidden;
+}
+.setup-progress-bar {
+  height: 100%; background: #00c8ff;
+  border-radius: 99px; width: 0%;
+  transition: width .05s linear;
+  box-shadow: 0 0 8px rgba(0,200,255,.6);
+}
+
+/* CTA Button */
+.setup-btn {
+  width: 100%; padding: .95rem;
+  background: rgba(0,200,255,.12);
+  border: 1px solid rgba(0,200,255,.35);
+  border-radius: 12px;
+  font-family: 'Rajdhani', sans-serif; font-size: 1rem; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: #00c8ff; cursor: pointer; transition: .2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.setup-btn:hover { background: rgba(0,200,255,.2); border-color: rgba(0,200,255,.6); }
+.setup-btn:disabled { opacity: .4; cursor: default; }
+.setup-btn.primary {
+  background: #00c8ff; color: #000a15; border-color: #00c8ff;
+  box-shadow: 0 4px 20px rgba(0,200,255,.3);
+}
+.setup-btn.primary:hover { background: #33d4ff; box-shadow: 0 4px 24px rgba(0,200,255,.45); }
+
+/* Connecting screen */
+.setup-connecting {
+  display: flex; flex-direction: column; align-items: center; gap: 1.2rem;
+  padding: 1rem 0;
+}
+.setup-spinner {
+  width: 48px; height: 48px;
+  border: 3px solid rgba(0,200,255,.15);
+  border-top-color: #00c8ff;
+  border-radius: 50%;
+  animation: loginSpin 0.8s linear infinite;
+}
+.setup-conn-title {
+  font-family: 'Rajdhani', sans-serif; font-size: 1.2rem; font-weight: 700; color: #c8eeff;
+}
+.setup-conn-log {
+  font-family: 'Share Tech Mono', monospace; font-size: .65rem;
+  color: rgba(0,200,255,.6); line-height: 2; text-align: center; min-height: 60px;
+}
+
 </style>
 
 <!-- Firebase SDK -->
@@ -739,7 +897,76 @@ body::after{
 <div class="sao-ripple-container" id="saoRipples"></div>
 
 <div class="app">
-  <!-- ══ TOP NAV ══ -->
+  
+<!-- ══ SETUP OVERLAY (onboarding nuevos usuarios) ═════════ -->
+<div id="setup-overlay" class="gone">
+  <div class="setup-card">
+
+    <!-- Paso 1: Alias -->
+    <div class="setup-step active" id="setup-s1">
+      <div class="setup-dots">
+        <div class="setup-dot on" id="sdot1"></div>
+        <div class="setup-dot" id="sdot2"></div>
+        <div class="setup-dot" id="sdot3"></div>
+      </div>
+      <div class="setup-sys-tag">NerveGear · Registro</div>
+      <div class="setup-title">¿Cómo te llama el protocolo?</div>
+      <div class="setup-sub">Elige tu nombre de atleta. Así apareceréis en el ranking SAO.</div>
+      <input class="setup-input" id="setupAlias" type="text" maxlength="24" placeholder="Tu alias de combate…" autocomplete="off" spellcheck="false">
+      <button class="setup-btn primary" id="setupS1Btn" onclick="setupNext(2)">Continuar →</button>
+    </div>
+
+    <!-- Paso 2: Disciplina favorita -->
+    <div class="setup-step" id="setup-s2">
+      <div class="setup-dots">
+        <div class="setup-dot on" id="sdot1b"></div>
+        <div class="setup-dot on" id="sdot2b"></div>
+        <div class="setup-dot" id="sdot3b"></div>
+      </div>
+      <div class="setup-sys-tag">AmuSphere · Calibración</div>
+      <div class="setup-title">Tu lift principal</div>
+      <div class="setup-sub">El oracle entrenará su modelo con tu disciplina base.</div>
+      <div class="disc-grid">
+        <div class="disc-opt" id="do-bench" onclick="selectDisc('bench')">
+          <div class="disc-emoji">🏋️</div>
+          <div class="disc-label">Bench Press</div>
+        </div>
+        <div class="disc-opt" id="do-deadlift" onclick="selectDisc('deadlift')">
+          <div class="disc-emoji">⛓️</div>
+          <div class="disc-label">Deadlift</div>
+        </div>
+        <div class="disc-opt" id="do-squat" onclick="selectDisc('squat')">
+          <div class="disc-emoji">🦵</div>
+          <div class="disc-label">Squat</div>
+        </div>
+        <div class="disc-opt" id="do-overhead" onclick="selectDisc('overhead')">
+          <div class="disc-emoji">🔱</div>
+          <div class="disc-label">OHP</div>
+        </div>
+      </div>
+      <button class="setup-btn" id="setupS2Back" onclick="setupBack(1)">← Volver</button>
+      <button class="setup-btn primary" id="setupS2Btn" onclick="setupNext(3)" disabled>Continuar →</button>
+    </div>
+
+    <!-- Paso 3: Conectando -->
+    <div class="setup-step" id="setup-s3">
+      <div class="setup-dots">
+        <div class="setup-dot on"></div>
+        <div class="setup-dot on"></div>
+        <div class="setup-dot on"></div>
+      </div>
+      <div class="setup-connecting">
+        <div class="setup-spinner"></div>
+        <div class="setup-conn-title">Conectando al AmuSphere…</div>
+        <div class="setup-progress-wrap"><div class="setup-progress-bar" id="setupProgBar"></div></div>
+        <div class="setup-conn-log" id="setupConnLog">Inicializando NerveGear…</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ TOP NAV ══ -->
   <nav class="topnav">
     <div class="nav-brand">
       <div class="core-dot"></div>
@@ -1181,14 +1408,15 @@ body::after{
   }
 
   /* Login exitoso */
+  var _loginHandled = false;
   function onLoginOk(user) {
+    if(_loginHandled) return; // evitar doble llamada de onAuthStateChanged + getRedirectResult
+    _loginHandled = true;
     updateUserNav(user);
-    // Sync Google name into SAO state
-    if(user.displayName) {
-      state.name = user.displayName.split(' ')[0];
-    }
     hideLogin();
     loadFirestoreRanking();
+    // Cargar/crear perfil del usuario
+    loadUserState(user.uid, user);
   }
 
   /* Botón logout (si existe) */
@@ -1608,6 +1836,7 @@ function closeResult() {
   if(state.ownedSkills.includes('ia_vision')) setTimeout(()=>showToast('🤖 IA Vision: técnica correcta detectada','info'),600);
   addLog(`<span class="ok">▶</span> ${DISC_NAMES[r.disc]} ${r.weight}kg×${r.reps} · PS ${r.ps} · +${r.finalVBC} 💎 VBC`);
   renderLiftHistory(); renderRecords();
+  saveUserState(false); // persistir progreso
   // Achievement checks
   if(state.lifts===1) unlockAchievement('firstLift');
   if(state.totalVBC>=100) unlockAchievement('pts100');
@@ -1712,6 +1941,7 @@ function buySkill(id) {
   if(state.equippedSkills.length>=5) unlockAchievement('maxEquipped');
   advanceMission('skills',1);
   updateSaoBadges();
+  saveUserState(false);
 }
 
 // ════════════════════════════════════════
@@ -2171,6 +2401,195 @@ pickMission();
 setTimeout(()=>unlockAchievement('firstEntry'), 1200);
 
 console.log('[VBC Protocol · SAO Fusion] Booting · AmuSphere Online · NERHIA Active');
+
+/* ══════════════════════════════════════════════════════════
+   SETUP & PERSISTENCIA FIRESTORE
+   ══════════════════════════════════════════════════════════ */
+
+// ── SETUP OVERLAY ──────────────────────────────────────────
+var _setupDisc = null;
+
+function showSetup(user) {
+  var ov = document.getElementById('setup-overlay');
+  if(!ov) return;
+  // Pre-fill alias
+  var inp = document.getElementById('setupAlias');
+  if(inp && user && user.displayName) {
+    inp.value = user.displayName.split(' ')[0];
+  }
+  // Validar alias en tiempo real
+  if(inp) inp.addEventListener('input', function() {
+    var btn = document.getElementById('setupS1Btn');
+    if(btn) btn.disabled = inp.value.trim().length < 1;
+  });
+  ov.classList.remove('gone');
+}
+
+function hideSetup() {
+  var ov = document.getElementById('setup-overlay');
+  if(ov) ov.classList.add('gone');
+}
+
+function selectDisc(d) {
+  _setupDisc = d;
+  ['bench','deadlift','squat','overhead'].forEach(function(k) {
+    var el = document.getElementById('do-'+k);
+    if(el) el.classList.toggle('selected', k === d);
+  });
+  var btn = document.getElementById('setupS2Btn');
+  if(btn) btn.disabled = false;
+}
+
+function setupNext(step) {
+  if(step === 2) {
+    var alias = (document.getElementById('setupAlias')||{}).value || '';
+    if(!alias.trim()) return;
+  }
+  if(step === 3) {
+    if(!_setupDisc) return;
+    // Start connecting animation then complete
+    document.getElementById('setup-s2').classList.remove('active');
+    document.getElementById('setup-s3').classList.add('active');
+    runSetupConnect();
+    return;
+  }
+  // Go to step
+  document.getElementById('setup-s' + (step-1)).classList.remove('active');
+  document.getElementById('setup-s' + step).classList.add('active');
+}
+
+function setupBack(step) {
+  document.getElementById('setup-s' + (step+1)).classList.remove('active');
+  document.getElementById('setup-s' + step).classList.add('active');
+}
+
+var _setupLogs = [
+  'Inicializando NerveGear…',
+  'Calibrando sensores SAO…',
+  'Conectando al oracle NERHIA…',
+  'Sincronizando AmuSphere…',
+  'Registrando atleta en protocolo…',
+  '✅ Conexión establecida'
+];
+
+function runSetupConnect() {
+  var bar = document.getElementById('setupProgBar');
+  var log = document.getElementById('setupConnLog');
+  var i = 0;
+  var pct = 0;
+  var interval = setInterval(function() {
+    pct += 100 / _setupLogs.length;
+    if(bar) bar.style.width = Math.min(100, Math.round(pct)) + '%';
+    if(log && i < _setupLogs.length) { log.textContent = _setupLogs[i]; i++; }
+    if(pct >= 100) {
+      clearInterval(interval);
+      setTimeout(completeSetup, 500);
+    }
+  }, 350);
+}
+
+function completeSetup() {
+  var alias = ((document.getElementById('setupAlias')||{}).value || '').trim() || 'Atleta VBC';
+  // Update state
+  state.name = alias;
+  state.mainDisc = _setupDisc;
+  // Save to Firestore
+  saveUserState(true);
+  // Unlock first entry achievement
+  unlockAchievement('firstEntry');
+  // Pre-select discipline in lift screen
+  if(_setupDisc) {
+    var discSel = document.getElementById('discSel');
+    if(discSel) discSel.value = _setupDisc;
+    selectedDisc = _setupDisc;
+    updatePreview();
+  }
+  // Update UI
+  updateUI();
+  hideSetup();
+  addLog('<span class="ok">▶</span> Bienvenido al protocolo, ' + alias + ' · Disciplina: ' + (_setupDisc||'—'));
+}
+
+// ── FIRESTORE PERSISTENCE ──────────────────────────────────
+var _currentUid = null;
+
+function saveUserState(isNew) {
+  if(!window._fbDb || !_currentUid) return;
+  var doc = {
+    name: state.name,
+    mainDisc: state.mainDisc || _setupDisc || null,
+    vbc: state.vbc,
+    totalVBC: state.totalVBC,
+    condor: state.condor,
+    lifts: state.lifts,
+    bestScore: state.bestScore,
+    bestTier: state.bestTier,
+    xp: state.xp,
+    level: state.level,
+    records: state.records,
+    liftHistory: state.liftHistory.slice(0,20),
+    txHistory: state.txHistory.slice(0,30),
+    ownedSkills: state.ownedSkills,
+    equippedSkills: state.equippedSkills,
+    streak: state.streak,
+    videosUploaded: state.videosUploaded || 0,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if(isNew) doc.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+  window._fbDb.collection('users').doc(_currentUid).set(doc, {merge: true})
+    .catch(function(e){ console.warn('[VBC] saveUserState:', e.message); });
+}
+
+function loadUserState(uid, user) {
+  if(!window._fbDb) { onNoUserDoc(user); return; }
+  _currentUid = uid;
+  window._fbDb.collection('users').doc(uid).get()
+    .then(function(doc) {
+      if(doc.exists) {
+        var d = doc.data();
+        // Restore state
+        if(d.name)           state.name = d.name;
+        if(d.mainDisc)       state.mainDisc = d.mainDisc;
+        if(d.vbc != null)    state.vbc = d.vbc;
+        if(d.totalVBC != null) state.totalVBC = d.totalVBC;
+        if(d.condor != null) state.condor = d.condor;
+        if(d.lifts != null)  state.lifts = d.lifts;
+        if(d.bestScore != null) state.bestScore = d.bestScore;
+        if(d.bestTier)       state.bestTier = d.bestTier;
+        if(d.xp != null)     state.xp = d.xp;
+        if(d.level != null)  state.level = d.level;
+        if(d.records)        state.records = d.records;
+        if(d.liftHistory)    state.liftHistory = d.liftHistory;
+        if(d.txHistory)      state.txHistory = d.txHistory;
+        if(d.ownedSkills)    state.ownedSkills = d.ownedSkills;
+        if(d.equippedSkills) state.equippedSkills = d.equippedSkills;
+        if(d.streak != null) state.streak = d.streak;
+        if(d.videosUploaded != null) state.videosUploaded = d.videosUploaded;
+        // Pre-select main disc
+        if(d.mainDisc) {
+          var discSel = document.getElementById('discSel');
+          if(discSel) { discSel.value = d.mainDisc; selectedDisc = d.mainDisc; }
+        }
+        updateUI();
+        renderLiftHistory();
+        renderRecords();
+        addLog('<span class="ok">▶</span> Sesión restaurada · ' + state.name + ' · LVL ' + state.level);
+      } else {
+        // New user
+        onNoUserDoc(user);
+      }
+    })
+    .catch(function(e) {
+      console.warn('[VBC] loadUserState error:', e.message);
+      onNoUserDoc(user);
+    });
+}
+
+function onNoUserDoc(user) {
+  // Show onboarding
+  showSetup(user);
+}
+
 </script>
 </body>
 </html>
