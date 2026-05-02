@@ -845,12 +845,41 @@ body::after{
   color: rgba(0,200,255,.6); line-height: 2; text-align: center; min-height: 60px;
 }
 
+
+/* ─── REST TIMER ─── */
+#restTimer{position:fixed;bottom:80px;right:16px;z-index:9000;display:none;
+  background:rgba(0,8,20,0.95);border:1px solid var(--cyan);border-radius:12px;
+  padding:12px 16px;min-width:160px;box-shadow:0 0 20px rgba(0,200,255,.25);
+  font-family:var(--mono);}
+#restTimer .rt-label{font-size:9px;color:var(--text3);letter-spacing:2px;margin-bottom:4px;}
+#restTimer .rt-time{font-size:28px;color:var(--cyan);font-weight:700;letter-spacing:2px;text-align:center;}
+#restTimer .rt-bar{height:3px;background:rgba(0,200,255,.15);border-radius:2px;margin:6px 0;}
+#restTimer .rt-fill{height:100%;background:var(--cyan);border-radius:2px;transition:width .5s linear;}
+#restTimer .rt-btns{display:flex;gap:6px;margin-top:8px;justify-content:center;}
+#restTimer .rt-btn{font-family:var(--mono);font-size:10px;padding:3px 8px;
+  border:1px solid var(--cyan);background:transparent;color:var(--cyan);
+  border-radius:4px;cursor:pointer;transition:all .2s;}
+#restTimer .rt-btn:hover{background:var(--cyan);color:#000;}
+#restTimer .rt-btn.active{background:var(--cyan);color:#000;}
+#restTimer .rt-close{position:absolute;top:6px;right:8px;font-size:11px;
+  color:var(--text3);cursor:pointer;background:none;border:none;}
+#restTimer.done{border-color:#ff6b35;box-shadow:0 0 20px rgba(255,107,53,.4);animation:timerDone .5s ease 3;}
+@keyframes timerDone{0%,100%{transform:scale(1);}50%{transform:scale(1.04);}}
+/* ─── PROGRESS CHART ─── */
+.chart-wrap{background:rgba(0,200,255,.04);border:1px solid rgba(0,200,255,.12);
+  border-radius:8px;padding:12px;margin-top:12px;}
+.chart-disc-tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+.cdt{font-family:var(--mono);font-size:10px;padding:3px 10px;border:1px solid rgba(0,200,255,.3);
+  border-radius:20px;cursor:pointer;color:var(--text3);background:transparent;transition:all .2s;}
+.cdt.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,200,255,.1);}
+
 </style>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -1198,6 +1227,22 @@ body::after{
         <div class="panel">
           <div class="panel-h"><span class="panel-title">Historial Reciente</span><span class="panel-sub">ÚLTIMOS 5 LIFTS</span></div>
           <div class="panel-body"><div id="liftHistory" style="display:flex;flex-direction:column;gap:6px;"><div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:12px;">Sin lifts aún</div></div></div>
+      <!-- PROGRESS CHART PANEL -->
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-h">
+          <span class="panel-title">⟶ PROGRESIÓN</span>
+          <span class="panel-sub">HISTORIAL DE PESO</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-disc-tabs">
+            <button class="cdt active" onclick="switchChartDisc('bench',this)">BENCH</button>
+            <button class="cdt" onclick="switchChartDisc('deadlift',this)">DEADLIFT</button>
+            <button class="cdt" onclick="switchChartDisc('squat',this)">SQUAT</button>
+            <button class="cdt" onclick="switchChartDisc('overhead',this)">OHP</button>
+          </div>
+          <div id="progressChartWrap" class="chart-wrap"></div>
+        </div>
+      </div>
         </div>
       </div>
     </div>
@@ -1805,6 +1850,7 @@ function registerLift() {
   state.lastLiftTime=now;
   pendingResult={...res,finalVBC,finalCondor:res.condor,disc:selectedDisc,weight:w,reps:r};
   showResult(res,finalVBC,res.condor);
+  setTimeout(()=>startRestTimer(90), 800);
 }
 
 function showResult(res,vbc,condor) {
@@ -2004,6 +2050,8 @@ function renderRecords() {
 }
 
 function renderLiftHistory() {
+  // Render progress chart
+  setTimeout(renderProgressChart, 100);
   const c=document.getElementById('liftHistory');
   if(!state.liftHistory.length){c.innerHTML='<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:12px;">Sin lifts aún</div>';return;}
   c.innerHTML=state.liftHistory.slice(0,5).map(l=>`
@@ -2676,7 +2724,154 @@ window.haptic = function(type) {
   };
   navigator.vibrate(patterns[type] || [20]);
 };
+
+// ═══════════════════════════════════════════════
+// REST TIMER
+// ═══════════════════════════════════════════════
+let rtInterval=null, rtTotal=90, rtRemaining=90;
+
+function startRestTimer(seconds=90){
+  rtTotal = seconds; rtRemaining = seconds;
+  const el = document.getElementById('restTimer');
+  el.style.display='block'; el.classList.remove('done');
+  updateRestDisplay();
+  clearInterval(rtInterval);
+  rtInterval = setInterval(()=>{
+    rtRemaining--;
+    updateRestDisplay();
+    if(rtRemaining<=0){
+      clearInterval(rtInterval);
+      el.classList.add('done');
+      document.getElementById('rtDisplay').textContent='¡LISTO!';
+      document.getElementById('rtFill').style.width='0%';
+      if(navigator.vibrate) navigator.vibrate([200,100,200,100,400]);
+      showToast('⏱ ¡Fin del descanso! A levantar.','info');
+    }
+  },1000);
+}
+
+function setRestTime(s){
+  document.querySelectorAll('.rt-btn').forEach(b=>{
+    b.classList.toggle('active', b.textContent===`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`);
+  });
+  startRestTimer(s);
+}
+
+function updateRestDisplay(){
+  const m=Math.floor(rtRemaining/60), s=rtRemaining%60;
+  document.getElementById('rtDisplay').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  const pct=(rtRemaining/rtTotal)*100;
+  document.getElementById('rtFill').style.width=pct+'%';
+  const fill=document.getElementById('rtFill');
+  fill.style.background = pct>50?'var(--cyan)':pct>20?'#ffa500':'#ff4444';
+}
+
+function closeRestTimer(){
+  clearInterval(rtInterval);
+  document.getElementById('restTimer').style.display='none';
+}
+
+// ═══════════════════════════════════════════════
+// PROGRESS CHART
+// ═══════════════════════════════════════════════
+let progressChart=null, activeChartDisc='bench';
+
+function renderProgressChart(){
+  const wrap=document.getElementById('progressChartWrap');
+  if(!wrap) return;
+  const discNames={bench:'Bench Press',deadlift:'Deadlift',squat:'Squat',overhead:'Overhead'};
+  // Filter by discipline
+  const data=state.liftHistory
+    .filter(l=>l.disc===activeChartDisc)
+    .slice(-20)
+    .reverse();
+  
+  if(data.length<2){
+    wrap.innerHTML='<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:20px;">Registra al menos 2 lifts para ver el progreso</div>';
+    return;
+  }
+  
+  const labels=data.map(l=>{
+    const d=new Date(l.ts||l.date||Date.now());
+    return `${d.getDate()}/${d.getMonth()+1}`;
+  });
+  const weights=data.map(l=>l.weight);
+  const scores=data.map(l=>l.vbc||0);
+  
+  wrap.innerHTML='<canvas id="progressCanvas" height="160"></canvas>';
+  const ctx2=document.getElementById('progressCanvas').getContext('2d');
+  
+  if(progressChart) progressChart.destroy();
+  progressChart=new Chart(ctx2,{
+    type:'line',
+    data:{
+      labels,
+      datasets:[{
+        label:'Peso (kg)',
+        data:weights,
+        borderColor:'rgba(0,200,255,0.8)',
+        backgroundColor:'rgba(0,200,255,0.08)',
+        borderWidth:2,
+        pointBackgroundColor:'rgba(0,200,255,1)',
+        pointRadius:4,
+        tension:0.3,
+        fill:true
+      },{
+        label:'Score VBC',
+        data:scores,
+        borderColor:'rgba(255,215,0,0.6)',
+        backgroundColor:'rgba(255,215,0,0.04)',
+        borderWidth:1.5,
+        pointBackgroundColor:'rgba(255,215,0,1)',
+        pointRadius:3,
+        tension:0.3,
+        yAxisID:'y2',
+        fill:false
+      }]
+    },
+    options:{
+      responsive:true,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{labels:{color:'rgba(0,200,255,0.6)',font:{family:'monospace',size:10}}},
+        tooltip:{backgroundColor:'rgba(0,8,20,0.95)',borderColor:'rgba(0,200,255,0.3)',borderWidth:1,
+          titleFont:{family:'monospace'},bodyFont:{family:'monospace'}}
+      },
+      scales:{
+        x:{ticks:{color:'rgba(0,200,255,0.4)',font:{family:'monospace',size:9}},
+           grid:{color:'rgba(0,200,255,0.05)'}},
+        y:{ticks:{color:'rgba(0,200,255,0.4)',font:{family:'monospace',size:9}},
+           grid:{color:'rgba(0,200,255,0.05)'},title:{display:true,text:'kg',color:'rgba(0,200,255,0.4)',font:{family:'monospace',size:9}}},
+        y2:{position:'right',ticks:{color:'rgba(255,215,0,0.4)',font:{family:'monospace',size:9}},
+            grid:{display:false},title:{display:true,text:'VBC',color:'rgba(255,215,0,0.4)',font:{family:'monospace',size:9}}}
+      }
+    }
+  });
+}
+
+function switchChartDisc(disc,el){
+  activeChartDisc=disc;
+  document.querySelectorAll('.cdt').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  renderProgressChart();
+}
+
 </script>
+
+
+<!-- REST TIMER -->
+<div id="restTimer">
+  <button class="rt-close" onclick="closeRestTimer()">✕</button>
+  <div class="rt-label">⟶ REST TIMER</div>
+  <div class="rt-time" id="rtDisplay">01:30</div>
+  <div class="rt-bar"><div class="rt-fill" id="rtFill" style="width:100%"></div></div>
+  <div class="rt-btns">
+    <button class="rt-btn" onclick="setRestTime(60)">1:00</button>
+    <button class="rt-btn active" onclick="setRestTime(90)">1:30</button>
+    <button class="rt-btn" onclick="setRestTime(120)">2:00</button>
+    <button class="rt-btn" onclick="setRestTime(180)">3:00</button>
+  </div>
+</div>
 
 </body>
 </html>
