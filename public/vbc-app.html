@@ -2,6 +2,13 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#00c8ff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VBC Protocol">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VBC Protocol · SAO Interface · VibraAlto</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -1162,7 +1169,7 @@ body::after{
                 <span class="input-hint">Máx 30 reps</span>
               </div>
             </div>
-            <button class="lift-btn" onclick="registerLift()" id="liftBtn">⟶ REGISTRAR LIFT · CALCULAR SCORE</button>
+            <button class="lift-btn" onclick="haptic('lift');registerLift()" id="liftBtn">⟶ REGISTRAR LIFT · CALCULAR SCORE</button>
           </div>
         </div>
       </div>
@@ -1917,7 +1924,7 @@ function renderSkills() {
       <div class="skill-desc">${sk.desc}</div>
       <div class="skill-cost">
         <div><div class="cost-val">💎 ${sk.cost.toLocaleString('es-CL')}</div><div class="cost-lbl">VBC</div></div>
-        <button class="${btnClass}" onclick="buySkill('${sk.id}')">${btnTxt}</button>
+        <button class="${btnClass}" onclick="haptic('medium');buySkill('${sk.id}')">${btnTxt}</button>
       </div>
     </div>`;
   }).join('');
@@ -2591,5 +2598,85 @@ function onNoUserDoc(user) {
 }
 
 </script>
+
+<!-- ══ PWA Install Banner ══ -->
+<div id="pwa-banner" style="display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9000;width:min(360px,92vw);background:rgba(0,8,16,0.96);border:1px solid rgba(0,200,255,0.4);border-radius:12px;padding:14px 16px;backdrop-filter:blur(20px);box-shadow:0 0 32px rgba(0,200,255,0.2);animation:slideUp .4s ease;">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div style="width:48px;height:48px;border-radius:10px;background:rgba(0,200,255,0.1);border:1px solid rgba(0,200,255,0.3);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">⚔️</div>
+    <div style="flex:1;min-width:0;">
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:#c8eeff;letter-spacing:.5px;">Instalar VBC Protocol</div>
+      <div style="font-size:12px;color:rgba(0,200,255,0.6);margin-top:2px;">Acceso rápido desde tu pantalla de inicio</div>
+    </div>
+    <button onclick="dismissInstall()" style="background:none;border:none;color:rgba(0,200,255,0.4);font-size:20px;cursor:pointer;padding:4px;line-height:1;">✕</button>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:12px;">
+    <button onclick="dismissInstall()" style="flex:1;padding:8px;background:transparent;border:1px solid rgba(0,200,255,0.25);border-radius:6px;color:rgba(0,200,255,0.6);font-family:'Rajdhani',sans-serif;font-size:13px;cursor:pointer;">AHORA NO</button>
+    <button onclick="triggerInstall()" style="flex:2;padding:8px;background:linear-gradient(135deg,rgba(0,200,255,0.2),rgba(0,200,255,0.08));border:1px solid rgba(0,200,255,0.5);border-radius:6px;color:#00c8ff;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.5px;">⟶ INSTALAR APP</button>
+  </div>
+</div>
+<style>
+@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+</style>
+
+
+<script>
+// ── PWA Service Worker Registration ──
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('[VBC] SW registered', reg.scope))
+      .catch(err => console.warn('[VBC] SW error', err));
+  });
+}
+
+// ── PWA Install Prompt ──
+let _pwaPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _pwaPrompt = e;
+  // Show after 3s if user is logged in
+  setTimeout(() => {
+    if (!localStorage.getItem('vbc-install-dismissed')) {
+      const banner = document.getElementById('pwa-banner');
+      if (banner) banner.style.display = 'block';
+    }
+  }, 3000);
+});
+
+window.triggerInstall = function() {
+  const banner = document.getElementById('pwa-banner');
+  if (banner) banner.style.display = 'none';
+  if (_pwaPrompt) {
+    _pwaPrompt.prompt();
+    _pwaPrompt.userChoice.then(res => {
+      if (res.outcome === 'accepted') {
+        addLog('🎮 AmuSphere instalado · Acceso directo creado');
+      }
+      _pwaPrompt = null;
+    });
+  }
+};
+
+window.dismissInstall = function() {
+  const banner = document.getElementById('pwa-banner');
+  if (banner) banner.style.display = 'none';
+  localStorage.setItem('vbc-install-dismissed', '1');
+};
+
+// ── Haptic Feedback Helper ──
+window.haptic = function(type) {
+  if (!navigator.vibrate) return;
+  const patterns = {
+    light:   [10],
+    medium:  [30],
+    heavy:   [60],
+    success: [40, 30, 40],
+    error:   [100, 50, 100],
+    lift:    [20, 10, 20, 10, 60],
+  };
+  navigator.vibrate(patterns[type] || [20]);
+};
+</script>
+
 </body>
 </html>
