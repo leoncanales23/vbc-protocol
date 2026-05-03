@@ -845,41 +845,12 @@ body::after{
   color: rgba(0,200,255,.6); line-height: 2; text-align: center; min-height: 60px;
 }
 
-
-/* ─── REST TIMER ─── */
-#restTimer{position:fixed;bottom:80px;right:16px;z-index:9000;display:none;
-  background:rgba(0,8,20,0.95);border:1px solid var(--cyan);border-radius:12px;
-  padding:12px 16px;min-width:160px;box-shadow:0 0 20px rgba(0,200,255,.25);
-  font-family:var(--mono);}
-#restTimer .rt-label{font-size:9px;color:var(--text3);letter-spacing:2px;margin-bottom:4px;}
-#restTimer .rt-time{font-size:28px;color:var(--cyan);font-weight:700;letter-spacing:2px;text-align:center;}
-#restTimer .rt-bar{height:3px;background:rgba(0,200,255,.15);border-radius:2px;margin:6px 0;}
-#restTimer .rt-fill{height:100%;background:var(--cyan);border-radius:2px;transition:width .5s linear;}
-#restTimer .rt-btns{display:flex;gap:6px;margin-top:8px;justify-content:center;}
-#restTimer .rt-btn{font-family:var(--mono);font-size:10px;padding:3px 8px;
-  border:1px solid var(--cyan);background:transparent;color:var(--cyan);
-  border-radius:4px;cursor:pointer;transition:all .2s;}
-#restTimer .rt-btn:hover{background:var(--cyan);color:#000;}
-#restTimer .rt-btn.active{background:var(--cyan);color:#000;}
-#restTimer .rt-close{position:absolute;top:6px;right:8px;font-size:11px;
-  color:var(--text3);cursor:pointer;background:none;border:none;}
-#restTimer.done{border-color:#ff6b35;box-shadow:0 0 20px rgba(255,107,53,.4);animation:timerDone .5s ease 3;}
-@keyframes timerDone{0%,100%{transform:scale(1);}50%{transform:scale(1.04);}}
-/* ─── PROGRESS CHART ─── */
-.chart-wrap{background:rgba(0,200,255,.04);border:1px solid rgba(0,200,255,.12);
-  border-radius:8px;padding:12px;margin-top:12px;}
-.chart-disc-tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
-.cdt{font-family:var(--mono);font-size:10px;padding:3px 10px;border:1px solid rgba(0,200,255,.3);
-  border-radius:20px;cursor:pointer;color:var(--text3);background:transparent;transition:all .2s;}
-.cdt.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,200,255,.1);}
-
 </style>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -1017,6 +988,7 @@ body::after{
       <button class="nav-tab" onclick="goScreen('skills')">✨ Skills</button>
       <button class="nav-tab" onclick="goScreen('wallet')">💎 Wallet</button>
       <button class="nav-tab" onclick="goScreen('ranking')">🏆 Ranking</button>
+      <button class="nav-tab" onclick="goScreen('battle')">⚔ Battle</button>
     </div>
     <div class="nav-right">
       <!-- 💎 Diamond sprite — moneda VBC */-->
@@ -1227,22 +1199,6 @@ body::after{
         <div class="panel">
           <div class="panel-h"><span class="panel-title">Historial Reciente</span><span class="panel-sub">ÚLTIMOS 5 LIFTS</span></div>
           <div class="panel-body"><div id="liftHistory" style="display:flex;flex-direction:column;gap:6px;"><div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:12px;">Sin lifts aún</div></div></div>
-      <!-- PROGRESS CHART PANEL -->
-      <div class="panel" style="margin-bottom:16px;">
-        <div class="panel-h">
-          <span class="panel-title">⟶ PROGRESIÓN</span>
-          <span class="panel-sub">HISTORIAL DE PESO</span>
-        </div>
-        <div class="panel-body">
-          <div class="chart-disc-tabs">
-            <button class="cdt active" onclick="switchChartDisc('bench',this)">BENCH</button>
-            <button class="cdt" onclick="switchChartDisc('deadlift',this)">DEADLIFT</button>
-            <button class="cdt" onclick="switchChartDisc('squat',this)">SQUAT</button>
-            <button class="cdt" onclick="switchChartDisc('overhead',this)">OHP</button>
-          </div>
-          <div id="progressChartWrap" class="chart-wrap"></div>
-        </div>
-      </div>
         </div>
       </div>
     </div>
@@ -1304,6 +1260,114 @@ body::after{
     </div>
   </div>
 </div>
+
+  <!-- ══ SCREEN: BATTLE MODE ══ -->
+  <div class="screen" id="s-battle">
+
+    <!-- Pending challenge notification (shown to challenged user) -->
+    <div id="battle-incoming" style="display:none;position:fixed;top:0;left:0;right:0;z-index:999;background:linear-gradient(135deg,rgba(10,20,30,.97),rgba(5,15,25,.97));border-bottom:2px solid var(--accent);padding:20px 16px;animation:fadeIn .3s;">
+      <div style="font-family:var(--mono);color:var(--accent);font-size:11px;letter-spacing:3px;margin-bottom:8px;">⚔ INCOMING CHALLENGE</div>
+      <div id="battle-incoming-txt" style="color:#fff;font-size:15px;font-weight:700;margin-bottom:12px;"></div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="acceptBattle()" style="flex:1;padding:12px;background:var(--accent);color:#000;font-family:var(--mono);font-weight:700;font-size:13px;border:none;cursor:pointer;letter-spacing:2px;">✓ ACEPTAR</button>
+        <button onclick="rejectBattle()" style="flex:1;padding:12px;background:transparent;color:var(--accent);font-family:var(--mono);font-weight:700;font-size:13px;border:1px solid var(--accent);cursor:pointer;letter-spacing:2px;">✕ RECHAZAR</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="scan"></div>
+      <div class="panel-h">
+        <span class="panel-title">⚔ BATTLE MODE</span>
+        <span class="panel-sub">1v1 PROOF-OF-STRENGTH</span>
+      </div>
+      <div class="panel-body" style="padding:16px;">
+
+        <!-- State: idle -->
+        <div id="battle-idle">
+          <div style="color:var(--text3);font-family:var(--mono);font-size:11px;letter-spacing:2px;margin-bottom:16px;text-align:center;">RETA A UN ATLETA DEL RANKING</div>
+          <div id="battle-rivals" style="display:flex;flex-direction:column;gap:8px;"></div>
+          <div style="margin-top:16px;padding:12px;border:1px solid rgba(0,212,255,.15);background:rgba(0,212,255,.04);">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:2px;margin-bottom:8px;">DISCIPLINA DEL RETO</div>
+            <select id="battle-disc" style="width:100%;background:#0a1420;border:1px solid var(--border);color:#fff;padding:10px;font-family:var(--mono);font-size:13px;outline:none;">
+              <option value="bench">BENCH PRESS</option>
+              <option value="deadlift">DEADLIFT</option>
+              <option value="squat">BACK SQUAT</option>
+              <option value="overhead">OVERHEAD PRESS</option>
+            </select>
+          </div>
+          <div style="margin-top:12px;padding:12px;border:1px solid rgba(0,212,255,.1);background:rgba(0,0,0,.3);font-family:var(--mono);font-size:10px;color:var(--text3);line-height:1.8;">
+            <div style="color:var(--accent);margin-bottom:4px;">REGLAS DE BATALLA</div>
+            <div>· El rival tiene 3 min para aceptar el reto</div>
+            <div>· Ambos registran su mejor lift en 3 minutos</div>
+            <div>· Gana el mayor VBC Score en esa disciplina</div>
+            <div>· Premio: 50 💎 VBC al ganador</div>
+          </div>
+        </div>
+
+        <!-- State: waiting for accept -->
+        <div id="battle-waiting" style="display:none;text-align:center;padding:30px 0;">
+          <div style="font-size:40px;margin-bottom:12px;">⏳</div>
+          <div style="font-family:var(--mono);color:var(--accent);font-size:13px;letter-spacing:2px;margin-bottom:8px;">ESPERANDO RESPUESTA</div>
+          <div id="battle-waiting-txt" style="color:var(--text2);font-size:12px;font-family:var(--mono);margin-bottom:20px;"></div>
+          <div class="progress-bar" style="height:4px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden;margin-bottom:20px;">
+            <div id="battle-wait-bar" style="height:100%;background:var(--accent);width:100%;transition:width 1s linear;"></div>
+          </div>
+          <button onclick="cancelBattle()" style="padding:10px 24px;background:transparent;border:1px solid rgba(255,60,60,.5);color:rgba(255,60,60,.8);font-family:var(--mono);font-size:11px;letter-spacing:2px;cursor:pointer;">CANCELAR</button>
+        </div>
+
+        <!-- State: active battle -->
+        <div id="battle-active" style="display:none;">
+          <div style="text-align:center;margin-bottom:16px;">
+            <div style="font-family:var(--mono);color:var(--accent);font-size:11px;letter-spacing:3px;margin-bottom:6px;">BATALLA EN CURSO</div>
+            <div id="battle-countdown" style="font-family:var(--mono);font-size:48px;color:#fff;font-weight:700;letter-spacing:-2px;">3:00</div>
+            <div id="battle-disc-label" style="font-family:var(--mono);font-size:11px;color:var(--text3);letter-spacing:2px;margin-top:4px;"></div>
+          </div>
+
+          <!-- VS card -->
+          <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:16px;">
+            <div id="b-card-me" style="background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.3);padding:12px;text-align:center;border-radius:4px;">
+              <div id="b-alias-me" style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:4px;"></div>
+              <div id="b-score-me" style="font-size:24px;font-weight:700;color:#fff;">—</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3);">VBC SCORE</div>
+            </div>
+            <div style="font-family:var(--mono);font-size:18px;color:rgba(255,255,255,.3);font-weight:700;">VS</div>
+            <div id="b-card-rival" style="background:rgba(255,100,0,.06);border:1px solid rgba(255,100,0,.2);padding:12px;text-align:center;border-radius:4px;">
+              <div id="b-alias-rival" style="font-family:var(--mono);font-size:11px;color:#ff6400;letter-spacing:1px;margin-bottom:4px;"></div>
+              <div id="b-score-rival" style="font-size:24px;font-weight:700;color:#fff;">—</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text3);">VBC SCORE</div>
+            </div>
+          </div>
+
+          <!-- Submit lift for battle -->
+          <div style="border:1px solid rgba(0,212,255,.2);padding:14px;background:rgba(0,0,0,.3);">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:2px;margin-bottom:10px;">REGISTRAR TU LIFT DE BATALLA</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+              <div>
+                <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:4px;">PESO (kg)</div>
+                <input id="b-weight" type="number" min="1" max="500" step="0.5" placeholder="100" style="width:100%;background:#0a1420;border:1px solid var(--border);color:#fff;padding:10px;font-family:var(--mono);font-size:14px;outline:none;box-sizing:border-box;">
+              </div>
+              <div>
+                <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:4px;">REPS</div>
+                <input id="b-reps" type="number" min="1" max="30" placeholder="5" style="width:100%;background:#0a1420;border:1px solid var(--border);color:#ff3;padding:10px;font-family:var(--mono);font-size:14px;outline:none;box-sizing:border-box;">
+              </div>
+            </div>
+            <button id="b-submit-btn" onclick="submitBattleLift()" style="width:100%;padding:14px;background:var(--accent);color:#000;font-family:var(--mono);font-weight:700;font-size:13px;border:none;cursor:pointer;letter-spacing:2px;">⚔ REGISTRAR LIFT</button>
+            <div id="b-submitted-ok" style="display:none;text-align:center;padding:12px;font-family:var(--mono);color:var(--accent);font-size:12px;letter-spacing:2px;">✓ LIFT ENVIADO — ESPERANDO RIVAL</div>
+          </div>
+        </div>
+
+        <!-- State: result -->
+        <div id="battle-result" style="display:none;text-align:center;padding:20px 0;">
+          <div id="b-result-icon" style="font-size:56px;margin-bottom:12px;"></div>
+          <div id="b-result-title" style="font-family:var(--mono);font-size:18px;font-weight:700;letter-spacing:3px;margin-bottom:8px;"></div>
+          <div id="b-result-sub" style="font-family:var(--mono);font-size:11px;color:var(--text3);letter-spacing:2px;margin-bottom:24px;"></div>
+          <div id="b-result-scores" style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:24px;"></div>
+          <button onclick="resetBattle()" style="padding:12px 32px;background:var(--accent);color:#000;font-family:var(--mono);font-weight:700;font-size:12px;border:none;cursor:pointer;letter-spacing:2px;">NUEVO RETO</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
 
 <!-- ══ SAO HOLOGRAPHIC OVERLAY
      En el universo SAO, esta pantalla aparece cuando el jugador
@@ -1759,7 +1823,8 @@ function goScreen(id) {
        (id==='lift'&&t.textContent.includes('Lift'))||
        (id==='skills'&&t.textContent.includes('Skills'))||
        (id==='wallet'&&t.textContent.includes('Wallet'))||
-       (id==='ranking'&&t.textContent.includes('Ranking'))) t.classList.add('active');
+       (id==='ranking'&&t.textContent.includes('Ranking'))||
+       (id==='battle'&&t.textContent.includes('Battle'))) t.classList.add('active');
   });
   if(id==='skills') renderSkills();
   if(id==='wallet') renderWallet();
@@ -1850,7 +1915,6 @@ function registerLift() {
   state.lastLiftTime=now;
   pendingResult={...res,finalVBC,finalCondor:res.condor,disc:selectedDisc,weight:w,reps:r};
   showResult(res,finalVBC,res.condor);
-  setTimeout(()=>startRestTimer(90), 800);
 }
 
 function showResult(res,vbc,condor) {
@@ -2050,8 +2114,6 @@ function renderRecords() {
 }
 
 function renderLiftHistory() {
-  // Render progress chart
-  setTimeout(renderProgressChart, 100);
   const c=document.getElementById('liftHistory');
   if(!state.liftHistory.length){c.innerHTML='<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:12px;">Sin lifts aún</div>';return;}
   c.innerHTML=state.liftHistory.slice(0,5).map(l=>`
@@ -2725,153 +2787,367 @@ window.haptic = function(type) {
   navigator.vibrate(patterns[type] || [20]);
 };
 
-// ═══════════════════════════════════════════════
-// REST TIMER
-// ═══════════════════════════════════════════════
-let rtInterval=null, rtTotal=90, rtRemaining=90;
+// ══════════════════════════════════════════════════
+// ⚔ BATTLE MODE — 1v1 Real-time
+// ══════════════════════════════════════════════════
+window._battle = {
+  id: null,
+  role: null,       // 'challenger' | 'challenged'
+  disc: null,
+  rival: null,
+  countdown: null,
+  waitTimeout: null,
+  unsubscribe: null,
+};
 
-function startRestTimer(seconds=90){
-  rtTotal = seconds; rtRemaining = seconds;
-  const el = document.getElementById('restTimer');
-  el.style.display='block'; el.classList.remove('done');
-  updateRestDisplay();
-  clearInterval(rtInterval);
-  rtInterval = setInterval(()=>{
-    rtRemaining--;
-    updateRestDisplay();
-    if(rtRemaining<=0){
-      clearInterval(rtInterval);
-      el.classList.add('done');
-      document.getElementById('rtDisplay').textContent='¡LISTO!';
-      document.getElementById('rtFill').style.width='0%';
-      if(navigator.vibrate) navigator.vibrate([200,100,200,100,400]);
-      showToast('⏱ ¡Fin del descanso! A levantar.','info');
-    }
-  },1000);
+const DISC_NAMES_B = {bench:'BENCH PRESS',deadlift:'DEADLIFT',squat:'BACK SQUAT',overhead:'OHP'};
+
+// ── VBC score formula (same as main lift calc) ──
+function calcVBCScore(disc, weight, reps) {
+  const e1rm = weight * (1 + reps/30);
+  const base = {bench:1.5,deadlift:1.0,squat:1.2,overhead:2.0}[disc]||1.0;
+  return Math.round(e1rm * base);
 }
 
-function setRestTime(s){
-  document.querySelectorAll('.rt-btn').forEach(b=>{
-    b.classList.toggle('active', b.textContent===`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`);
-  });
-  startRestTimer(s);
-}
+// ── Render rival list when entering battle screen ──
+function renderBattleRivals() {
+  const rows = document.getElementById('battle-rivals');
+  if (!rows) return;
+  const me = (window.currentUser && window.currentUser.displayName) || 'Tú';
+  const ranking = window._firestoreRanking || [];
+  const rivals = ranking.filter(u => u.alias !== me && u.alias).slice(0, 10);
 
-function updateRestDisplay(){
-  const m=Math.floor(rtRemaining/60), s=rtRemaining%60;
-  document.getElementById('rtDisplay').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  const pct=(rtRemaining/rtTotal)*100;
-  document.getElementById('rtFill').style.width=pct+'%';
-  const fill=document.getElementById('rtFill');
-  fill.style.background = pct>50?'var(--cyan)':pct>20?'#ffa500':'#ff4444';
-}
-
-function closeRestTimer(){
-  clearInterval(rtInterval);
-  document.getElementById('restTimer').style.display='none';
-}
-
-// ═══════════════════════════════════════════════
-// PROGRESS CHART
-// ═══════════════════════════════════════════════
-let progressChart=null, activeChartDisc='bench';
-
-function renderProgressChart(){
-  const wrap=document.getElementById('progressChartWrap');
-  if(!wrap) return;
-  const discNames={bench:'Bench Press',deadlift:'Deadlift',squat:'Squat',overhead:'Overhead'};
-  // Filter by discipline
-  const data=state.liftHistory
-    .filter(l=>l.disc===activeChartDisc)
-    .slice(-20)
-    .reverse();
-  
-  if(data.length<2){
-    wrap.innerHTML='<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:20px;">Registra al menos 2 lifts para ver el progreso</div>';
+  if (!rivals.length) {
+    rows.innerHTML = '<div style="color:var(--text3);font-family:var(--mono);font-size:11px;text-align:center;padding:16px;">No hay rivales en el ranking aún</div>';
     return;
   }
-  
-  const labels=data.map(l=>{
-    const d=new Date(l.ts||l.date||Date.now());
-    return `${d.getDate()}/${d.getMonth()+1}`;
-  });
-  const weights=data.map(l=>l.weight);
-  const scores=data.map(l=>l.vbc||0);
-  
-  wrap.innerHTML='<canvas id="progressCanvas" height="160"></canvas>';
-  const ctx2=document.getElementById('progressCanvas').getContext('2d');
-  
-  if(progressChart) progressChart.destroy();
-  progressChart=new Chart(ctx2,{
-    type:'line',
-    data:{
-      labels,
-      datasets:[{
-        label:'Peso (kg)',
-        data:weights,
-        borderColor:'rgba(0,200,255,0.8)',
-        backgroundColor:'rgba(0,200,255,0.08)',
-        borderWidth:2,
-        pointBackgroundColor:'rgba(0,200,255,1)',
-        pointRadius:4,
-        tension:0.3,
-        fill:true
-      },{
-        label:'Score VBC',
-        data:scores,
-        borderColor:'rgba(255,215,0,0.6)',
-        backgroundColor:'rgba(255,215,0,0.04)',
-        borderWidth:1.5,
-        pointBackgroundColor:'rgba(255,215,0,1)',
-        pointRadius:3,
-        tension:0.3,
-        yAxisID:'y2',
-        fill:false
-      }]
-    },
-    options:{
-      responsive:true,
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{labels:{color:'rgba(0,200,255,0.6)',font:{family:'monospace',size:10}}},
-        tooltip:{backgroundColor:'rgba(0,8,20,0.95)',borderColor:'rgba(0,200,255,0.3)',borderWidth:1,
-          titleFont:{family:'monospace'},bodyFont:{family:'monospace'}}
-      },
-      scales:{
-        x:{ticks:{color:'rgba(0,200,255,0.4)',font:{family:'monospace',size:9}},
-           grid:{color:'rgba(0,200,255,0.05)'}},
-        y:{ticks:{color:'rgba(0,200,255,0.4)',font:{family:'monospace',size:9}},
-           grid:{color:'rgba(0,200,255,0.05)'},title:{display:true,text:'kg',color:'rgba(0,200,255,0.4)',font:{family:'monospace',size:9}}},
-        y2:{position:'right',ticks:{color:'rgba(255,215,0,0.4)',font:{family:'monospace',size:9}},
-            grid:{display:false},title:{display:true,text:'VBC',color:'rgba(255,215,0,0.4)',font:{family:'monospace',size:9}}}
+
+  rows.innerHTML = rivals.map((u, i) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);background:rgba(0,0,0,.3);">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text3);width:18px;">#${i+1}</span>
+        <div>
+          <div style="font-family:var(--mono);font-size:12px;color:#fff;">${u.alias||'?'}</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3);">${u.tier||'IRON'} · ${u.pts||0} pts</div>
+        </div>
+      </div>
+      <button onclick="sendChallenge('${u.alias||''}','${u.uid||''}')"
+        style="padding:6px 14px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:10px;letter-spacing:1px;cursor:pointer;">
+        ⚔ RETAR
+      </button>
+    </div>
+  `).join('');
+}
+
+// ── Override goScreen to refresh rivals on battle ──
+const _origGoScreen = window.goScreen;
+window.goScreen = function(id) {
+  _origGoScreen(id);
+  if (id === 'battle') {
+    renderBattleRivals();
+    checkPendingBattle();
+  }
+};
+
+// ── Firestore reference helper ──
+function battlesRef() {
+  return window._db ? window._db.collection('vbc_battles') : null;
+}
+
+// ── Send challenge ──
+window.sendChallenge = function(rivalAlias, rivalUid) {
+  if (!window.currentUser) return;
+  const b = window._battle;
+  if (b.id) { alert('Ya tienes una batalla activa'); return; }
+
+  const disc = document.getElementById('battle-disc').value;
+  const db = battlesRef();
+  if (!db) { alert('Sin conexión a la base de datos'); return; }
+
+  const me = window.currentUser;
+  const battleId = db.doc().id;
+
+  db.doc(battleId).set({
+    id: battleId,
+    disc: disc,
+    status: 'pending',
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 3 * 60 * 1000,
+    challenger: { uid: me.uid, alias: me.displayName || 'Atleta', score: null },
+    challenged: { uid: rivalUid, alias: rivalAlias, score: null },
+    winner: null,
+    reward: 50,
+  }).then(() => {
+    b.id = battleId;
+    b.role = 'challenger';
+    b.disc = disc;
+    b.rival = rivalAlias;
+    showBattleState('waiting');
+    document.getElementById('battle-waiting-txt').textContent = `Esperando que ${rivalAlias} acepte el reto de ${DISC_NAMES_B[disc]}...`;
+    haptic('medium');
+
+    // Listen for status changes
+    b.unsubscribe = db.doc(battleId).onSnapshot(snap => {
+      const data = snap.data();
+      if (!data) return;
+      if (data.status === 'active') startActiveBattle(data);
+      if (data.status === 'done') showBattleResult(data);
+    });
+
+    // 3-min wait expiry
+    let elapsed = 0;
+    const bar = document.getElementById('battle-wait-bar');
+    b.waitTimeout = setInterval(() => {
+      elapsed++;
+      const pct = Math.max(0, 100 - (elapsed / 180) * 100);
+      if (bar) bar.style.width = pct + '%';
+      if (elapsed >= 180) {
+        clearInterval(b.waitTimeout);
+        cancelBattle();
       }
+    }, 1000);
+  }).catch(err => alert('Error: ' + err.message));
+};
+
+// ── Check if current user has a pending challenge ──
+window.checkPendingBattle = function() {
+  if (!window.currentUser || !battlesRef()) return;
+  const uid = window.currentUser.uid;
+  battlesRef()
+    .where('challenged.uid', '==', uid)
+    .where('status', '==', 'pending')
+    .orderBy('createdAt', 'desc')
+    .limit(1)
+    .get()
+    .then(snap => {
+      if (snap.empty) return;
+      const data = snap.docs[0].data();
+      const now = Date.now();
+      if (data.expiresAt < now) return; // expired
+      // Show incoming banner
+      window._battle.id = data.id;
+      window._battle.role = 'challenged';
+      window._battle.disc = data.disc;
+      window._battle.rival = data.challenger.alias;
+      const banner = document.getElementById('battle-incoming');
+      const txt = document.getElementById('battle-incoming-txt');
+      if (banner && txt) {
+        txt.textContent = `${data.challenger.alias} te reta a ${DISC_NAMES_B[data.disc]} — ¿Aceptas el duelo?`;
+        banner.style.display = 'block';
+        haptic('medium');
+      }
+    }).catch(() => {});
+};
+
+// ── Accept battle ──
+window.acceptBattle = function() {
+  const b = window._battle;
+  if (!b.id || !battlesRef()) return;
+  document.getElementById('battle-incoming').style.display = 'none';
+  battlesRef().doc(b.id).update({
+    status: 'active',
+    startedAt: Date.now(),
+    battleExpiresAt: Date.now() + 3 * 60 * 1000,
+  }).then(() => {
+    b.unsubscribe = battlesRef().doc(b.id).onSnapshot(snap => {
+      const data = snap.data();
+      if (!data) return;
+      if (data.status === 'done') showBattleResult(data);
+    });
+    // Get full battle data
+    battlesRef().doc(b.id).get().then(snap => startActiveBattle(snap.data()));
+  }).catch(err => alert('Error: ' + err.message));
+  haptic('success');
+};
+
+// ── Reject battle ──
+window.rejectBattle = function() {
+  const b = window._battle;
+  document.getElementById('battle-incoming').style.display = 'none';
+  if (b.id && battlesRef()) {
+    battlesRef().doc(b.id).update({ status: 'rejected' }).catch(()=>{});
+  }
+  resetBattle();
+};
+
+// ── Cancel pending challenge ──
+window.cancelBattle = function() {
+  const b = window._battle;
+  clearInterval(b.waitTimeout);
+  if (b.unsubscribe) b.unsubscribe();
+  if (b.id && battlesRef()) {
+    battlesRef().doc(b.id).update({ status: 'cancelled' }).catch(()=>{});
+  }
+  resetBattle();
+};
+
+// ── Start active battle UI ──
+function startActiveBattle(data) {
+  const b = window._battle;
+  b.disc = data.disc;
+
+  showBattleState('active');
+  document.getElementById('battle-disc-label').textContent = DISC_NAMES_B[data.disc];
+
+  const isChallenger = b.role === 'challenger';
+  document.getElementById('b-alias-me').textContent = isChallenger ? data.challenger.alias : data.challenged.alias;
+  document.getElementById('b-alias-rival').textContent = isChallenger ? data.challenged.alias : data.challenger.alias;
+
+  // Countdown 3 min
+  const startAt = data.startedAt || data.battleExpiresAt - 180000;
+  const endsAt = startAt + 180000;
+
+  clearInterval(b.countdown);
+  b.countdown = setInterval(() => {
+    const left = Math.max(0, endsAt - Date.now());
+    const m = Math.floor(left / 60000);
+    const s = Math.floor((left % 60000) / 1000);
+    const el = document.getElementById('battle-countdown');
+    if (el) el.textContent = `${m}:${String(s).padStart(2,'0')}`;
+    if (left <= 10000 && el) el.style.color = '#ff4444';
+    if (left <= 0) {
+      clearInterval(b.countdown);
+      // Auto-submit with 0 if not submitted
+      if (!b.submitted) autoFinishBattle(data);
     }
+  }, 500);
+
+  // Listen for rival score updates
+  if (b.unsubscribe) b.unsubscribe();
+  b.unsubscribe = battlesRef().doc(b.id).onSnapshot(snap => {
+    const d = snap.data();
+    if (!d) return;
+    const myScore = isChallenger ? d.challenger.score : d.challenged.score;
+    const rivalScore = isChallenger ? d.challenged.score : d.challenger.score;
+    if (myScore !== null) {
+      document.getElementById('b-score-me').textContent = myScore;
+    }
+    if (rivalScore !== null) {
+      document.getElementById('b-score-rival').textContent = rivalScore;
+    }
+    if (d.status === 'done') showBattleResult(d);
   });
 }
 
-function switchChartDisc(disc,el){
-  activeChartDisc=disc;
-  document.querySelectorAll('.cdt').forEach(b=>b.classList.remove('active'));
-  el.classList.add('active');
-  renderProgressChart();
+// ── Submit battle lift ──
+window.submitBattleLift = function() {
+  const b = window._battle;
+  if (!b.id || b.submitted) return;
+  const weight = parseFloat(document.getElementById('b-weight').value);
+  const reps = parseInt(document.getElementById('b-reps').value);
+  if (!weight || !reps) { haptic('error'); return; }
+
+  const score = calcVBCScore(b.disc, weight, reps);
+  const isChallenger = b.role === 'challenger';
+  const update = {};
+  update[isChallenger ? 'challenger.score' : 'challenged.score'] = score;
+
+  battlesRef().doc(b.id).update(update).then(() => {
+    b.submitted = true;
+    document.getElementById('b-submit-btn').style.display = 'none';
+    document.getElementById('b-submitted-ok').style.display = 'block';
+    document.getElementById('b-score-me').textContent = score;
+    haptic('lift');
+
+    // Check if both submitted
+    battlesRef().doc(b.id).get().then(snap => {
+      const data = snap.data();
+      const cScore = data.challenger.score;
+      const dScore = data.challenged.score;
+      if (cScore !== null && dScore !== null) finalizeBattle(data, cScore, dScore);
+    });
+  }).catch(err => alert('Error: ' + err.message));
+};
+
+// ── Finalize and determine winner ──
+function finalizeBattle(data, cScore, dScore) {
+  const winner = cScore >= dScore ? data.challenger.uid : data.challenged.uid;
+  const winnerAlias = cScore >= dScore ? data.challenger.alias : data.challenged.alias;
+  battlesRef().doc(data.id).update({
+    status: 'done',
+    winner,
+    winnerAlias,
+    finalScores: { challenger: cScore, challenged: dScore },
+  }).catch(() => {});
 }
+
+// ── Auto-finish if time expired ──
+function autoFinishBattle(data) {
+  const b = window._battle;
+  const isChallenger = b.role === 'challenger';
+  battlesRef().doc(b.id).get().then(snap => {
+    const d = snap.data();
+    if (d.status === 'done') return;
+    const cScore = d.challenger.score || 0;
+    const dScore = d.challenged.score || 0;
+    finalizeBattle(d, cScore, dScore);
+  }).catch(() => {});
+}
+
+// ── Show battle result ──
+function showBattleResult(data) {
+  const b = window._battle;
+  clearInterval(b.countdown);
+  clearInterval(b.waitTimeout);
+  if (b.unsubscribe) b.unsubscribe();
+
+  const me = window.currentUser;
+  const won = data.winner === (me && me.uid);
+  const isDraw = data.finalScores && data.finalScores.challenger === data.finalScores.challenged;
+
+  showBattleState('result');
+  document.getElementById('b-result-icon').textContent = isDraw ? '🤝' : (won ? '🏆' : '💀');
+  document.getElementById('b-result-title').textContent = isDraw ? 'EMPATE' : (won ? 'VICTORIA' : 'DERROTA');
+  document.getElementById('b-result-title').style.color = isDraw ? 'var(--accent)' : (won ? '#ffd700' : '#ff4444');
+  document.getElementById('b-result-sub').textContent = won ? `+${data.reward} 💎 VBC ganados` : (isDraw ? 'Nadie obtiene VBC' : `${data.winnerAlias} ganó el duelo`);
+
+  if (data.finalScores) {
+    const isChallenger = b.role === 'challenger';
+    const myScore = isChallenger ? data.finalScores.challenger : data.finalScores.challenged;
+    const rivalScore = isChallenger ? data.finalScores.challenged : data.finalScores.challenger;
+    const rivalAlias = isChallenger ? data.challenged.alias : data.challenger.alias;
+    document.getElementById('b-result-scores').innerHTML = `
+      <div style="text-align:center;padding:12px;border:1px solid ${won?'#ffd700':'var(--border)'};background:rgba(0,0,0,.3);">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:4px;">TÚ</div>
+        <div style="font-size:28px;font-weight:700;color:${won?'#ffd700':'#fff'};">${myScore||0}</div>
+      </div>
+      <div style="font-family:var(--mono);color:var(--text3);font-size:14px;">VS</div>
+      <div style="text-align:center;padding:12px;border:1px solid var(--border);background:rgba(0,0,0,.3);">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:4px;">${rivalAlias}</div>
+        <div style="font-size:28px;font-weight:700;color:#fff;">${rivalScore||0}</div>
+      </div>
+    `;
+  }
+
+  haptic(won ? 'success' : 'error');
+}
+
+// ── Helper: show battle UI state ──
+function showBattleState(state) {
+  ['idle','waiting','active','result'].forEach(s => {
+    const el = document.getElementById('battle-' + s);
+    if (el) el.style.display = s === state ? 'block' : 'none';
+  });
+}
+
+// ── Reset battle ──
+window.resetBattle = function() {
+  const b = window._battle;
+  clearInterval(b.countdown);
+  clearInterval(b.waitTimeout);
+  if (b.unsubscribe) b.unsubscribe();
+  window._battle = { id:null, role:null, disc:null, rival:null, countdown:null, waitTimeout:null, unsubscribe:null, submitted:false };
+  showBattleState('idle');
+};
+
+// ── Check for pending challenge on login ──
+const _origOnLogin = window.onLoginSuccess;
+window.onLoginSuccess = function(...args) {
+  if (_origOnLogin) _origOnLogin(...args);
+  setTimeout(checkPendingBattle, 2000);
+};
 
 </script>
-
-
-<!-- REST TIMER -->
-<div id="restTimer">
-  <button class="rt-close" onclick="closeRestTimer()">✕</button>
-  <div class="rt-label">⟶ REST TIMER</div>
-  <div class="rt-time" id="rtDisplay">01:30</div>
-  <div class="rt-bar"><div class="rt-fill" id="rtFill" style="width:100%"></div></div>
-  <div class="rt-btns">
-    <button class="rt-btn" onclick="setRestTime(60)">1:00</button>
-    <button class="rt-btn active" onclick="setRestTime(90)">1:30</button>
-    <button class="rt-btn" onclick="setRestTime(120)">2:00</button>
-    <button class="rt-btn" onclick="setRestTime(180)">3:00</button>
-  </div>
-</div>
 
 </body>
 </html>
