@@ -845,6 +845,112 @@ body::after{
   color: rgba(0,200,255,.6); line-height: 2; text-align: center; min-height: 60px;
 }
 
+
+/* ════════════ RE:MONSTER EVOLUTION SYSTEM ════════════ */
+.evo-avatar {
+  position:relative; width:120px; height:120px; margin:0 auto 16px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+}
+.evo-avatar .evo-emoji {
+  font-size:64px; filter:drop-shadow(0 0 18px var(--evo-glow,#00ffcc));
+  animation: evo-float 3s ease-in-out infinite;
+  transition: transform 0.3s;
+  position:relative; z-index:2;
+}
+.evo-avatar:hover .evo-emoji { transform: scale(1.12); }
+.evo-ring {
+  position:absolute; inset:0; border-radius:50%;
+  border: 2px solid var(--evo-glow,#00ffcc);
+  box-shadow: 0 0 20px var(--evo-glow,#00ffcc), inset 0 0 20px rgba(0,255,204,0.1);
+  animation: evo-pulse 2s ease-in-out infinite;
+}
+.evo-particles {
+  position:absolute; inset:-10px; border-radius:50%;
+  animation: evo-spin 6s linear infinite;
+}
+.evo-particle {
+  position:absolute; width:4px; height:4px; border-radius:50%;
+  background:var(--evo-glow,#00ffcc);
+  box-shadow: 0 0 6px var(--evo-glow,#00ffcc);
+}
+.evo-name-badge {
+  text-align:center; font-family:var(--mono); font-size:10px; letter-spacing:2px;
+  color:var(--evo-glow,#00ffcc); text-shadow: 0 0 10px var(--evo-glow,#00ffcc);
+  margin-bottom:4px; text-transform:uppercase;
+}
+.evo-title {
+  text-align:center; font-family:var(--mono); font-size:13px; font-weight:bold;
+  color:#fff; letter-spacing:1px; margin-bottom:12px;
+}
+.evo-progress-wrap {
+  margin: 0 auto 16px; max-width:220px;
+}
+.evo-progress-label {
+  display:flex; justify-content:space-between;
+  font-family:var(--mono); font-size:9px; color:var(--text3); margin-bottom:4px;
+}
+.evo-progress-bar {
+  height:4px; background:var(--border); border-radius:2px; overflow:hidden;
+}
+.evo-progress-fill {
+  height:100%; border-radius:2px;
+  background:var(--evo-glow,#00ffcc);
+  box-shadow: 0 0 8px var(--evo-glow,#00ffcc);
+  transition: width 1s ease;
+}
+
+/* Evolution overlay */
+.evo-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:9999;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  opacity:0; pointer-events:none; transition:opacity 0.3s;
+}
+.evo-overlay.active { opacity:1; pointer-events:all; }
+.evo-overlay-emoji { font-size:100px; animation: evo-evolve 1s ease-out; margin-bottom:24px; }
+.evo-overlay-text {
+  font-family:var(--mono); font-size:11px; letter-spacing:4px;
+  color:var(--evo-glow,#00ffcc); margin-bottom:8px;
+  text-shadow: 0 0 20px var(--evo-glow,#00ffcc);
+  animation: evo-glitch 0.5s steps(2) 3;
+}
+.evo-overlay-title {
+  font-family:var(--mono); font-size:28px; font-weight:bold;
+  color:#fff; letter-spacing:3px; text-align:center;
+  text-shadow: 0 0 30px var(--evo-glow,#00ffcc);
+  margin-bottom:32px;
+}
+.evo-overlay-close {
+  font-family:var(--mono); font-size:10px; letter-spacing:2px;
+  color:var(--text3); border:1px solid var(--border); padding:8px 24px;
+  background:transparent; cursor:pointer; transition:all 0.2s;
+}
+.evo-overlay-close:hover { color:#fff; border-color:#fff; }
+
+/* Ranking mini avatar */
+.lb-evo { font-size:16px; margin-right:4px; }
+
+/* Animations */
+@keyframes evo-float {
+  0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)}
+}
+@keyframes evo-pulse {
+  0%,100%{opacity:0.6;transform:scale(1)} 50%{opacity:1;transform:scale(1.08)}
+}
+@keyframes evo-spin {
+  from{transform:rotate(0deg)} to{transform:rotate(360deg)}
+}
+@keyframes evo-evolve {
+  0%{transform:scale(0) rotate(-180deg);opacity:0}
+  60%{transform:scale(1.3) rotate(10deg);opacity:1}
+  100%{transform:scale(1) rotate(0deg);opacity:1}
+}
+@keyframes evo-glitch {
+  0%{text-shadow:2px 0 #ff0044,−2px 0 #00ffcc}
+  50%{text-shadow:−2px 0 #ff0044,2px 0 #00ffcc}
+  100%{text-shadow:none}
+}
+
 </style>
 
 <!-- Firebase SDK -->
@@ -1647,7 +1753,7 @@ const DISC_NAMES = {bench:'Bench Press',deadlift:'Deadlift',squat:'Squat',overhe
 let state = {
   name:'Atleta VBC', vbc:0, condor:0, totalVBC:0, lifts:0,
   bestScore:0, bestTier:'BRONCE', xp:0, level:1,
-  records:{}, liftHistory:[], txHistory:[],
+  records:{}, battleWins:0, evolutionLevel:0, liftHistory:[], txHistory:[],
   ownedSkills:[], equippedSkills:[], streak:0, lastLiftTime:null,
   videosUploaded:0,
 };
@@ -2065,6 +2171,13 @@ function buySkill(id) {
 // RENDER FUNCTIONS
 // ════════════════════════════════════════
 function renderPerfil() {
+  // Evolution avatar
+  const _evoWins = state.battleWins || 0;
+  const _evoRank = getMyRankPos();
+  const _evo = getEvolution(state.bestScore, state.totalVBC, _evoWins, _evoRank);
+  state.evolutionLevel = _evo.level;
+  const _evoContainer = document.getElementById('evoAvatarContainer');
+  if (_evoContainer) _evoContainer.innerHTML = buildEvoAvatar(_evo, state.bestScore, state.totalVBC, _evoWins);
   document.getElementById('heroName').textContent=state.name;
   document.getElementById('heroLevel').textContent='LVL '+state.level;
   const tierClass={GALÁCTICO:'galactico',PLATINO:'platino',ORO:'oro',PLATA:'plata',BRONCE:'bronce'}[state.bestTier]||'bronce';
@@ -2173,9 +2286,10 @@ function renderRanking() {
     const rank=i+1;
     const rankClass=rank===1?'r1':rank===2?'r2':rank===3?'r3':'rn';
     const rankTxt=rank<=3?['🥇','🥈','🥉'][rank-1]:rank;
+    const _rEvo=getEvolution(r.score,r.vbc,r.wins||0,rank);
     return `<div class="lb-row ${r.me?'me':''}">
       <div class="lb-rank ${rankClass}">${rankTxt}</div>
-      <div><div class="lb-name">${r.name}</div></div>
+      <div><div class="lb-name"><span class="lb-evo" title="${_rEvo.name}">${_rEvo.emoji}</span>${r.name}</div></div>
       <div><span class="lb-tier-b tier-badge ${tierClass[r.tier]||'bronce'}" style="font-size:8px;">${tierEmoji[r.tier]||'🥉'} ${r.tier}</span></div>
       <div class="lb-score">${r.score}</div>
       <div class="lb-vbc">${r.vbc.toLocaleString('es-CL')}</div>
@@ -2679,6 +2793,7 @@ function loadUserState(uid, user) {
         if(d.liftHistory)    state.liftHistory = d.liftHistory;
         if(d.txHistory)      state.txHistory = d.txHistory;
         if(d.ownedSkills)    state.ownedSkills = d.ownedSkills;
+        if(d.battleWins != null) state.battleWins = d.battleWins;
         if(d.equippedSkills) state.equippedSkills = d.equippedSkills;
         if(d.streak != null) state.streak = d.streak;
         if(d.videosUploaded != null) state.videosUploaded = d.videosUploaded;
@@ -3120,6 +3235,23 @@ function showBattleResult(data) {
   }
 
   haptic(won ? 'success' : 'error');
+
+  // ── Evolution check on win ──
+  if (won && !isDraw) {
+    const _prevEvo = state.evolutionLevel || 1;
+    state.battleWins = (state.battleWins || 0) + 1;
+    // Reward VBC locally (server also updates but for immediate feedback)
+    if (data.reward) { state.vbc += data.reward; state.totalVBC += data.reward; updateNavBal(); }
+    // Check if evolved
+    setTimeout(() => checkEvolutionUp(_prevEvo), 1200);
+    // Save to Firestore
+    if (window._db && window.currentUser) {
+      const _uid = window.currentUser.uid;
+      window._db.collection('vbc_users').doc(_uid).update({
+        battleWins: state.battleWins
+      }).catch(()=>{});
+    }
+  }
 }
 
 // ── Helper: show battle UI state ──
@@ -3147,7 +3279,148 @@ window.onLoginSuccess = function(...args) {
   setTimeout(checkPendingBattle, 2000);
 };
 
+
+// ════════════════════════════════════════
+// RE:MONSTER EVOLUTION SYSTEM
+// ════════════════════════════════════════
+const EVOLUTIONS = [
+  { level:1, name:'GOBLIN',      title:'Goblin Soldado',   emoji:'👺', glow:'#55ff55', minScore:0,  minVBC:0,    minWins:0  },
+  { level:2, name:'HOBGOBLIN',   title:'Hobgoblin Guerrero',emoji:'👹', glow:'#88ff44', minScore:20, minVBC:300,  minWins:0  },
+  { level:3, name:'OGRE',        title:'Ogre Combatiente', emoji:'🔥', glow:'#ff8800', minScore:40, minVBC:800,  minWins:1  },
+  { level:4, name:'HIGH OGRE',   title:'High Ogre Elite',  emoji:'⚡', glow:'#ffee00', minScore:60, minVBC:1500, minWins:3  },
+  { level:5, name:'RARE OGRE',   title:'Rare Ogre Oscuro', emoji:'💀', glow:'#cc44ff', minScore:75, minVBC:3000, minWins:5  },
+  { level:6, name:'OGRE LORD',   title:'Ogre Lord Supremo',emoji:'👑', glow:'#ff4444', minScore:88, minVBC:6000, minWins:10 },
+  { level:7, name:'DEMON LORD',  title:'Demon Lord ∞',     emoji:'🌑', glow:'#ffffff', minScore:95, minVBC:12000,minWins:15 },
+];
+
+function getEvolution(score, vbc, wins, rankPos) {
+  let evo = EVOLUTIONS[0];
+  for (let e of EVOLUTIONS) {
+    const scoreOk = score >= e.minScore;
+    const vbcOk   = vbc   >= e.minVBC;
+    const winsOk  = wins  >= e.minWins;
+    const rankOk  = e.level === 6 ? (rankPos && rankPos <= 3) : e.level === 7 ? (rankPos === 1) : false;
+    if (scoreOk || vbcOk || winsOk || rankOk) evo = e;
+  }
+  return evo;
+}
+
+function getMyRankPos() {
+  const rows = window._firestoreRanking || [];
+  const me = (window.currentUser && window.currentUser.uid) || '';
+  const sorted = [...rows].sort((a,b)=>(b.bestScore||0)-(a.bestScore||0));
+  const idx = sorted.findIndex(r => r.uid === me);
+  return idx >= 0 ? idx + 1 : null;
+}
+
+function getNextEvolution(curLevel) {
+  return EVOLUTIONS.find(e => e.level === curLevel + 1) || null;
+}
+
+function getEvolutionProgress(score, vbc, wins, curLevel) {
+  const next = getNextEvolution(curLevel);
+  if (!next) return 100;
+  // Progress toward next: take best metric
+  const sP = next.minScore > 0 ? Math.min(100, Math.round(score / next.minScore * 100)) : 100;
+  const vP = next.minVBC   > 0 ? Math.min(100, Math.round(vbc   / next.minVBC   * 100)) : 100;
+  const wP = next.minWins  > 0 ? Math.min(100, Math.round(wins  / next.minWins  * 100)) : 100;
+  return Math.max(sP, vP, wP);
+}
+
+function buildEvoAvatar(evo, score, vbc, wins) {
+  const next = getNextEvolution(evo.level);
+  const pct  = getEvolutionProgress(score, vbc, wins, evo.level);
+  const particles = Array.from({length:8}, (_,i) => {
+    const angle = i * 45;
+    const rad   = angle * Math.PI / 180;
+    const r     = 52;
+    const x     = 50 + r * Math.cos(rad);
+    const y     = 50 + r * Math.sin(rad);
+    return `<div class="evo-particle" style="left:${x}%;top:${y}%;transform:translate(-50%,-50%);opacity:${0.4+i*0.07};"></div>`;
+  }).join('');
+
+  return `
+    <div style="--evo-glow:${evo.glow};">
+      <div class="evo-avatar" onclick="showEvolutionDetail()">
+        <div class="evo-ring"></div>
+        <div class="evo-particles">${particles}</div>
+        <div class="evo-emoji">${evo.emoji}</div>
+      </div>
+      <div class="evo-name-badge">── ${evo.name} ──</div>
+      <div class="evo-title">${evo.title}</div>
+      ${next ? `
+      <div class="evo-progress-wrap" style="--evo-glow:${evo.glow};">
+        <div class="evo-progress-label">
+          <span>PRÓXIMA EVOLUCIÓN: ${next.name}</span>
+          <span>${pct}%</span>
+        </div>
+        <div class="evo-progress-bar">
+          <div class="evo-progress-fill" style="width:${pct}%;"></div>
+        </div>
+      </div>` : `<div class="evo-name-badge" style="color:#fff;">── FORMA MÁXIMA ──</div>`}
+    </div>`;
+}
+
+function showEvolutionDetail() {
+  const evo = getEvolution(state.bestScore, state.totalVBC, state.battleWins||0, getMyRankPos());
+  const next = getNextEvolution(evo.level);
+  const overlay = document.getElementById('evoOverlay');
+  if (!overlay) return;
+  document.getElementById('evoOverlayEmoji').textContent = evo.emoji;
+  document.getElementById('evoOverlayName').textContent = '── ' + evo.name + ' ──';
+  document.getElementById('evoOverlayTitle').textContent = evo.title;
+  document.getElementById('evoOverlayStats').innerHTML = `
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text3);line-height:2;text-align:center;">
+      <div>NIVEL ${evo.level} / 7</div>
+      <div>VICTORIAS EN BATALLA: ${state.battleWins||0}</div>
+      ${next ? `<div style="margin-top:8px;color:${next.glow};">SIGUIENTE: ${next.title} ${next.emoji}</div>
+      <div style="font-size:9px;color:var(--text3);">Score ${next.minScore}+ · VBC ${next.minVBC.toLocaleString('es-CL')}+ · ${next.minWins} victorias</div>` : '<div style="color:gold;">FORMA DEFINITIVA ALCANZADA</div>'}
+    </div>`;
+  overlay.style.setProperty('--evo-glow', evo.glow);
+  overlay.classList.add('active');
+}
+
+function showEvolutionAnimation(evo) {
+  const overlay = document.getElementById('evoOverlay');
+  if (!overlay) return;
+  document.getElementById('evoOverlayEmoji').textContent = evo.emoji;
+  document.getElementById('evoOverlayName').textContent = '⚡ EVOLUCIÓN ⚡';
+  document.getElementById('evoOverlayTitle').textContent = evo.title;
+  document.getElementById('evoOverlayStats').innerHTML = `
+    <div style="font-family:var(--mono);font-size:11px;color:var(--text3);text-align:center;">
+      <div style="color:${evo.glow};font-size:14px;letter-spacing:2px;">NUEVA FORMA DESBLOQUEADA</div>
+      <div style="margin-top:8px;">${evo.name} — NIVEL ${evo.level}</div>
+    </div>`;
+  overlay.style.setProperty('--evo-glow', evo.glow);
+  overlay.classList.add('active');
+  if (navigator.vibrate) navigator.vibrate([100,50,100,50,300]);
+}
+
+function checkEvolutionUp(prevLevel) {
+  const wins = state.battleWins || 0;
+  const newEvo = getEvolution(state.bestScore, state.totalVBC, wins, getMyRankPos());
+  if (newEvo.level > prevLevel) {
+    state.evolutionLevel = newEvo.level;
+    setTimeout(() => showEvolutionAnimation(newEvo), 800);
+  }
+  return newEvo;
+}
+
 </script>
+
+
+<!-- RE:MONSTER EVOLUTION OVERLAY -->
+<div class="evo-overlay" id="evoOverlay" onclick="document.getElementById('evoOverlay').classList.remove('active')">
+  <div style="--evo-glow:#00ffcc; text-align:center;" onclick="event.stopPropagation()">
+    <div class="evo-overlay-emoji" id="evoOverlayEmoji">👺</div>
+    <div class="evo-overlay-text" id="evoOverlayName">── GOBLIN ──</div>
+    <div class="evo-overlay-title" id="evoOverlayTitle">Goblin Soldado</div>
+    <div id="evoOverlayStats"></div>
+    <div style="margin-top:24px;">
+      <button class="evo-overlay-close" onclick="document.getElementById('evoOverlay').classList.remove('active')">[ CERRAR ]</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
