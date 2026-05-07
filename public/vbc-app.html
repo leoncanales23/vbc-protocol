@@ -951,6 +951,62 @@ body::after{
   100%{text-shadow:none}
 }
 
+/* ══ ESTIRPE CHARACTER FIGURES ════════════════════════════ */
+.char-figure { display:inline-block; animation: charFloat 3s ease-in-out infinite; }
+.char-figure svg { width:100%; height:100%; }
+@keyframes charFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+
+.estirpe-pick-grid {
+  display:grid; grid-template-columns:1fr 1fr;
+  gap:10px; margin:16px 0; width:100%;
+}
+.estirpe-pick-card {
+  background:rgba(0,255,204,0.05); border:1.5px solid rgba(0,255,204,0.2);
+  border-radius:12px; padding:12px 8px; cursor:pointer; text-align:center;
+  transition:all .2s; display:flex; flex-direction:column; align-items:center; gap:6px;
+}
+.estirpe-pick-card:hover, .estirpe-pick-card.selected {
+  border-color:var(--est-color, #00ffcc);
+  background:rgba(var(--est-rgb, 0,255,204), 0.12);
+  box-shadow:0 0 12px rgba(var(--est-rgb, 0,255,204),0.4);
+  transform:translateY(-2px);
+}
+.estirpe-pick-card .est-icon { font-size:1.6rem; }
+.estirpe-pick-card .est-name { font-size:0.85rem; font-weight:700; letter-spacing:1px; }
+.estirpe-pick-card .est-element { font-size:0.65rem; opacity:0.7; }
+.estirpe-pick-card .est-bonus { font-size:0.65rem; color:var(--gold); margin-top:2px; }
+
+.profile-estirpe-banner {
+  display:flex; align-items:center; gap:16px;
+  background:rgba(0,0,0,0.4); border-radius:16px;
+  padding:16px; margin:12px 0;
+  border:1px solid rgba(255,255,255,0.08);
+}
+.profile-estirpe-info { flex:1; }
+.profile-estirpe-name { font-size:1rem; font-weight:700; letter-spacing:1px; }
+.profile-estirpe-form { font-size:0.7rem; opacity:0.7; margin-top:2px; }
+.profile-estirpe-bonus { font-size:0.68rem; color:var(--gold); margin-top:4px; }
+
+.evo-overlay-char { display:flex; justify-content:center; margin:16px 0; }
+
+.rank-estirpe-dot { font-size:0.8rem; }
+
+/* action char popup */
+.action-char-popup {
+  position:fixed; pointer-events:none; z-index:999;
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  animation: charPopAnim 2s ease-out forwards;
+}
+.action-char-popup .ac-label {
+  font-size:0.65rem; letter-spacing:1px; font-weight:700;
+  color:var(--accent); text-shadow:0 0 8px var(--accent);
+}
+@keyframes charPopAnim {
+  0% { opacity:0; transform:translateY(20px) scale(0.6); }
+  20% { opacity:1; transform:translateY(0) scale(1.1); }
+  70% { opacity:1; transform:translateY(-10px) scale(1); }
+  100% { opacity:0; transform:translateY(-30px) scale(0.8); }
+}
 </style>
 
 <!-- Firebase SDK -->
@@ -1021,6 +1077,7 @@ body::after{
         <div class="setup-dot on" id="sdot1"></div>
         <div class="setup-dot" id="sdot2"></div>
         <div class="setup-dot" id="sdot3"></div>
+        <div class="setup-dot" id="sdot4"></div>
       </div>
       <div class="setup-sys-tag">NerveGear · Registro</div>
       <div class="setup-title">¿Cómo te llama el protocolo?</div>
@@ -1074,6 +1131,21 @@ body::after{
         <div class="setup-progress-wrap"><div class="setup-progress-bar" id="setupProgBar"></div></div>
         <div class="setup-conn-log" id="setupConnLog">Inicializando NerveGear…</div>
       </div>
+
+    <!-- Paso 4: Estirpe -->
+    <div class="setup-step" id="setup-s4">
+      <div class="setup-dots">
+        <div class="setup-dot" id="sdot4-1"></div>
+        <div class="setup-dot" id="sdot4-2"></div>
+        <div class="setup-dot" id="sdot4-3"></div>
+        <div class="setup-dot on" id="sdot4-4"></div>
+      </div>
+      <div class="setup-sys-tag">NerveGear · Linaje</div>
+      <div class="setup-title">Elige tu Estirpe</div>
+      <div class="setup-sub">Tu linaje define tu camino de evolución y tus habilidades únicas. Esta elección es permanente.</div>
+      <div class="estirpe-pick-grid" id="estirpePickGrid"></div>
+      <div id="estirpePickError" style="color:#ff4444;font-size:0.75rem;min-height:18px;text-align:center;"></div>
+      <button class="setup-btn primary" id="setupEstirpeBtn" onclick="finishEstirpePick()">CONFIRMAR ESTIRPE</button>
     </div>
 
   </div>
@@ -1753,7 +1825,7 @@ const DISC_NAMES = {bench:'Bench Press',deadlift:'Deadlift',squat:'Squat',overhe
 let state = {
   name:'Atleta VBC', vbc:0, condor:0, totalVBC:0, lifts:0,
   bestScore:0, bestTier:'BRONCE', xp:0, level:1,
-  records:{}, battleWins:0, evolutionLevel:0, liftHistory:[], txHistory:[],
+  records:{}, battleWins:0, evolutionLevel:0, estirpe:null, titanCardUsed:null, liftHistory:[], txHistory:[],
   ownedSkills:[], equippedSkills:[], streak:0, lastLiftTime:null,
   videosUploaded:0,
 };
@@ -1920,6 +1992,92 @@ window.addEventListener('resize',initCanvas);
 // ════════════════════════════════════════
 // NAVIGATION
 // ════════════════════════════════════════
+// ══ ESTIRPE ONBOARDING ═══════════════════════════════════
+function initEstirpePicker() {
+  const grid = document.getElementById('estirpePickGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const estirpeList = ['oni','tempest','undead','arcane','dragon'];
+  estirpeList.forEach(id => {
+    const est = ESTIRPES[id];
+    const form0 = est.forms[0];
+    const colorRgb = hexToRgb(est.color);
+    const card = document.createElement('div');
+    card.className = 'estirpe-pick-card';
+    card.style.setProperty('--est-color', est.color);
+    card.style.setProperty('--est-rgb', colorRgb);
+    card.dataset.estirpe = id;
+    card.innerHTML = `
+      <div class="char-figure" style="width:60px;height:60px;filter:drop-shadow(0 0 8px ${est.color});">${form0.svg}</div>
+      <div class="est-name" style="color:${est.color}">${est.name.toUpperCase()}</div>
+      <div class="est-element">${est.icon} ${est.element}</div>
+      <div class="est-bonus">${est.bonus}</div>
+    `;
+    card.onclick = () => {
+      document.querySelectorAll('.estirpe-pick-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      window._selectedEstirpe = id;
+    };
+    grid.appendChild(card);
+  });
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+
+function finishEstirpePick() {
+  const chosen = window._selectedEstirpe;
+  if (!chosen) {
+    document.getElementById('estirpePickError').textContent = 'Debes elegir una estirpe para continuar.';
+    return;
+  }
+  state.estirpe = chosen;
+  saveUserState(false);
+  document.getElementById('setup-overlay').classList.add('gone');
+  showEstirpeWelcome(chosen);
+  goScreen('home');
+}
+
+function showEstirpeWelcome(estirpeId) {
+  const est = ESTIRPES[estirpeId];
+  if (!est) return;
+  const form = est.forms[0];
+  const ov = document.createElement('div');
+  ov.style.cssText = `position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;animation:fadeIn .4s ease;`;
+  ov.innerHTML = `
+    <div style="font-size:0.7rem;letter-spacing:3px;color:${est.color};opacity:0.8">ESTIRPE CONFIRMADA</div>
+    <div class="char-figure" style="width:120px;height:120px;filter:drop-shadow(0 0 24px ${est.color});">${form.svg}</div>
+    <div style="font-size:1.6rem;font-weight:900;letter-spacing:3px;color:${est.color}">${est.name.toUpperCase()}</div>
+    <div style="font-size:0.85rem;opacity:0.8;text-align:center;max-width:260px;">${est.desc}</div>
+    <div style="font-size:0.75rem;color:var(--gold);margin-top:4px;">${est.bonus}</div>
+    <div style="font-size:0.7rem;color:${est.color};opacity:0.7;margin-top:8px;">${form.name} — Nivel 1</div>
+  `;
+  document.body.appendChild(ov);
+  setTimeout(() => { ov.style.animation = 'fadeOut .4s ease forwards'; setTimeout(() => ov.remove(), 400); }, 3500);
+}
+
+function showCharActionPopup(label) {
+  if (!state.estirpe) return;
+  const evo = getEvolution(state.bestScore||0, state.vbc||0, state.battleWins||0, getMyRankPos());
+  const est = ESTIRPES[state.estirpe];
+  if (!est) return;
+  const form = getEstirpeFormForLevel(state.estirpe, evo.level);
+  if (!form) return;
+  const popup = document.createElement('div');
+  popup.className = 'action-char-popup';
+  popup.style.cssText = `bottom:160px;left:50%;transform:translateX(-50%);`;
+  popup.innerHTML = `
+    <div class="char-figure" style="width:64px;height:64px;filter:drop-shadow(0 0 12px ${est.color});">${form.svg}</div>
+    <div class="ac-label" style="color:${est.color}">${label}</div>
+  `;
+  document.body.appendChild(popup);
+  setTimeout(() => popup.remove(), 2200);
+}
+
 function goScreen(id) {
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
@@ -2038,6 +2196,7 @@ function showResult(res,vbc,condor) {
     streakEl.style.cssText='border:1px solid rgba(255,120,30,.4);background:rgba(255,120,30,.1);color:#ff8844;padding:4px 12px;border-radius:5px;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.1em;';
   } else {streakEl.textContent='';streakEl.style.cssText='';}
   document.getElementById('resultOverlay').classList.add('show');
+  showCharActionPopup('¡LIFT REGISTRADO!');
 }
 
 function closeResult() {
@@ -2197,6 +2356,23 @@ function renderPerfil() {
   document.getElementById('condorPct').textContent=condPct+'%';
   document.getElementById('condBar').style.width=condPct+'%';
   renderEquipped();renderRecords();
+  // Estirpe banner
+  if (state.estirpe) {
+    const _est = ESTIRPES[state.estirpe];
+    const _evoF = getEstirpeFormForLevel(state.estirpe, _evo.level);
+    const _estBannerEl = document.getElementById('estirpeBanner');
+    if (_estBannerEl && _evoF) {
+      _estBannerEl.innerHTML = `<div class="profile-estirpe-banner" style="border-color:${_est.color}33">
+        <div class="char-figure" style="width:72px;height:72px;filter:drop-shadow(0 0 14px ${_est.color});">${_evoF.svg}</div>
+        <div class="profile-estirpe-info">
+          <div class="profile-estirpe-name" style="color:${_est.color}">${_est.icon} ${_est.name.toUpperCase()}</div>
+          <div class="profile-estirpe-form">${_evoF.name}</div>
+          <div class="profile-estirpe-bonus">${_est.bonus}</div>
+        </div>
+      </div>`;
+      _estBannerEl.style.display = 'block';
+    }
+  }
 }
 
 function renderEquipped() {
@@ -2737,7 +2913,10 @@ function completeSetup() {
   }
   // Update UI
   updateUI();
-  hideSetup();
+  // Show estirpe step instead of finishing immediately
+  initEstirpePicker();
+  document.getElementById('setup-s3').classList.remove('active');
+  document.getElementById('setup-s4').classList.add('active');
   addLog('<span class="ok">▶</span> Bienvenido al protocolo, ' + alias + ' · Disciplina: ' + (_setupDisc||'—'));
 }
 
@@ -2794,6 +2973,8 @@ function loadUserState(uid, user) {
         if(d.txHistory)      state.txHistory = d.txHistory;
         if(d.ownedSkills)    state.ownedSkills = d.ownedSkills;
         if(d.battleWins != null) state.battleWins = d.battleWins;
+        if(d.estirpe) state.estirpe = d.estirpe;
+        if(d.titanCardUsed) state.titanCardUsed = d.titanCardUsed;
         if(d.equippedSkills) state.equippedSkills = d.equippedSkills;
         if(d.streak != null) state.streak = d.streak;
         if(d.videosUploaded != null) state.videosUploaded = d.videosUploaded;
@@ -3236,10 +3417,29 @@ function showBattleResult(data) {
 
   haptic(won ? 'success' : 'error');
 
+  // ── Carta Titán offer on loss ──
+  if (!won && !isDraw) {
+    setTimeout(() => {
+      showTitanCardOffer(
+        () => {
+          const liftSec = document.getElementById('battle-lift-section');
+          if (liftSec) liftSec.style.display = 'block';
+          const resultEl = document.getElementById('battle-result-overlay');
+          if (resultEl) resultEl.style.display = 'none';
+          showBattleState('active');
+          if (typeof showNotification === 'function') showNotification('⚡ Carta Titán activa — ¡último intento!', 'success');
+          else if (typeof showToast === 'function') showToast('⚡ Carta Titán activa — ¡último intento!', 'success');
+        },
+        () => { if (typeof showToast === 'function') showToast('Has sido derrotado.', 'error'); }
+      );
+    }, 800);
+  }
+
   // ── Evolution check on win ──
   if (won && !isDraw) {
     const _prevEvo = state.evolutionLevel || 1;
     state.battleWins = (state.battleWins || 0) + 1;
+    showCharActionPopup('¡VICTORIA!');
     // Reward VBC locally (server also updates but for immediate feedback)
     if (data.reward) { state.vbc += data.reward; state.totalVBC += data.reward; updateNavBal(); }
     // Check if evolved
@@ -3248,7 +3448,8 @@ function showBattleResult(data) {
     if (window._db && window.currentUser) {
       const _uid = window.currentUser.uid;
       window._db.collection('vbc_users').doc(_uid).update({
-        battleWins: state.battleWins
+        battleWins: state.battleWins,
+        titanCardUsed: state.titanCardUsed || null
       }).catch(()=>{});
     }
   }
@@ -3283,7 +3484,244 @@ window.onLoginSuccess = function(...args) {
 // ════════════════════════════════════════
 // RE:MONSTER EVOLUTION SYSTEM
 // ════════════════════════════════════════
-const EVOLUTIONS = [
+const // ══ CARTA TITÁN — Attack on Titan fury revival ══════════════════
+const TITAN_COOLDOWN_DAYS = 30;
+
+function canUseTitanCard() {
+  if (!state.titanCardUsed) return true;
+  const last = new Date(state.titanCardUsed);
+  const now = new Date();
+  const diffDays = (now - last) / (1000 * 60 * 60 * 24);
+  return diffDays >= TITAN_COOLDOWN_DAYS;
+}
+
+function getTitanCardCooldownText() {
+  if (!state.titanCardUsed) return 'Disponible';
+  const last = new Date(state.titanCardUsed);
+  const now = new Date();
+  const diffDays = Math.floor((now - last) / (1000 * 60 * 60 * 24));
+  const remaining = TITAN_COOLDOWN_DAYS - diffDays;
+  if (remaining <= 0) return 'Disponible';
+  return `Se renueva en ${remaining} días`;
+}
+
+function activateTitanCard(onComplete) {
+  state.titanCardUsed = new Date().toISOString();
+  if (window._fbDb && _currentUid) {
+    window._fbDb.collection('users').doc(_currentUid).update({ titanCardUsed: state.titanCardUsed });
+  }
+  const ov = document.createElement('div');
+  ov.id = 'titan-overlay';
+  ov.style.cssText = `
+    position:fixed;inset:0;z-index:9999;background:#000;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    overflow:hidden;
+  `;
+  ov.innerHTML = `
+    <style>
+      @keyframes titan-shake { 0%,100%{transform:translate(0,0) rotate(0deg)} 10%{transform:translate(-8px,4px) rotate(-2deg)} 20%{transform:translate(8px,-4px) rotate(2deg)} 30%{transform:translate(-6px,6px) rotate(-1deg)} 40%{transform:translate(6px,-6px) rotate(1deg)} 50%{transform:translate(-4px,2px) rotate(-1deg)} 60%{transform:translate(4px,4px) rotate(1deg)} 70%{transform:translate(-2px,-2px) rotate(0deg)} 80%{transform:translate(2px,2px) rotate(1deg)} 90%{transform:translate(-2px,-4px) rotate(-1deg)} }
+      @keyframes titan-rise { 0%{opacity:0;transform:scale(0.3) translateY(120px)} 60%{opacity:1;transform:scale(1.15) translateY(-10px)} 100%{transform:scale(1) translateY(0)} }
+      @keyframes wire-left { 0%{stroke-dashoffset:200;opacity:0} 40%{opacity:1} 100%{stroke-dashoffset:0;opacity:1} }
+      @keyframes wire-right { 0%{stroke-dashoffset:200;opacity:0} 40%{opacity:1} 100%{stroke-dashoffset:0;opacity:1} }
+      @keyframes gear-spin { from{transform-origin:50% 50%;transform:rotate(0deg)} to{transform:rotate(360deg)} }
+      @keyframes titan-text-in { 0%{opacity:0;letter-spacing:30px} 100%{opacity:1;letter-spacing:4px} }
+      @keyframes titan-flash { 0%,100%{opacity:1} 50%{opacity:0.3} }
+      @keyframes steam-up { 0%{transform:translateY(0) scaleX(1);opacity:0.7} 100%{transform:translateY(-60px) scaleX(0.3);opacity:0} }
+      #titan-body { animation: titan-rise 1s cubic-bezier(.17,.67,.3,1.2) forwards; }
+      #titan-scene { animation: titan-shake 0.4s ease 0.5s 4; }
+      .titan-wire-l { stroke-dasharray:200; animation: wire-left 0.8s ease 1.2s forwards; }
+      .titan-wire-r { stroke-dasharray:200; animation: wire-right 0.8s ease 1.4s forwards; }
+      .gear-l { animation: gear-spin 0.6s linear 1.2s 3; }
+      .gear-r { animation: gear-spin 0.6s linear reverse 1.4s 3; }
+      #titan-label { animation: titan-text-in 0.8s ease 2s forwards; opacity:0; }
+      #titan-sub { animation: titan-flash 1s ease 2.8s 3; }
+      .steam { animation: steam-up 1s ease forwards; }
+    </style>
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 80%,#1a0000 0%,#000 70%);"></div>
+    <div style="position:absolute;bottom:0;left:0;right:0;height:30%;background:linear-gradient(to top,#0a0000,transparent);"></div>
+    <svg id="titan-scene" viewBox="0 0 320 260" width="320" style="position:relative;z-index:2;">
+      <line class="titan-wire-l" x1="0" y1="40" x2="130" y2="140" stroke="#aaa" stroke-width="1.5" stroke-linecap="round"/>
+      <line class="titan-wire-r" x1="320" y1="40" x2="190" y2="140" stroke="#aaa" stroke-width="1.5" stroke-linecap="round"/>
+      <g class="gear-l" style="transform-box:fill-box;transform-origin:center;">
+        <circle cx="20" cy="36" r="14" fill="none" stroke="#888" stroke-width="3"/>
+        <circle cx="20" cy="36" r="6" fill="#555"/>
+        <rect x="17" y="18" width="6" height="8" rx="2" fill="#888"/>
+        <rect x="17" y="46" width="6" height="8" rx="2" fill="#888"/>
+        <rect x="2" y="33" width="8" height="6" rx="2" fill="#888"/>
+        <rect x="30" y="33" width="8" height="6" rx="2" fill="#888"/>
+      </g>
+      <g class="gear-r" style="transform-box:fill-box;transform-origin:center;">
+        <circle cx="300" cy="36" r="14" fill="none" stroke="#888" stroke-width="3"/>
+        <circle cx="300" cy="36" r="6" fill="#555"/>
+        <rect x="297" y="18" width="6" height="8" rx="2" fill="#888"/>
+        <rect x="297" y="46" width="6" height="8" rx="2" fill="#888"/>
+        <rect x="282" y="33" width="8" height="6" rx="2" fill="#888"/>
+        <rect x="310" y="33" width="8" height="6" rx="2" fill="#888"/>
+      </g>
+      <g id="titan-body">
+        <path d="M148 120 Q140 160 130 200 Q160 180 160 200 Q160 180 190 200 Q180 160 172 120 Z" fill="#2d5a27" opacity="0.9"/>
+        <rect x="150" y="120" width="20" height="32" rx="4" fill="#4a7c59"/>
+        <circle cx="160" cy="110" r="13" fill="#f5d0a0"/>
+        <path d="M148 104 Q160 96 172 104" fill="#4a3728" stroke="none"/>
+        <ellipse cx="155" cy="110" rx="4" ry="3" fill="#fff"/>
+        <ellipse cx="158" cy="110" rx="4" ry="3" fill="#fff"/>
+        <circle cx="156" cy="110" r="2" fill="#2a1a00"/>
+        <circle cx="159" cy="110" r="2" fill="#2a1a00"/>
+        <rect x="152" y="121" width="16" height="6" rx="3" fill="#cc3300"/>
+        <line x1="150" y1="128" x2="124" y2="148" stroke="#4a7c59" stroke-width="5" stroke-linecap="round"/>
+        <rect x="108" y="143" width="20" height="5" rx="2" fill="#aaa" transform="rotate(-30 108 143)"/>
+        <line x1="170" y1="128" x2="196" y2="148" stroke="#4a7c59" stroke-width="5" stroke-linecap="round"/>
+        <rect x="188" y="143" width="20" height="5" rx="2" fill="#aaa" transform="rotate(30 188 143)"/>
+        <line x1="154" y1="152" x2="146" y2="180" stroke="#3a5c3a" stroke-width="5" stroke-linecap="round"/>
+        <line x1="166" y1="152" x2="174" y2="180" stroke="#3a5c3a" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="148" cy="148" r="5" fill="#888" stroke="#555" stroke-width="1"/>
+        <circle cx="172" cy="148" r="5" fill="#888" stroke="#555" stroke-width="1"/>
+      </g>
+      <ellipse class="steam" cx="160" cy="200" rx="18" ry="6" fill="#ff4400" opacity="0.7" style="animation-delay:0.8s"/>
+      <ellipse class="steam" cx="145" cy="210" rx="10" ry="4" fill="#ff6600" opacity="0.5" style="animation-delay:1s"/>
+      <ellipse class="steam" cx="175" cy="205" rx="12" ry="4" fill="#ff4400" opacity="0.5" style="animation-delay:1.2s"/>
+    </svg>
+    <div id="titan-label" style="position:relative;z-index:3;text-align:center;margin-top:12px;">
+      <div style="font-family:'Courier New',monospace;font-size:22px;font-weight:900;color:#ff4400;letter-spacing:4px;text-shadow:0 0 20px #ff4400,0 0 40px #ff6600;">CARTA TITÁN</div>
+      <div id="titan-sub" style="font-family:'Courier New',monospace;font-size:12px;color:#aaa;margin-top:6px;letter-spacing:2px;">SEGUNDA OPORTUNIDAD ACTIVADA</div>
+    </div>
+    <div style="position:relative;z-index:3;margin-top:28px;">
+      <button id="titan-go-btn" onclick="document.getElementById('titan-overlay').remove();if(window._titanCallback)window._titanCallback();" style="background:linear-gradient(135deg,#cc3300,#ff4400);color:#fff;border:none;border-radius:8px;padding:14px 36px;font-family:'Courier New',monospace;font-size:15px;font-weight:700;letter-spacing:3px;cursor:pointer;box-shadow:0 0 20px #ff4400;display:none;">⚡ ATACAR</button>
+    </div>
+  `;
+  document.body.appendChild(ov);
+  window._titanCallback = onComplete;
+  if (navigator.vibrate) navigator.vibrate([100,50,200,50,400]);
+  setTimeout(() => {
+    const btn = document.getElementById('titan-go-btn');
+    if (btn) btn.style.display = 'block';
+  }, 3200);
+}
+
+function showTitanCardOffer(onAccept, onDecline) {
+  const available = canUseTitanCard();
+  const cooldownText = getTitanCardCooldownText();
+  const ov = document.createElement('div');
+  ov.id = 'titan-offer';
+  ov.style.cssText = `position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;`;
+  ov.innerHTML = `
+    <div style="background:#0a0a0a;border:1px solid ${available ? '#cc3300' : '#333'};border-radius:16px;padding:28px 24px;max-width:320px;text-align:center;box-shadow:0 0 30px ${available ? '#cc330055' : 'transparent'};">
+      <div style="font-size:42px;margin-bottom:8px;">⚔️</div>
+      <div style="font-family:'Courier New',monospace;font-size:18px;font-weight:900;color:${available ? '#ff4400' : '#666'};letter-spacing:2px;margin-bottom:8px;">CARTA TITÁN</div>
+      <div style="font-family:'Courier New',monospace;font-size:12px;color:#888;margin-bottom:16px;line-height:1.5;">${available ? '¿Desatar la furia del titán y obtener<br>una segunda oportunidad?' : 'Carta ya utilizada este mes.'}</div>
+      <div style="font-size:11px;color:${available ? '#ff6600' : '#555'};margin-bottom:20px;font-family:monospace;">${cooldownText}</div>
+      ${available ? `
+        <button onclick="document.getElementById('titan-offer').remove();activateTitanCard(window._titanAccept);" style="background:#cc3300;color:#fff;border:none;border-radius:8px;padding:12px 28px;font-family:'Courier New',monospace;font-size:14px;font-weight:700;cursor:pointer;margin-right:10px;letter-spacing:2px;">DESATAR</button>
+        <button onclick="document.getElementById('titan-offer').remove();if(window._titanDecline)window._titanDecline();" style="background:#1a1a1a;color:#888;border:1px solid #333;border-radius:8px;padding:12px 20px;font-family:'Courier New',monospace;font-size:13px;cursor:pointer;">Rendirse</button>
+      ` : `
+        <button onclick="document.getElementById('titan-offer').remove();if(window._titanDecline)window._titanDecline();" style="background:#1a1a1a;color:#aaa;border:1px solid #333;border-radius:8px;padding:12px 28px;font-family:'Courier New',monospace;font-size:13px;cursor:pointer;">Aceptar derrota</button>
+      `}
+    </div>
+  `;
+  document.body.appendChild(ov);
+  window._titanAccept = onAccept;
+  window._titanDecline = onDecline;
+}
+
+// ══ ESTIRPES — Lineages with per-form minimalist SVG art ═══════════════
+const ESTIRPES = {
+  oni: {
+    id:'oni', name:'Oni', element:'Sangre',
+    color:'#ff2244', glow:'rgba(255,34,68,0.4)',
+    bonus:'+15% Score de Fuerza',
+    desc:'La línea que consume la ira. Evoluciona a través de la destrucción.',
+    icon:'🩸',
+    forms:[
+      { level:1, name:'Imp Rojo',      svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="38" r="14" fill="#ff2244" opacity="0.9"/><polygon points="30,26 26,14 34,22" fill="#ff2244"/><polygon points="50,26 54,14 46,22" fill="#ff2244"/><rect x="33" y="52" width="14" height="18" rx="4" fill="#cc1133"/><line x1="40" y1="70" x2="35" y2="85" stroke="#cc1133" stroke-width="3" stroke-linecap="round"/><line x1="40" y1="70" x2="45" y2="85" stroke="#cc1133" stroke-width="3" stroke-linecap="round"/><circle cx="34" cy="38" r="2.5" fill="#fff"/><circle cx="46" cy="38" r="2.5" fill="#fff"/></svg>` },
+      { level:2, name:'Oni Menor',     svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="36" r="17" fill="#ff2244" opacity="0.9"/><polygon points="28,22 22,6 33,18" fill="#ff3355"/><polygon points="52,22 58,6 47,18" fill="#ff3355"/><rect x="30" y="53" width="20" height="22" rx="5" fill="#cc1133"/><line x1="40" y1="75" x2="33" y2="92" stroke="#cc1133" stroke-width="4" stroke-linecap="round"/><line x1="40" y1="75" x2="47" y2="92" stroke="#cc1133" stroke-width="4" stroke-linecap="round"/><line x1="22" y1="60" x2="30" y2="66" stroke="#cc1133" stroke-width="3" stroke-linecap="round"/><line x1="58" y1="60" x2="50" y2="66" stroke="#cc1133" stroke-width="3" stroke-linecap="round"/><circle cx="33" cy="36" r="3" fill="#fff"/><circle cx="47" cy="36" r="3" fill="#fff"/><line x1="34" y1="44" x2="46" y2="44" stroke="#880022" stroke-width="2"/></svg>` },
+      { level:3, name:'Ogre Oni',      svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="34" r="19" fill="#ee1133"/><polygon points="26,20 18,2 32,16" fill="#ff4455"/><polygon points="54,20 62,2 48,16" fill="#ff4455"/><polygon points="40,18 37,8 43,8" fill="#ff6677"/><rect x="26" y="53" width="28" height="26" rx="6" fill="#cc0022"/><line x1="40" y1="79" x2="31" y2="96" stroke="#cc0022" stroke-width="5" stroke-linecap="round"/><line x1="40" y1="79" x2="49" y2="96" stroke="#cc0022" stroke-width="5" stroke-linecap="round"/><line x1="18" y1="57" x2="26" y2="65" stroke="#cc0022" stroke-width="4" stroke-linecap="round"/><line x1="62" y1="57" x2="54" y2="65" stroke="#cc0022" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="34" r="3.5" fill="#fff"/><circle cx="48" cy="34" r="3.5" fill="#fff"/><circle cx="32" cy="34" r="1.5" fill="#ff0000"/><circle cx="48" cy="34" r="1.5" fill="#ff0000"/><path d="M34 43 Q40 47 46 43" stroke="#880022" stroke-width="2" fill="none"/></svg>` },
+      { level:4, name:'Blood Oni',     svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="32" r="21" fill="#dd0022" opacity="0.95"/><polygon points="24,18 14,0 30,14" fill="#ff2244"/><polygon points="56,18 66,0 50,14" fill="#ff2244"/><polygon points="40,16 37,4 43,4" fill="#ff5566"/><polygon points="33,14 30,4 36,12" fill="#ff5566"/><polygon points="47,14 50,4 44,12" fill="#ff5566"/><rect x="24" y="53" width="32" height="28" rx="7" fill="#bb0011"/><line x1="40" y1="81" x2="30" y2="98" stroke="#bb0011" stroke-width="5" stroke-linecap="round"/><line x1="40" y1="81" x2="50" y2="98" stroke="#bb0011" stroke-width="5" stroke-linecap="round"/><line x1="14" y1="55" x2="24" y2="64" stroke="#bb0011" stroke-width="5" stroke-linecap="round"/><line x1="66" y1="55" x2="56" y2="64" stroke="#bb0011" stroke-width="5" stroke-linecap="round"/><circle cx="31" cy="32" r="4" fill="#fff"/><circle cx="49" cy="32" r="4" fill="#fff"/><circle cx="31" cy="32" r="2" fill="#cc0000"/><circle cx="49" cy="32" r="2" fill="#cc0000"/><line x1="26" y1="26" x2="20" y2="22" stroke="#ff4444" stroke-width="2"/><line x1="54" y1="26" x2="60" y2="22" stroke="#ff4444" stroke-width="2"/></svg>` },
+      { level:5, name:'Chaos Oni',     svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="30" r="22" fill="#cc0022" opacity="0.95"/><polygon points="22,16 10,-2 28,12" fill="#ff2244"/><polygon points="58,16 70,-2 52,12" fill="#ff2244"/><polygon points="40,14 37,0 43,0" fill="#ff4455"/><polygon points="30,12 26,0 33,8" fill="#ee3344"/><polygon points="50,12 54,0 47,8" fill="#ee3344"/><polygon points="35,6 32,-4 38,2" fill="#dd2233"/><polygon points="45,6 48,-4 42,2" fill="#dd2233"/><rect x="22" y="52" width="36" height="30" rx="7" fill="#aa0011"/><line x1="40" y1="82" x2="29" y2="98" stroke="#aa0011" stroke-width="6" stroke-linecap="round"/><line x1="40" y1="82" x2="51" y2="98" stroke="#aa0011" stroke-width="6" stroke-linecap="round"/><line x1="12" y1="53" x2="22" y2="63" stroke="#aa0011" stroke-width="5" stroke-linecap="round"/><line x1="68" y1="53" x2="58" y2="63" stroke="#aa0011" stroke-width="5" stroke-linecap="round"/><circle cx="30" cy="30" r="4.5" fill="#fff"/><circle cx="50" cy="30" r="4.5" fill="#fff"/><circle cx="30" cy="30" r="2.5" fill="#ff0000"/><circle cx="50" cy="30" r="2.5" fill="#ff0000"/><path d="M32 40 Q40 46 48 40" stroke="#660011" stroke-width="2.5" fill="none"/><circle cx="40" cy="2" r="3" fill="#ff2244" opacity="0.5"/></svg>` },
+      { level:6, name:'War Demon',     svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="28" r="23" fill="#bb0011"/><polygon points="20,14 6,-4 26,10" fill="#ff1133"/><polygon points="60,14 74,-4 54,10" fill="#ff1133"/><polygon points="40,12 36,-2 44,-2" fill="#ff3344"/><polygon points="28,10 23,-4 32,6" fill="#ee2233"/><polygon points="52,10 57,-4 48,6" fill="#ee2233"/><rect x="18" y="51" width="44" height="34" rx="8" fill="#990011"/><line x1="10" y1="50" x2="18" y2="62" stroke="#990011" stroke-width="6" stroke-linecap="round"/><line x1="70" y1="50" x2="62" y2="62" stroke="#990011" stroke-width="6" stroke-linecap="round"/><line x1="40" y1="85" x2="28" y2="100" stroke="#990011" stroke-width="6" stroke-linecap="round"/><line x1="40" y1="85" x2="52" y2="100" stroke="#990011" stroke-width="6" stroke-linecap="round"/><circle cx="29" cy="28" r="5" fill="#fff"/><circle cx="51" cy="28" r="5" fill="#fff"/><circle cx="29" cy="28" r="3" fill="#ff0000"/><circle cx="51" cy="28" r="3" fill="#ff0000"/><circle cx="29" cy="28" r="1.5" fill="#ffff00"/><circle cx="51" cy="28" r="1.5" fill="#ffff00"/><path d="M30 40 Q40 48 50 40" stroke="#550011" stroke-width="3" fill="none"/><rect x="24" y="51" width="32" height="5" rx="2" fill="#cc1122" opacity="0.5"/></svg>` },
+      { level:7, name:'Demon King',    svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="26" r="24" fill="#990011"/><polygon points="18,12 2,-8 24,8" fill="#ff0022"/><polygon points="62,12 78,-8 56,8" fill="#ff0022"/><polygon points="40,10 35,-6 45,-6" fill="#ff2244"/><polygon points="26,8 20,-8 30,4" fill="#ee1133"/><polygon points="54,8 60,-8 50,4" fill="#ee1133"/><polygon points="32,4 28,-8 35,0" fill="#dd0022"/><polygon points="48,4 52,-8 45,0" fill="#dd0022"/><rect x="14" y="50" width="52" height="38" rx="9" fill="#770011"/><line x1="6" y1="48" x2="14" y2="62" stroke="#770011" stroke-width="7" stroke-linecap="round"/><line x1="74" y1="48" x2="66" y2="62" stroke="#770011" stroke-width="7" stroke-linecap="round"/><line x1="40" y1="88" x2="26" y2="100" stroke="#770011" stroke-width="7" stroke-linecap="round"/><line x1="40" y1="88" x2="54" y2="100" stroke="#770011" stroke-width="7" stroke-linecap="round"/><circle cx="28" cy="26" r="6" fill="#fff"/><circle cx="52" cy="26" r="6" fill="#fff"/><circle cx="28" cy="26" r="4" fill="#ff0000"/><circle cx="52" cy="26" r="4" fill="#ff0000"/><circle cx="28" cy="26" r="2" fill="#fff"/><circle cx="52" cy="26" r="2" fill="#fff"/><path d="M28 40 Q40 50 52 40" stroke="#440000" stroke-width="3.5" fill="none"/><rect x="22" y="50" width="36" height="6" rx="3" fill="#ff1133" opacity="0.4"/><circle cx="40" cy="14" r="5" fill="#ff0022" opacity="0.6"/><circle cx="40" cy="14" r="2" fill="#fff" opacity="0.8"/></svg>` },
+    ]
+  },
+  tempest: {
+    id:'tempest', name:'Tempest', element:'Viento',
+    color:'#00ffcc', glow:'rgba(0,255,204,0.4)',
+    bonus:'+15% Score de Velocidad',
+    desc:'La línea del viento eterno. Velocidad como arma, tormenta como destino.',
+    icon:'🌪️',
+    forms:[
+      { level:1, name:'Sprite Viento',     svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="40" rx="12" ry="15" fill="#00ffcc" opacity="0.85"/><path d="M28 36 Q18 30 14 22" stroke="#00ffcc" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M52 36 Q62 30 66 22" stroke="#00ffcc" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M32 52 Q24 62 20 72" stroke="#00ccaa" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M48 52 Q56 62 60 72" stroke="#00ccaa" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="35" cy="38" r="2" fill="#fff" opacity="0.9"/><circle cx="45" cy="38" r="2" fill="#fff" opacity="0.9"/><path d="M36 45 Q40 48 44 45" stroke="#008866" stroke-width="1.5" fill="none"/></svg>` },
+      { level:2, name:'Storm Runner',      svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="36" rx="14" ry="17" fill="#00eecc" opacity="0.9"/><path d="M26 30 Q14 22 8 12" stroke="#00ffcc" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M54 30 Q66 22 72 12" stroke="#00ffcc" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M26 28 Q16 18 12 8" stroke="#00ffcc" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.6"/><path d="M32 53 Q26 66 22 78" stroke="#00ccaa" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M48 53 Q54 66 58 78" stroke="#00ccaa" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="33" cy="35" r="2.5" fill="#fff"/><circle cx="47" cy="35" r="2.5" fill="#fff"/><path d="M35 44 Q40 48 45 44" stroke="#007755" stroke-width="2" fill="none"/></svg>` },
+      { level:3, name:'Gale Warrior',      svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="34" rx="16" ry="19" fill="#00ddbb" opacity="0.9"/><path d="M40 15 Q36 2 28 -4" stroke="#00ffcc" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M24 28 Q10 18 4 6" stroke="#00ffcc" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M56 28 Q70 18 76 6" stroke="#00ffcc" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M40 15 Q44 2 52 -4" stroke="#00ffcc" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/><rect x="28" y="53" width="24" height="28" rx="8" fill="#00aa99"/><path d="M32 81 Q28 92 24 100" stroke="#00aa99" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M48 81 Q52 92 56 100" stroke="#00aa99" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="33" cy="33" r="3" fill="#fff"/><circle cx="47" cy="33" r="3" fill="#fff"/><circle cx="33" cy="33" r="1.5" fill="#00ffcc"/><circle cx="47" cy="33" r="1.5" fill="#00ffcc"/></svg>` },
+      { level:4, name:'Thunder Herald',    svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="32" rx="18" ry="20" fill="#00ccaa" opacity="0.95"/><path d="M22 24 Q6 12 0 0" stroke="#00ffcc" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M58 24 Q74 12 80 0" stroke="#00ffcc" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M40 12 Q36 -2 30 -8" stroke="#00ffcc" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M40 12 Q44 -2 50 -8" stroke="#00ffcc" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/><polygon points="40,2 36,12 44,12" fill="#00ffcc" opacity="0.5"/><rect x="26" y="52" width="28" height="30" rx="8" fill="#008877"/><line x1="18" y1="50" x2="26" y2="60" stroke="#008877" stroke-width="5" stroke-linecap="round"/><line x1="62" y1="50" x2="54" y2="60" stroke="#008877" stroke-width="5" stroke-linecap="round"/><path d="M32 82 Q28 93 24 100" stroke="#008877" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M48 82 Q52 93 56 100" stroke="#008877" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="32" cy="32" r="3.5" fill="#fff"/><circle cx="48" cy="32" r="3.5" fill="#fff"/><circle cx="32" cy="32" r="2" fill="#00ffcc"/><circle cx="48" cy="32" r="2" fill="#00ffcc"/></svg>` },
+      { level:5, name:'Storm Lord',        svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="30" rx="19" ry="21" fill="#00bb99" opacity="0.95"/><path d="M21 22 Q4 8 -2 -4" stroke="#00ffcc" stroke-width="3.5" fill="none" stroke-linecap="round"/><path d="M59 22 Q76 8 82 -4" stroke="#00ffcc" stroke-width="3.5" fill="none" stroke-linecap="round"/><path d="M40 9 Q33 -6 26 -12" stroke="#00ffcc" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M40 9 Q47 -6 54 -12" stroke="#00ffcc" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M28 14 Q18 2 12 -6" stroke="#00ffcc" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/><path d="M52 14 Q62 2 68 -6" stroke="#00ffcc" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/><rect x="22" y="51" width="36" height="32" rx="9" fill="#007766"/><line x1="12" y1="49" x2="22" y2="61" stroke="#007766" stroke-width="6" stroke-linecap="round"/><line x1="68" y1="49" x2="58" y2="61" stroke="#007766" stroke-width="6" stroke-linecap="round"/><path d="M30 83 Q26 94 22 100" stroke="#007766" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M50 83 Q54 94 58 100" stroke="#007766" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="30" cy="30" r="4" fill="#fff"/><circle cx="50" cy="30" r="4" fill="#fff"/><circle cx="30" cy="30" r="2.5" fill="#00ffcc"/><circle cx="50" cy="30" r="2.5" fill="#00ffcc"/></svg>` },
+      { level:6, name:'Tempest Sovereign', svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="28" rx="20" ry="22" fill="#00aa88" opacity="0.95"/><path d="M20 18 Q2 2 -4 -10" stroke="#00ffcc" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M60 18 Q78 2 84 -10" stroke="#00ffcc" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M40 6 Q30 -10 22 -16" stroke="#00ffcc" stroke-width="3.5" fill="none" stroke-linecap="round"/><path d="M40 6 Q50 -10 58 -16" stroke="#00ffcc" stroke-width="3.5" fill="none" stroke-linecap="round"/><path d="M26 10 Q14 -4 8 -12" stroke="#00ffcc" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.6"/><path d="M54 10 Q66 -4 72 -12" stroke="#00ffcc" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.6"/><path d="M32 4 Q24 -10 18 -18" stroke="#00ffcc" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.3"/><rect x="18" y="50" width="44" height="36" rx="10" fill="#006655"/><line x1="8" y1="47" x2="18" y2="61" stroke="#006655" stroke-width="7" stroke-linecap="round"/><line x1="72" y1="47" x2="62" y2="61" stroke="#006655" stroke-width="7" stroke-linecap="round"/><path d="M28 86 Q23 97 18 100" stroke="#006655" stroke-width="6" fill="none" stroke-linecap="round"/><path d="M52 86 Q57 97 62 100" stroke="#006655" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="29" cy="28" r="4.5" fill="#fff"/><circle cx="51" cy="28" r="4.5" fill="#fff"/><circle cx="29" cy="28" r="3" fill="#00ffcc"/><circle cx="51" cy="28" r="3" fill="#00ffcc"/><circle cx="29" cy="28" r="1.5" fill="#fff"/><circle cx="51" cy="28" r="1.5" fill="#fff"/></svg>` },
+      { level:7, name:'Storm Emperor',     svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="26" rx="21" ry="23" fill="#009977"/><path d="M19 14 Q0 -2 -6 -16" stroke="#00ffcc" stroke-width="4.5" fill="none" stroke-linecap="round"/><path d="M61 14 Q80 -2 86 -16" stroke="#00ffcc" stroke-width="4.5" fill="none" stroke-linecap="round"/><path d="M40 3 Q28 -14 18 -20" stroke="#00ffcc" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M40 3 Q52 -14 62 -20" stroke="#00ffcc" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M24 6 Q10 -10 4 -20" stroke="#00ffcc" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/><path d="M56 6 Q70 -10 76 -20" stroke="#00ffcc" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/><path d="M30 0 Q20 -16 14 -24" stroke="#00ffcc" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.4"/><path d="M50 0 Q60 -16 66 -24" stroke="#00ffcc" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.4"/><rect x="14" y="49" width="52" height="40" rx="11" fill="#005544"/><line x1="4" y1="45" x2="14" y2="61" stroke="#005544" stroke-width="8" stroke-linecap="round"/><line x1="76" y1="45" x2="66" y2="61" stroke="#005544" stroke-width="8" stroke-linecap="round"/><path d="M26 89 Q20 99 14 100" stroke="#005544" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M54 89 Q60 99 66 100" stroke="#005544" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="28" cy="26" r="5" fill="#fff"/><circle cx="52" cy="26" r="5" fill="#fff"/><circle cx="28" cy="26" r="3.5" fill="#00ffcc"/><circle cx="52" cy="26" r="3.5" fill="#00ffcc"/><circle cx="28" cy="26" r="1.5" fill="#fff"/><circle cx="52" cy="26" r="1.5" fill="#fff"/><ellipse cx="40" cy="49" rx="14" ry="3" fill="#00ffcc" opacity="0.3"/></svg>` },
+    ]
+  },
+  undead: {
+    id:'undead', name:'Undead', element:'Sombra',
+    color:'#aa44ff', glow:'rgba(170,68,255,0.4)',
+    bonus:'+20% Bonus Condor',
+    desc:'La línea que trasciende la muerte. El dolor forja al inmortal.',
+    icon:'🦴',
+    forms:[
+      { level:1, name:'Bone Walker',   svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="22" r="11" fill="none" stroke="#aa44ff" stroke-width="2.5"/><circle cx="35" cy="21" r="2" fill="#aa44ff"/><circle cx="45" cy="21" r="2" fill="#aa44ff"/><line x1="40" y1="33" x2="40" y2="65" stroke="#aa44ff" stroke-width="2.5" stroke-linecap="round"/><line x1="40" y1="42" x2="28" y2="55" stroke="#aa44ff" stroke-width="2" stroke-linecap="round"/><line x1="40" y1="42" x2="52" y2="55" stroke="#aa44ff" stroke-width="2" stroke-linecap="round"/><line x1="40" y1="65" x2="30" y2="82" stroke="#aa44ff" stroke-width="2.5" stroke-linecap="round"/><line x1="40" y1="65" x2="50" y2="82" stroke="#aa44ff" stroke-width="2.5" stroke-linecap="round"/><line x1="30" y1="82" x2="26" y2="90" stroke="#8833dd" stroke-width="2" stroke-linecap="round"/><line x1="50" y1="82" x2="54" y2="90" stroke="#8833dd" stroke-width="2" stroke-linecap="round"/></svg>` },
+      { level:2, name:'Skeleton',      svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="20" r="13" fill="none" stroke="#bb55ff" stroke-width="2.5"/><circle cx="34" cy="19" r="2.5" fill="#bb55ff"/><circle cx="46" cy="19" r="2.5" fill="#bb55ff"/><path d="M34 26 Q40 30 46 26" stroke="#7722bb" stroke-width="1.5" fill="none"/><line x1="40" y1="33" x2="40" y2="60" stroke="#bb55ff" stroke-width="3" stroke-linecap="round"/><line x1="30" y1="38" x2="40" y2="44" stroke="#bb55ff" stroke-width="2.5"/><line x1="50" y1="38" x2="40" y2="44" stroke="#bb55ff" stroke-width="2.5"/><line x1="30" y1="38" x2="24" y2="54" stroke="#bb55ff" stroke-width="2" stroke-linecap="round"/><line x1="50" y1="38" x2="56" y2="54" stroke="#bb55ff" stroke-width="2" stroke-linecap="round"/><line x1="34" y1="60" x2="40" y2="60" stroke="#bb55ff" stroke-width="2.5"/><line x1="46" y1="60" x2="40" y2="60" stroke="#bb55ff" stroke-width="2.5"/><line x1="34" y1="60" x2="28" y2="80" stroke="#bb55ff" stroke-width="2.5" stroke-linecap="round"/><line x1="46" y1="60" x2="52" y2="80" stroke="#bb55ff" stroke-width="2.5" stroke-linecap="round"/><line x1="28" y1="80" x2="24" y2="92" stroke="#8833dd" stroke-width="2" stroke-linecap="round"/><line x1="52" y1="80" x2="56" y2="92" stroke="#8833dd" stroke-width="2" stroke-linecap="round"/></svg>` },
+      { level:3, name:'Revenant',      svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="22" r="14" fill="#1a0033" stroke="#cc66ff" stroke-width="2.5"/><circle cx="33" cy="21" r="3" fill="#cc66ff"/><circle cx="47" cy="21" r="3" fill="#cc66ff"/><path d="M34 28 Q40 33 46 28" stroke="#8833cc" stroke-width="2" fill="none"/><path d="M26 36 Q20 28 16 34 Q20 40 26 36Z" fill="#cc66ff" opacity="0.6"/><path d="M54 36 Q60 28 64 34 Q60 40 54 36Z" fill="#cc66ff" opacity="0.6"/><rect x="30" y="36" width="20" height="28" rx="5" fill="#1a0033" stroke="#cc66ff" stroke-width="2"/><line x1="20" y1="95" x2="30" y2="64" stroke="#1a0033" stroke-width="18" stroke-linecap="round"/><line x1="60" y1="95" x2="50" y2="64" stroke="#1a0033" stroke-width="18" stroke-linecap="round"/><line x1="20" y1="95" x2="30" y2="64" stroke="#9922cc" stroke-width="3" stroke-linecap="round"/><line x1="60" y1="95" x2="50" y2="64" stroke="#9922cc" stroke-width="3" stroke-linecap="round"/></svg>` },
+      { level:4, name:'Specter',       svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="20" r="15" fill="#220044" stroke="#dd77ff" stroke-width="2.5"/><circle cx="32" cy="19" r="3.5" fill="#dd77ff"/><circle cx="48" cy="19" r="3.5" fill="#dd77ff"/><path d="M33 27 Q40 33 47 27" stroke="#9933dd" stroke-width="2" fill="none"/><path d="M10 36 Q20 20 30 36" fill="#220044" stroke="#dd77ff" stroke-width="2" fill-opacity="0.7"/><path d="M70 36 Q60 20 50 36" fill="#220044" stroke="#dd77ff" stroke-width="2" fill-opacity="0.7"/><path d="M25 35 L25 100 Q40 85 55 100 L55 35 Q40 50 25 35Z" fill="#220044" stroke="#aa55ee" stroke-width="2"/><path d="M25 50 Q40 65 55 50" stroke="#dd77ff" stroke-width="1.5" fill="none" opacity="0.5"/><path d="M25 65 Q40 80 55 65" stroke="#dd77ff" stroke-width="1.5" fill="none" opacity="0.3"/></svg>` },
+      { level:5, name:'Wraith',        svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="18" r="16" fill="#2d0055" stroke="#ee88ff" stroke-width="3"/><circle cx="31" cy="17" r="4" fill="#ee88ff"/><circle cx="49" cy="17" r="4" fill="#ee88ff"/><circle cx="31" cy="17" r="2" fill="#aa00ff"/><circle cx="49" cy="17" r="2" fill="#aa00ff"/><path d="M10 32 Q18 14 30 32" fill="#2d0055" stroke="#ee88ff" stroke-width="2.5" fill-opacity="0.8"/><path d="M70 32 Q62 14 50 32" fill="#2d0055" stroke="#ee88ff" stroke-width="2.5" fill-opacity="0.8"/><path d="M22 34 L22 100 Q31 88 40 100 Q49 88 58 100 L58 34 Q40 52 22 34Z" fill="#2d0055" stroke="#bb55ee" stroke-width="2.5"/><line x1="22" y1="50" x2="14" y2="44" stroke="#ee88ff" stroke-width="2" stroke-linecap="round"/><line x1="58" y1="50" x2="66" y2="44" stroke="#ee88ff" stroke-width="2" stroke-linecap="round"/><path d="M22 48 Q40 66 58 48" stroke="#ee88ff" stroke-width="1.5" fill="none" opacity="0.6"/><path d="M22 64 Q40 82 58 64" stroke="#ee88ff" stroke-width="1.5" fill="none" opacity="0.4"/></svg>` },
+      { level:6, name:'Lich',          svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="16" r="17" fill="#3d0066" stroke="#ff99ff" stroke-width="3"/><circle cx="30" cy="15" r="4.5" fill="#ff99ff"/><circle cx="50" cy="15" r="4.5" fill="#ff99ff"/><circle cx="30" cy="15" r="2.5" fill="#cc00ff"/><circle cx="50" cy="15" r="2.5" fill="#cc00ff"/><path d="M32 24 Q40 30 48 24" stroke="#aa00dd" stroke-width="2" fill="none"/><path d="M8 30 Q16 10 28 30" fill="#3d0066" stroke="#ff99ff" stroke-width="2.5" fill-opacity="0.9"/><path d="M72 30 Q64 10 52 30" fill="#3d0066" stroke="#ff99ff" stroke-width="2.5" fill-opacity="0.9"/><path d="M20 33 L20 100 Q29 85 40 100 Q51 85 60 100 L60 33 Q40 55 20 33Z" fill="#3d0066" stroke="#cc66ee" stroke-width="2.5"/><line x1="20" y1="48" x2="4" y2="38" stroke="#ff99ff" stroke-width="3" stroke-linecap="round"/><line x1="4" y1="38" x2="4" y2="52" stroke="#ff99ff" stroke-width="3" stroke-linecap="round"/><line x1="60" y1="48" x2="76" y2="38" stroke="#ff99ff" stroke-width="3" stroke-linecap="round"/><line x1="76" y1="38" x2="76" y2="28" stroke="#ff99ff" stroke-width="3" stroke-linecap="round"/><circle cx="76" cy="26" r="4" fill="#ff99ff" opacity="0.7"/><path d="M20 55 Q40 75 60 55" stroke="#ff99ff" stroke-width="1.5" fill="none" opacity="0.5"/><path d="M20 72 Q40 92 60 72" stroke="#ff99ff" stroke-width="1" fill="none" opacity="0.3"/><polygon points="40,0 37,8 40,5 43,8" fill="#ff99ff" opacity="0.8"/></svg>` },
+      { level:7, name:'Lich Overlord', svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="14" r="18" fill="#4d0077" stroke="#ffaaff" stroke-width="3.5"/><circle cx="29" cy="13" r="5" fill="#ffaaff"/><circle cx="51" cy="13" r="5" fill="#ffaaff"/><circle cx="29" cy="13" r="3" fill="#ee00ff"/><circle cx="51" cy="13" r="3" fill="#ee00ff"/><circle cx="29" cy="13" r="1.5" fill="#fff"/><circle cx="51" cy="13" r="1.5" fill="#fff"/><path d="M31 23 Q40 30 49 23" stroke="#cc00ee" stroke-width="2.5" fill="none"/><path d="M6 28 Q12 6 26 28" fill="#4d0077" stroke="#ffaaff" stroke-width="3" fill-opacity="1"/><path d="M74 28 Q68 6 54 28" fill="#4d0077" stroke="#ffaaff" stroke-width="3" fill-opacity="1"/><polygon points="28,-4 34,0 40,-8 46,0 52,-4 46,4 40,0 34,4" fill="#ffaaff" opacity="0.9"/><path d="M18 32 L18 100 Q27 83 40 100 Q53 83 62 100 L62 32 Q40 58 18 32Z" fill="#4d0077" stroke="#dd77ff" stroke-width="3"/><line x1="18" y1="46" x2="2" y2="34" stroke="#ffaaff" stroke-width="3.5" stroke-linecap="round"/><line x1="2" y1="34" x2="0" y2="20" stroke="#ffaaff" stroke-width="3.5" stroke-linecap="round"/><circle cx="0" cy="17" r="5" fill="#ee00ff" opacity="0.8"/><line x1="62" y1="46" x2="78" y2="34" stroke="#ffaaff" stroke-width="3.5" stroke-linecap="round"/><line x1="78" y1="34" x2="80" y2="20" stroke="#ffaaff" stroke-width="3.5" stroke-linecap="round"/><circle cx="80" cy="17" r="5" fill="#ee00ff" opacity="0.8"/><path d="M18 52 Q40 74 62 52" stroke="#ffaaff" stroke-width="2" fill="none" opacity="0.6"/><path d="M18 68 Q40 90 62 68" stroke="#ffaaff" stroke-width="1.5" fill="none" opacity="0.4"/><ellipse cx="40" cy="32" rx="10" ry="2" fill="#ee00ff" opacity="0.3"/></svg>` },
+    ]
+  },
+  arcane: {
+    id:'arcane', name:'Arcane', element:'Arcano',
+    color:'#4488ff', glow:'rgba(68,136,255,0.4)',
+    bonus:'+15% VBC Coins ganados',
+    desc:'La línea del conocimiento eterno. La magia amplifica cada esfuerzo.',
+    icon:'🔮',
+    forms:[
+      { level:1, name:'Aprendiz',       svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="22" r="11" fill="#0a0a2e" stroke="#4488ff" stroke-width="2"/><circle cx="35" cy="21" r="2" fill="#4488ff"/><circle cx="45" cy="21" r="2" fill="#4488ff"/><path d="M28 34 L40 34 L52 34 L46 72 L34 72 Z" fill="#0a0a2e" stroke="#4488ff" stroke-width="2"/><line x1="54" y1="34" x2="62" y2="20" stroke="#4488ff" stroke-width="2" stroke-linecap="round"/><circle cx="62" cy="18" r="4" fill="#4488ff" opacity="0.7"/><line x1="34" y1="72" x2="30" y2="88" stroke="#3366cc" stroke-width="2.5" stroke-linecap="round"/><line x1="46" y1="72" x2="50" y2="88" stroke="#3366cc" stroke-width="2.5" stroke-linecap="round"/></svg>` },
+      { level:2, name:'Adept Arcano',   svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="20" r="13" fill="#0d0d35" stroke="#5599ff" stroke-width="2.5"/><circle cx="34" cy="19" r="2.5" fill="#5599ff"/><circle cx="46" cy="19" r="2.5" fill="#5599ff"/><path d="M26 33 L40 33 L54 33 L47 68 L33 68 Z" fill="#0d0d35" stroke="#5599ff" stroke-width="2.5"/><line x1="56" y1="33" x2="66" y2="16" stroke="#5599ff" stroke-width="2.5" stroke-linecap="round"/><circle cx="67" cy="14" r="5" fill="#5599ff" opacity="0.7"/><circle cx="67" cy="14" r="2.5" fill="#fff" opacity="0.9"/><path d="M26 33 L16 26 Q12 34 16 40 L26 44" stroke="#5599ff" stroke-width="2" fill="none" stroke-linecap="round"/><line x1="33" y1="68" x2="29" y2="85" stroke="#3366cc" stroke-width="3" stroke-linecap="round"/><line x1="47" y1="68" x2="51" y2="85" stroke="#3366cc" stroke-width="3" stroke-linecap="round"/></svg>` },
+      { level:3, name:'Mago',           svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="18" r="14" fill="#0f0f3d" stroke="#66aaff" stroke-width="2.5"/><circle cx="33" cy="17" r="3" fill="#66aaff"/><circle cx="47" cy="17" r="3" fill="#66aaff"/><path d="M24 32 L40 32 L56 32 L48 66 L32 66 Z" fill="#0f0f3d" stroke="#66aaff" stroke-width="2.5"/><line x1="58" y1="32" x2="70" y2="12" stroke="#66aaff" stroke-width="3" stroke-linecap="round"/><circle cx="71" cy="10" r="6" fill="#66aaff" opacity="0.7"/><circle cx="71" cy="10" r="3" fill="#fff" opacity="0.9"/><path d="M24 32 L12 23 Q6 32 12 40 L24 44" stroke="#66aaff" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="8" cy="32" r="4" fill="#4477ff" opacity="0.6"/><line x1="32" y1="66" x2="27" y2="84" stroke="#3366cc" stroke-width="3.5" stroke-linecap="round"/><line x1="48" y1="66" x2="53" y2="84" stroke="#3366cc" stroke-width="3.5" stroke-linecap="round"/><circle cx="40" cy="5" r="4" fill="#66aaff" opacity="0.5"/><path d="M36 5 Q40 0 44 5" stroke="#66aaff" stroke-width="1.5" fill="none"/></svg>` },
+      { level:4, name:'Hechicero',      svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="16" r="15" fill="#12123f" stroke="#77bbff" stroke-width="3"/><circle cx="32" cy="15" r="3.5" fill="#77bbff"/><circle cx="48" cy="15" r="3.5" fill="#77bbff"/><circle cx="32" cy="15" r="1.5" fill="#4488ff"/><circle cx="48" cy="15" r="1.5" fill="#4488ff"/><path d="M22 31 L40 31 L58 31 L49 64 L31 64 Z" fill="#12123f" stroke="#77bbff" stroke-width="3"/><line x1="60" y1="31" x2="74" y2="8" stroke="#77bbff" stroke-width="3.5" stroke-linecap="round"/><circle cx="75" cy="6" r="7" fill="#77bbff" opacity="0.7"/><circle cx="75" cy="6" r="4" fill="#fff" opacity="0.9"/><path d="M22 31 L8 20 Q2 30 8 40 L22 46" stroke="#77bbff" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="5" cy="30" r="5" fill="#4488ff" opacity="0.6"/><line x1="31" y1="64" x2="25" y2="82" stroke="#3366cc" stroke-width="4" stroke-linecap="round"/><line x1="49" y1="64" x2="55" y2="82" stroke="#3366cc" stroke-width="4" stroke-linecap="round"/><polygon points="40,2 37,10 40,7 43,10" fill="#77bbff" opacity="0.8"/><circle cx="24" cy="18" r="3" fill="#4488ff" opacity="0.4"/><circle cx="56" cy="18" r="3" fill="#4488ff" opacity="0.4"/></svg>` },
+      { level:5, name:'Brujo',          svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="14" r="16" fill="#151545" stroke="#88ccff" stroke-width="3"/><circle cx="31" cy="13" r="4" fill="#88ccff"/><circle cx="49" cy="13" r="4" fill="#88ccff"/><circle cx="31" cy="13" r="2" fill="#0044ff"/><circle cx="49" cy="13" r="2" fill="#0044ff"/><path d="M20 30 L40 30 L60 30 L50 62 L30 62 Z" fill="#151545" stroke="#88ccff" stroke-width="3"/><line x1="62" y1="30" x2="78" y2="4" stroke="#88ccff" stroke-width="4" stroke-linecap="round"/><circle cx="79" cy="2" r="8" fill="#88ccff" opacity="0.7"/><circle cx="79" cy="2" r="5" fill="#fff" opacity="0.9"/><path d="M20 30 L4 17 Q-2 28 4 40 L20 48" stroke="#88ccff" stroke-width="3.5" fill="none" stroke-linecap="round"/><circle cx="2" cy="28" r="6" fill="#4488ff" opacity="0.6"/><line x1="30" y1="62" x2="23" y2="80" stroke="#3366cc" stroke-width="4.5" stroke-linecap="round"/><line x1="50" y1="62" x2="57" y2="80" stroke="#3366cc" stroke-width="4.5" stroke-linecap="round"/><polygon points="40,0 36,10 40,6 44,10" fill="#88ccff"/><circle cx="22" cy="16" r="3.5" fill="#4488ff" opacity="0.5"/><circle cx="58" cy="16" r="3.5" fill="#4488ff" opacity="0.5"/><circle cx="40" cy="-4" r="4" fill="#88ccff" opacity="0.4"/></svg>` },
+      { level:6, name:'Archimago',      svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="12" r="17" fill="#181848" stroke="#99ddff" stroke-width="3.5"/><circle cx="30" cy="11" r="4.5" fill="#99ddff"/><circle cx="50" cy="11" r="4.5" fill="#99ddff"/><circle cx="30" cy="11" r="2.5" fill="#0055ff"/><circle cx="50" cy="11" r="2.5" fill="#0055ff"/><circle cx="30" cy="11" r="1" fill="#fff"/><circle cx="50" cy="11" r="1" fill="#fff"/><path d="M18 29 L40 29 L62 29 L51 60 L29 60 Z" fill="#181848" stroke="#99ddff" stroke-width="3.5"/><line x1="64" y1="29" x2="80" y2="0" stroke="#99ddff" stroke-width="4.5" stroke-linecap="round"/><circle cx="80" cy="-2" r="9" fill="#99ddff" opacity="0.8"/><circle cx="80" cy="-2" r="5.5" fill="#fff" opacity="0.9"/><path d="M18 29 L2 14 Q-4 26 2 40 L18 50" stroke="#99ddff" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="0" cy="27" r="7" fill="#4488ff" opacity="0.7"/><line x1="29" y1="60" x2="21" y2="78" stroke="#3366cc" stroke-width="5" stroke-linecap="round"/><line x1="51" y1="60" x2="59" y2="78" stroke="#3366cc" stroke-width="5" stroke-linecap="round"/><polygon points="40,-4 35,8 40,4 45,8" fill="#99ddff"/><circle cx="18" cy="14" r="4" fill="#4488ff" opacity="0.5"/><circle cx="62" cy="14" r="4" fill="#4488ff" opacity="0.5"/><circle cx="40" cy="-8" r="5" fill="#99ddff" opacity="0.5"/><circle cx="26" cy="-2" r="3" fill="#99ddff" opacity="0.4"/><circle cx="54" cy="-2" r="3" fill="#99ddff" opacity="0.4"/></svg>` },
+      { level:7, name:'Vacío Arcano',   svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="10" r="18" fill="#1e1e52" stroke="#aaeeff" stroke-width="4"/><circle cx="29" cy="9" r="5" fill="#aaeeff"/><circle cx="51" cy="9" r="5" fill="#aaeeff"/><circle cx="29" cy="9" r="3" fill="#0066ff"/><circle cx="51" cy="9" r="3" fill="#0066ff"/><circle cx="29" cy="9" r="1.5" fill="#fff"/><circle cx="51" cy="9" r="1.5" fill="#fff"/><path d="M16 28 L40 28 L64 28 L52 58 L28 58 Z" fill="#1e1e52" stroke="#aaeeff" stroke-width="4"/><line x1="66" y1="28" x2="80" y2="-4" stroke="#aaeeff" stroke-width="5" stroke-linecap="round"/><circle cx="80" cy="-6" r="10" fill="#aaeeff" opacity="0.8"/><circle cx="80" cy="-6" r="6" fill="#fff" opacity="0.9"/><path d="M16 28 L0 11 Q-6 24 0 40 L16 52" stroke="#aaeeff" stroke-width="4.5" fill="none" stroke-linecap="round"/><circle cx="-2" cy="26" r="8" fill="#4488ff" opacity="0.8"/><circle cx="-2" cy="26" r="4" fill="#fff" opacity="0.6"/><line x1="28" y1="58" x2="19" y2="76" stroke="#3366cc" stroke-width="6" stroke-linecap="round"/><line x1="52" y1="58" x2="61" y2="76" stroke="#3366cc" stroke-width="6" stroke-linecap="round"/><polygon points="40,-8 34,6 40,2 46,6" fill="#aaeeff"/><circle cx="16" cy="12" r="4.5" fill="#4488ff" opacity="0.6"/><circle cx="64" cy="12" r="4.5" fill="#4488ff" opacity="0.6"/><circle cx="40" cy="-12" r="6" fill="#aaeeff" opacity="0.6"/><circle cx="24" cy="-6" r="4" fill="#aaeeff" opacity="0.5"/><circle cx="56" cy="-6" r="4" fill="#aaeeff" opacity="0.5"/><circle cx="12" cy="-2" r="3" fill="#aaeeff" opacity="0.3"/><circle cx="68" cy="-2" r="3" fill="#aaeeff" opacity="0.3"/><ellipse cx="40" cy="28" rx="14" ry="2" fill="#aaeeff" opacity="0.3"/></svg>` },
+    ]
+  },
+  dragon: {
+    id:'dragon', name:'Dragon', element:'Fuego',
+    color:'#ff8800', glow:'rgba(255,136,0,0.4)',
+    bonus:'+10% a todos los stats',
+    desc:'La línea del fuego eterno. Equilibrio y poder absoluto.',
+    icon:'🐉',
+    forms:[
+      { level:1, name:'Wyrmling',      svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="50" rx="16" ry="12" fill="#ff8800" opacity="0.9"/><circle cx="40" cy="36" r="11" fill="#ff8800" opacity="0.9"/><circle cx="35" cy="35" r="2" fill="#ffcc00"/><circle cx="45" cy="35" r="2" fill="#ffcc00"/><path d="M26 44 Q18 38 16 50 Q18 58 26 54" fill="#dd6600" stroke="#ff8800" stroke-width="1.5"/><path d="M54 44 Q62 38 64 50 Q62 58 54 54" fill="#dd6600" stroke="#ff8800" stroke-width="1.5"/><path d="M40 62 Q36 72 34 82" stroke="#cc5500" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M34 82 Q30 86 36 88" stroke="#cc5500" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="33" cy="32" r="1.5" fill="#ffaa00"/><circle cx="47" cy="32" r="1.5" fill="#ffaa00"/></svg>` },
+      { level:2, name:'Draco',         svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="54" rx="18" ry="14" fill="#ff7700" opacity="0.9"/><circle cx="40" cy="36" r="13" fill="#ff8800" opacity="0.9"/><circle cx="33" cy="35" r="2.5" fill="#ffcc00"/><circle cx="47" cy="35" r="2.5" fill="#ffcc00"/><path d="M22 46 Q10 34 8 48 Q10 58 22 56" fill="#dd6600" stroke="#ff8800" stroke-width="2"/><path d="M58 46 Q70 34 72 48 Q70 58 58 56" fill="#dd6600" stroke="#ff8800" stroke-width="2"/><line x1="40" y1="36" x2="32" y2="68" stroke="#cc5500" stroke-width="3.5"/><line x1="40" y1="36" x2="48" y2="68" stroke="#cc5500" stroke-width="3.5"/><path d="M32 68 Q28 80 24 90" stroke="#cc5500" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M48 68 Q52 80 56 90" stroke="#cc5500" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M40 68 Q36 76 34 86" stroke="#cc5500" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M34 86 Q30 92 36 94" stroke="#cc5500" stroke-width="2" fill="none" stroke-linecap="round"/></svg>` },
+      { level:3, name:'Wyvern',        svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="52" rx="20" ry="15" fill="#ff6600"/><circle cx="40" cy="32" r="14" fill="#ff7700"/><circle cx="32" cy="31" r="3" fill="#ffcc00"/><circle cx="48" cy="31" r="3" fill="#ffcc00"/><circle cx="32" cy="31" r="1.5" fill="#ff4400"/><circle cx="48" cy="31" r="1.5" fill="#ff4400"/><path d="M20 42 Q4 26 2 44 Q4 58 20 56" fill="#cc5500" stroke="#ff7700" stroke-width="2.5"/><path d="M60 42 Q76 26 78 44 Q76 58 60 56" fill="#cc5500" stroke="#ff7700" stroke-width="2.5"/><line x1="30" y1="67" x2="22" y2="88" stroke="#cc5500" stroke-width="4" stroke-linecap="round"/><line x1="50" y1="67" x2="58" y2="88" stroke="#cc5500" stroke-width="4" stroke-linecap="round"/><path d="M40 67 Q36 78 32 90" stroke="#bb4400" stroke-width="3.5" fill="none" stroke-linecap="round"/><path d="M32 90 Q26 96 32 98" stroke="#bb4400" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M36 24 Q40 18 44 24" stroke="#ffaa00" stroke-width="2" fill="none"/></svg>` },
+      { level:4, name:'Dragón Joven',  svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="50" rx="22" ry="17" fill="#ff5500"/><circle cx="40" cy="28" r="16" fill="#ff6600"/><circle cx="31" cy="27" r="3.5" fill="#ffdd00"/><circle cx="49" cy="27" r="3.5" fill="#ffdd00"/><circle cx="31" cy="27" r="2" fill="#ff2200"/><circle cx="49" cy="27" r="2" fill="#ff2200"/><path d="M18 38 Q0 18 -2 40 Q0 58 18 56" fill="#bb4400" stroke="#ff6600" stroke-width="3"/><path d="M62 38 Q80 18 82 40 Q80 58 62 56" fill="#bb4400" stroke="#ff6600" stroke-width="3"/><polygon points="40,14 36,22 40,18 44,22" fill="#ff9900"/><line x1="28" y1="67" x2="20" y2="88" stroke="#bb4400" stroke-width="5" stroke-linecap="round"/><line x1="52" y1="67" x2="60" y2="88" stroke="#bb4400" stroke-width="5" stroke-linecap="round"/><path d="M40 67 Q34 80 30 94" stroke="#aa3300" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M30 94 Q24 100 30 100" stroke="#aa3300" stroke-width="3" fill="none" stroke-linecap="round"/></svg>` },
+      { level:5, name:'Dragón Anciano',svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="48" rx="24" ry="19" fill="#ee4400"/><circle cx="40" cy="26" r="17" fill="#ff5500"/><circle cx="30" cy="25" r="4" fill="#ffee00"/><circle cx="50" cy="25" r="4" fill="#ffee00"/><circle cx="30" cy="25" r="2.5" fill="#ff1100"/><circle cx="50" cy="25" r="2.5" fill="#ff1100"/><path d="M16 34 Q-4 10 -6 36 Q-4 60 16 56" fill="#aa3300" stroke="#ff5500" stroke-width="3.5"/><path d="M64 34 Q84 10 86 36 Q84 60 64 56" fill="#aa3300" stroke="#ff5500" stroke-width="3.5"/><polygon points="40,12 35,22 40,17 45,22" fill="#ffaa00"/><polygon points="32,10 28,18 33,14 30,20" fill="#ffaa00" opacity="0.7"/><polygon points="48,10 52,18 47,14 50,20" fill="#ffaa00" opacity="0.7"/><line x1="26" y1="67" x2="16" y2="88" stroke="#aa3300" stroke-width="5.5" stroke-linecap="round"/><line x1="54" y1="67" x2="64" y2="88" stroke="#aa3300" stroke-width="5.5" stroke-linecap="round"/><path d="M40 67 Q32 80 28 96" stroke="#993300" stroke-width="4.5" fill="none" stroke-linecap="round"/><path d="M28 96 Q20 102 28 102" stroke="#993300" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg>` },
+      { level:6, name:'Dragón Legendario',svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="46" rx="26" ry="21" fill="#dd3300"/><circle cx="40" cy="22" r="18" fill="#ee4400"/><circle cx="29" cy="21" r="4.5" fill="#ffff00"/><circle cx="51" cy="21" r="4.5" fill="#ffff00"/><circle cx="29" cy="21" r="3" fill="#ff0000"/><circle cx="51" cy="21" r="3" fill="#ff0000"/><circle cx="29" cy="21" r="1.5" fill="#fff"/><circle cx="51" cy="21" r="1.5" fill="#fff"/><path d="M14 30 Q-8 4 -10 34 Q-8 62 14 56" fill="#993300" stroke="#ee4400" stroke-width="4"/><path d="M66 30 Q88 4 90 34 Q88 62 66 56" fill="#993300" stroke="#ee4400" stroke-width="4"/><polygon points="40,8 34,20 40,15 46,20" fill="#ffbb00"/><polygon points="30,6 24,16 30,12 28,18" fill="#ffbb00" opacity="0.8"/><polygon points="50,6 56,16 50,12 52,18" fill="#ffbb00" opacity="0.8"/><polygon points="22,4 18,14 24,10 22,16" fill="#ff9900" opacity="0.5"/><polygon points="58,4 62,14 56,10 58,16" fill="#ff9900" opacity="0.5"/><line x1="24" y1="67" x2="13" y2="88" stroke="#993300" stroke-width="6" stroke-linecap="round"/><line x1="56" y1="67" x2="67" y2="88" stroke="#993300" stroke-width="6" stroke-linecap="round"/><path d="M40 67 Q30 82 26 98" stroke="#882200" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M26 98 Q18 104 26 104" stroke="#882200" stroke-width="4" fill="none" stroke-linecap="round"/></svg>` },
+      { level:7, name:'Dragon Lord',   svg:`<svg viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="44" rx="28" ry="23" fill="#cc2200"/><circle cx="40" cy="18" r="19" fill="#dd3300"/><circle cx="28" cy="17" r="5" fill="#ffff00"/><circle cx="52" cy="17" r="5" fill="#ffff00"/><circle cx="28" cy="17" r="3.5" fill="#ff0000"/><circle cx="52" cy="17" r="3.5" fill="#ff0000"/><circle cx="28" cy="17" r="1.5" fill="#fff"/><circle cx="52" cy="17" r="1.5" fill="#fff"/><path d="M12 26 Q-12 -4 -14 30 Q-12 62 12 56" fill="#882200" stroke="#dd3300" stroke-width="4.5"/><path d="M68 26 Q92 -4 94 30 Q92 62 68 56" fill="#882200" stroke="#dd3300" stroke-width="4.5"/><polygon points="40,2 33,16 40,11 47,16" fill="#ffcc00"/><polygon points="28,0 20,12 27,8 24,16" fill="#ffcc00" opacity="0.9"/><polygon points="52,0 60,12 53,8 56,16" fill="#ffcc00" opacity="0.9"/><polygon points="18,0 12,12 19,8 16,16" fill="#ff9900" opacity="0.6"/><polygon points="62,0 68,12 61,8 64,16" fill="#ff9900" opacity="0.6"/><line x1="22" y1="67" x2="10" y2="88" stroke="#882200" stroke-width="7" stroke-linecap="round"/><line x1="58" y1="67" x2="70" y2="88" stroke="#882200" stroke-width="7" stroke-linecap="round"/><path d="M40 67 Q28 84 24 100" stroke="#771100" stroke-width="5.5" fill="none" stroke-linecap="round"/><path d="M24 100 Q14 106 22 106" stroke="#771100" stroke-width="4.5" fill="none" stroke-linecap="round"/><ellipse cx="40" cy="44" rx="16" ry="3" fill="#ff4400" opacity="0.3"/></svg>` },
+    ]
+  }
+};
+
+function getEstirpeFormForLevel(estirpeId, evoLevel) {
+  const est = ESTIRPES[estirpeId];
+  if (!est) return null;
+  const idx = Math.max(0, Math.min(evoLevel - 1, est.forms.length - 1));
+  return est.forms[idx];
+}
+
+function renderCharFigure(estirpeId, evoLevel, size=80) {
+  const form = getEstirpeFormForLevel(estirpeId, evoLevel);
+  if (!form) return '<div class="char-figure-placeholder">?</div>';
+  const est = ESTIRPES[estirpeId];
+  return `<div class="char-figure" style="width:${size}px;height:${size}px;filter:drop-shadow(0 0 ${Math.round(size*0.12)}px ${est.color});">${form.svg}</div>`;
+}
+
+EVOLUTIONS = [
   { level:1, name:'GOBLIN',      title:'Goblin Soldado',   emoji:'👺', glow:'#55ff55', minScore:0,  minVBC:0,    minWins:0  },
   { level:2, name:'HOBGOBLIN',   title:'Hobgoblin Guerrero',emoji:'👹', glow:'#88ff44', minScore:20, minVBC:300,  minWins:0  },
   { level:3, name:'OGRE',        title:'Ogre Combatiente', emoji:'🔥', glow:'#ff8800', minScore:40, minVBC:800,  minWins:1  },
