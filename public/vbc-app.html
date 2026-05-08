@@ -2946,17 +2946,20 @@ function saveUserState(isNew) {
     equippedSkills: state.equippedSkills,
     streak: state.streak,
     videosUploaded: state.videosUploaded || 0,
+    estirpe: state.estirpe || null,
+    battleWins: state.battleWins || 0,
+    titanCardUsed: state.titanCardUsed || null,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   if(isNew) doc.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-  window._fbDb.collection('users').doc(_currentUid).set(doc, {merge: true})
+  window._fbDb.collection('vbc_users').doc(_currentUid).set(doc, {merge: true})
     .catch(function(e){ console.warn('[VBC] saveUserState:', e.message); });
 }
 
 function loadUserState(uid, user) {
   if(!window._fbDb) { onNoUserDoc(user); return; }
   _currentUid = uid;
-  window._fbDb.collection('users').doc(uid).get()
+  window._fbDb.collection('vbc_users').doc(uid).get()
     .then(function(doc) {
       if(doc.exists) {
         var d = doc.data();
@@ -3512,7 +3515,7 @@ function requestUserLocation() {
     state.userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
     // Save to Firestore for other players to see
     if (window.db && state.uid) {
-      window.db.collection('users').doc(state.uid).update({
+      window.db.collection('vbc_users').doc(state.uid).update({
         location: state.userLocation,
         locationUpdated: new Date().toISOString()
       }).catch(()=>{});
@@ -3572,7 +3575,7 @@ function showRadarAlert(battle, distMeters) {
 function scanNearbyBattles() {
   if (!state.userLocation || !window.db) return;
   const cutoff = new Date(Date.now() - 4 * 60 * 1000).toISOString(); // battles started in last 4 min
-  window.db.collection('battles')
+  window.db.collection('vbc_battles')
     .where('status', '==', 'active')
     .get()
     .then(snap => {
@@ -3694,7 +3697,7 @@ function getTitanCardCooldownText() {
 function activateTitanCard(onComplete) {
   state.titanCardUsed = new Date().toISOString();
   if (window._fbDb && _currentUid) {
-    window._fbDb.collection('users').doc(_currentUid).update({ titanCardUsed: state.titanCardUsed });
+    window._fbDb.collection('vbc_users').doc(_currentUid).update({ titanCardUsed: state.titanCardUsed });
   }
   const ov = document.createElement('div');
   ov.id = 'titan-overlay';
