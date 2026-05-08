@@ -1463,6 +1463,7 @@ body::after{
         <!-- State: idle -->
         <div id="battle-idle">
           <div style="color:var(--text3);font-family:var(--mono);font-size:11px;letter-spacing:2px;margin-bottom:16px;text-align:center;">RETA A UN ATLETA DEL RANKING</div>
+          <div id="battle-radar-container"></div>
           <div id="battle-rivals" style="display:flex;flex-direction:column;gap:8px;"></div>
           <div style="margin-top:16px;padding:12px;border:1px solid rgba(0,212,255,.15);background:rgba(0,212,255,.04);">
             <div style="font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:2px;margin-bottom:8px;">DISCIPLINA DEL RETO</div>
@@ -1825,7 +1826,7 @@ const DISC_NAMES = {bench:'Bench Press',deadlift:'Deadlift',squat:'Squat',overhe
 let state = {
   name:'Atleta VBC', vbc:0, condor:0, totalVBC:0, lifts:0,
   bestScore:0, bestTier:'BRONCE', xp:0, level:1,
-  records:{}, battleWins:0, evolutionLevel:0, estirpe:null, titanCardUsed:null, liftHistory:[], txHistory:[],
+  records:{}, battleWins:0, evolutionLevel:0, estirpe:null, titanCardUsed:null, userLocation:null, liftHistory:[], txHistory:[],
   ownedSkills:[], equippedSkills:[], streak:0, lastLiftTime:null,
   videosUploaded:0,
 };
@@ -2079,6 +2080,7 @@ function showCharActionPopup(label) {
 }
 
 function goScreen(id) {
+  if (id !== 'battle') stopBattleRadar();
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('s-'+id).classList.add('active');
@@ -2800,6 +2802,7 @@ setInterval(()=>{
 renderEquipped();
 renderPerfil();
 renderLiftHistory();
+startBattleRadar();
 updateUI();
 updateSaoBadges();
 pickMission();
@@ -3140,6 +3143,7 @@ const _origGoScreen = window.goScreen;
 window.goScreen = function(id) {
   _origGoScreen(id);
   if (id === 'battle') {
+    startBattleRadar();
     renderBattleRivals();
     checkPendingBattle();
   }
@@ -3173,6 +3177,9 @@ window.sendChallenge = function(rivalAlias, rivalUid) {
     challenged: { uid: rivalUid, alias: rivalAlias, score: null },
     winner: null,
     reward: 50,
+    location: (typeof state !== 'undefined' && state.userLocation) ? state.userLocation : null,
+    player1Name: (window.currentUser && (window.currentUser.displayName || 'Atleta')) || 'Jugador',
+    player2Name: rivalAlias || '',
   }).then(() => {
     b.id = battleId;
     b.role = 'challenger';
@@ -3484,6 +3491,185 @@ window.onLoginSuccess = function(...args) {
 // ════════════════════════════════════════
 // RE:MONSTER EVOLUTION SYSTEM
 // ════════════════════════════════════════
+// ══ BATTLE RADAR — Geolocation proximity alerts ══════════════════
+
+const RADAR_RADIUS_M = 500; // meters alert threshold
+const RADAR_SCAN_INTERVAL = 15000; // scan every 15s
+let _radarInterval = null;
+let _radarAlertShown = {};
+
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function requestUserLocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(pos => {
+    state.userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    // Save to Firestore for other players to see
+    if (window.db && state.uid) {
+      window.db.collection('users').doc(state.uid).update({
+        location: state.userLocation,
+        locationUpdated: new Date().toISOString()
+      }).catch(()=>{});
+    }
+  }, ()=>{}, { enableHighAccuracy: true, timeout: 8000 });
+}
+
+function showRadarAlert(battle, distMeters) {
+  const key = battle.id || (battle.player1 + battle.player2);
+  if (_radarAlertShown[key]) return;
+  _radarAlertShown[key] = true;
+
+  const dist = distMeters < 1000
+    ? Math.round(distMeters) + 'm'
+    : (distMeters/1000).toFixed(1) + 'km';
+
+  const banner = document.createElement('div');
+  banner.className = 'radar-alert-banner';
+  banner.innerHTML = `
+    <style>
+      @keyframes radar-pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.04);opacity:0.85} }
+      @keyframes radar-slide-in { from{transform:translateY(-80px);opacity:0} to{transform:translateY(0);opacity:1} }
+      @keyframes radar-ring { 0%{transform:scale(0.5);opacity:0.8} 100%{transform:scale(2.5);opacity:0} }
+      .radar-alert-banner { position:fixed;top:0;left:0;right:0;z-index:8500;animation:radar-slide-in 0.4s ease; }
+    </style>
+    <div style="
+      background:linear-gradient(135deg,#1a0000,#2d0000);
+      border-bottom:2px solid #cc0000;
+      padding:14px 18px 12px;
+      display:flex;align-items:center;gap:14px;
+      box-shadow:0 4px 20px rgba(200,0,0,0.4);
+    ">
+      <!-- Radar ping animation -->
+      <div style="position:relative;width:36px;height:36px;flex-shrink:0;">
+        <div style="position:absolute;inset:0;border:2px solid #ff2200;border-radius:50%;animation:radar-ring 1.2s ease-out infinite;"></div>
+        <div style="position:absolute;inset:4px;border:2px solid #ff4400;border-radius:50%;animation:radar-ring 1.2s ease-out 0.4s infinite;"></div>
+        <div style="position:absolute;inset:8px;border:2px solid #ff6600;border-radius:50%;animation:radar-ring 1.2s ease-out 0.8s infinite;"></div>
+        <div style="position:absolute;inset:13px;background:#ff2200;border-radius:50%;animation:radar-pulse 0.6s ease infinite;"></div>
+      </div>
+      <!-- Text -->
+      <div style="flex:1;min-width:0;">
+        <div style="font-family:'Courier New',monospace;font-size:11px;color:#ff2200;letter-spacing:3px;font-weight:700;">⚔️ DUELO DETECTADO</div>
+        <div style="font-family:'Courier New',monospace;font-size:13px;color:#fff;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          ${battle.player1Name||'???'} <span style="color:#ff4400">VS</span> ${battle.player2Name||'???'}
+        </div>
+        <div style="font-family:'Courier New',monospace;font-size:10px;color:#888;margin-top:1px;">${dist} de distancia · ${battle.discipline||'LIFT'}</div>
+      </div>
+      <!-- Close -->
+      <button onclick="this.closest('.radar-alert-banner').remove();" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer;padding:4px;">✕</button>
+    </div>
+  `;
+  document.body.prepend(banner);
+  if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+  setTimeout(() => banner.remove(), 12000);
+}
+
+function scanNearbyBattles() {
+  if (!state.userLocation || !window.db) return;
+  const cutoff = new Date(Date.now() - 4 * 60 * 1000).toISOString(); // battles started in last 4 min
+  window.db.collection('battles')
+    .where('status', '==', 'active')
+    .get()
+    .then(snap => {
+      snap.forEach(doc => {
+        const b = { id: doc.id, ...doc.data() };
+        // Skip own battles
+        if (b.player1 === state.uid || b.player2 === state.uid) return;
+        if (!b.location) return;
+        const dist = getDistanceMeters(
+          state.userLocation.lat, state.userLocation.lng,
+          b.location.lat, b.location.lng
+        );
+        if (dist <= RADAR_RADIUS_M) {
+          showRadarAlert(b, dist);
+        }
+      });
+    }).catch(()=>{});
+}
+
+function startBattleRadar() {
+  const rc = document.getElementById('battle-radar-container');
+  if (rc && !rc.innerHTML) { rc.innerHTML = renderBattleRadarWidget(); }
+  requestUserLocation();
+  if (_radarInterval) clearInterval(_radarInterval);
+  _radarInterval = setInterval(() => {
+    requestUserLocation();
+    scanNearbyBattles();
+  }, RADAR_SCAN_INTERVAL);
+  // First scan after 3s
+  setTimeout(scanNearbyBattles, 3000);
+}
+
+function stopBattleRadar() {
+  if (_radarInterval) { clearInterval(_radarInterval); _radarInterval = null; }
+}
+
+// ── Radar mini-display for Battle tab ──────────────────────────────
+function renderBattleRadarWidget() {
+  return `
+    <div id="battle-radar-widget" style="
+      margin:0 0 18px;
+      background:#0a0a0a;
+      border:1px solid #1a1a1a;
+      border-radius:12px;
+      padding:14px 16px;
+      position:relative;
+      overflow:hidden;
+    ">
+      <style>
+        @keyframes radar-sweep {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes blip-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.6)} }
+      </style>
+      <!-- Sweep radar visualization -->
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="position:relative;width:60px;height:60px;flex-shrink:0;">
+          <!-- Circles -->
+          <div style="position:absolute;inset:0;border:1px solid #0f3f0f;border-radius:50%;"></div>
+          <div style="position:absolute;inset:10px;border:1px solid #0f3f0f;border-radius:50%;"></div>
+          <div style="position:absolute;inset:20px;border:1px solid #0f3f0f;border-radius:50%;"></div>
+          <!-- Crosshair -->
+          <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:#0f3f0f;"></div>
+          <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:#0f3f0f;"></div>
+          <!-- Sweep line -->
+          <div style="position:absolute;inset:0;border-radius:50%;overflow:hidden;">
+            <div style="
+              position:absolute;
+              top:50%;left:50%;
+              width:50%;height:2px;
+              margin-top:-1px;
+              transform-origin:left center;
+              background:linear-gradient(to right,transparent,#00ff4433,#00ff44);
+              animation:radar-sweep 2.5s linear infinite;
+            "></div>
+          </div>
+          <!-- Center dot -->
+          <div style="position:absolute;top:50%;left:50%;width:6px;height:6px;background:#00ff44;border-radius:50%;transform:translate(-50%,-50%);"></div>
+          <!-- Blips (rendered by JS) -->
+          <div id="radar-blips"></div>
+        </div>
+        <div style="flex:1;">
+          <div style="font-family:'Courier New',monospace;font-size:11px;color:#00ff44;letter-spacing:2px;font-weight:700;">📡 RADAR DE BATALLA</div>
+          <div id="radar-status-text" style="font-family:'Courier New',monospace;font-size:11px;color:#555;margin-top:3px;">Escaneando zona...</div>
+          <div style="font-family:'Courier New',monospace;font-size:10px;color:#333;margin-top:4px;">Radio: ${RADAR_RADIUS_M}m</div>
+        </div>
+        <button onclick="requestUserLocation();scanNearbyBattles();document.getElementById('radar-status-text').textContent='Escaneando...';" style="
+          background:#0a1a0a;border:1px solid #1a3a1a;border-radius:6px;
+          color:#00ff44;font-size:10px;font-family:'Courier New',monospace;
+          padding:6px 10px;cursor:pointer;letter-spacing:1px;
+        ">⟳ SCAN</button>
+      </div>
+    </div>
+  `;
+}
+
 const // ══ CARTA TITÁN — Attack on Titan fury revival ══════════════════
 const TITAN_COOLDOWN_DAYS = 30;
 
