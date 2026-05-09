@@ -1,11 +1,11 @@
 export function buildCountryRanking(athletes){
-  const map = {}
+  const map={}
 
   for(const a of athletes){
-    if(!map[a.country]) map[a.country]=0
-    map[a.country]+=a.score
+    map[a.country]=(map[a.country]||0)+a.score
   }
 
   return Object.entries(map)
-  .sort((a,b)=>b[1]-a[1])
+    .map(([country,score])=>({country,score}))
+    .sort((a,b)=>b.score-a.score)
 }

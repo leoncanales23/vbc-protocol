@@ -1,7 +1,9 @@
-export function streamEvent(event){
+export function publishEvent(type,data){
+
   return {
-    id:event.id,
-    type:event.type,
-    time:Date.now()
+    type,
+    data,
+    timestamp:Date.now()
   }
+
 }
