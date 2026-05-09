@@ -1,7 +1,3 @@
-export function syncFederationRanking(data){
-  return {
-    federation:data.name,
-    updated:Date.now(),
-    athletes:data.athletes.length
-  }
+export function syncFederations(list){
+  return list.length
 }

@@ -1,9 +1,7 @@
-export function createContract(athlete,gym){
-
+export function signContract(athlete,gym){
   return {
     athlete,
     gym,
-    signedAt:Date.now()
+    date:Date.now()
   }
-
 }

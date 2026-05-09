@@ -1,4 +1,3 @@
-export function computeGlobalScore(totalLift,bodyweight){
-  if(!bodyweight) return totalLift
-  return totalLift/bodyweight
+export function calculateIndex(score,bodyweight){
+  return score/bodyweight
 }
