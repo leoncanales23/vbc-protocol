@@ -1,13 +1,7 @@
-// VBC Athlete Passport
-
-export function createAthletePassport(athlete){
-
+export function createPassport(id,country){
   return {
-    vbcId:athlete.id,
-    name:athlete.name,
-    country:athlete.country,
-    joinDate:Date.now(),
-    verified:false
+    id,
+    country,
+    created:Date.now()
   }
-
 }
