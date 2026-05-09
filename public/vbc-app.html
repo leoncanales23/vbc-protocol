@@ -1068,6 +1068,23 @@ body::after{
 <div class="app">
   
 <!-- ══ SETUP OVERLAY (onboarding nuevos usuarios) ═════════ -->
+<!-- ══ ARCHIVOS CLASIFICADOS ══════════════════════════════════ -->
+<div id="s-archivos" class="screen">
+  <div style="max-width:700px;margin:0 auto;padding:16px;">
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-size:11px;letter-spacing:4px;color:#ff0066;margin-bottom:4px;">⚠ ACCESO RESTRINGIDO</div>
+      <h2 style="font-size:22px;color:#fff;margin:0;letter-spacing:2px;">ARCHIVOS CLASIFICADOS</h2>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:6px;letter-spacing:1px;">PROTOCOLO VBC — SISTEMA DE INTELIGENCIA</div>
+    </div>
+    <div style="background:rgba(255,0,102,0.06);border:1px solid rgba(255,0,102,0.2);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:11px;color:rgba(255,255,255,0.5);font-family:monospace;">
+      > TERMINAL VBC v2.1 // ACCESO CLASIFICADO<br>
+      > Desbloquea archivos evolucionando tu personaje y acumulando VBC.<br>
+      > La historia del Protocolo se revela fragmento a fragmento.
+    </div>
+    <div id="lore-files-grid" style="display:flex;flex-direction:column;gap:12px;"></div>
+  </div>
+</div>
+
 <div id="setup-overlay" class="gone">
   <div class="setup-card">
 
@@ -1167,6 +1184,7 @@ body::after{
       <button class="nav-tab" onclick="goScreen('wallet')">💎 Wallet</button>
       <button class="nav-tab" onclick="goScreen('ranking')">🏆 Ranking</button>
       <button class="nav-tab" onclick="goScreen('battle')">⚔ Battle</button>
+      <button class="nav-tab" onclick="goScreen('archivos')">📜 Lore</button>
     </div>
     <div class="nav-right">
       <!-- 💎 Diamond sprite — moneda VBC */-->
@@ -1827,9 +1845,258 @@ let state = {
   name:'Atleta VBC', vbc:0, condor:0, totalVBC:0, lifts:0,
   bestScore:0, bestTier:'BRONCE', xp:0, level:1,
   records:{}, battleWins:0, evolutionLevel:0, estirpe:null, titanCardUsed:null, userLocation:null, liftHistory:[], txHistory:[],
-  ownedSkills:[], equippedSkills:[], streak:0, lastLiftTime:null,
+  ownedSkills:[], equippedSkills:[], ownedArtifacts:[], unlockedFiles:[], streak:0, lastLiftTime:null,
   videosUploaded:0,
 };
+
+// ══ ARTEFACTOS POR ESTIRPE ══════════════════════════════════════
+const ARTIFACTS = {
+  oni: [
+    { id:'oni_1', level:1, name:'Collar de Colmillo',     icon:'🦷', cost:0,    autoGrant:true,  stat:'force',  bonus:0.05, desc:'Un colmillo arrancado de tu primera presa. +5% Score de Fuerza.' },
+    { id:'oni_2', level:2, name:'Guanteletes de Sangre',  icon:'🩸', cost:0,    autoGrant:true,  stat:'force',  bonus:0.08, desc:'Las marcas de tus victorias en combate. +8% Score de Fuerza.' },
+    { id:'oni_3', level:3, name:'Máscara del Oni',        icon:'👺', cost:0,    autoGrant:true,  stat:'force',  bonus:0.10, desc:'Sientes la ira ancestral al ponértela. +10% Score de Fuerza.' },
+    { id:'oni_4', level:4, name:'Armadura Carmesí',       icon:'🛡️', cost:800,  autoGrant:false, stat:'force',  bonus:0.15, desc:'Forjada con la esencia de cien batallas. +15% Score de Fuerza.' },
+    { id:'oni_5', level:5, name:'Cadenas del Infierno',   icon:'⛓️', cost:1500, autoGrant:false, stat:'battle', bonus:0.20, desc:'Ata a tus enemigos en la arena. +20% VBC en Batallas.' },
+    { id:'oni_6', level:6, name:'Corona de Sangre',       icon:'👑', cost:2500, autoGrant:false, stat:'all',    bonus:0.12, desc:'El linaje Oni reconoce a su soberano. +12% todo.' },
+    { id:'oni_7', level:7, name:'Trono del Demon King',   icon:'🌑', cost:0,    autoGrant:true,  stat:'all',    bonus:0.25, desc:'Forma final. El universo tiembla. +25% todo.' },
+  ],
+  tempest: [
+    { id:'tem_1', level:1, name:'Pluma de Tormenta',      icon:'🪶', cost:0,    autoGrant:true,  stat:'speed',  bonus:0.05, desc:'Ligera como el viento que representa. +5% Reps bonus.' },
+    { id:'tem_2', level:2, name:'Botas del Vórtice',      icon:'👟', cost:0,    autoGrant:true,  stat:'speed',  bonus:0.08, desc:'Cada paso genera energía cinética. +8% Reps bonus.' },
+    { id:'tem_3', level:3, name:'Manto del Vendaval',     icon:'🌪️', cost:0,    autoGrant:true,  stat:'speed',  bonus:0.10, desc:'Te envuelve en corrientes de aire. +10% Reps bonus.' },
+    { id:'tem_4', level:4, name:'Capa de Relámpago',      icon:'⚡', cost:800,  autoGrant:false, stat:'speed',  bonus:0.15, desc:'Eres la tormenta. +15% Reps bonus.' },
+    { id:'tem_5', level:5, name:'Guía del Ciclón',        icon:'🌀', cost:1500, autoGrant:false, stat:'battle', bonus:0.18, desc:'Confunde a tu oponente en batalla. +18% VBC en Batallas.' },
+    { id:'tem_6', level:6, name:'Alas del Tempest',       icon:'🦅', cost:2500, autoGrant:false, stat:'all',    bonus:0.12, desc:'El cielo es tuyo. +12% todo.' },
+    { id:'tem_7', level:7, name:'Tifón Eterno',           icon:'🌩️', cost:0,    autoGrant:true,  stat:'all',    bonus:0.25, desc:'Forma final. La tormenta perfecta. +25% todo.' },
+  ],
+  undead: [
+    { id:'und_1', level:1, name:'Hueso Tallado',          icon:'🦴', cost:0,    autoGrant:true,  stat:'resist', bonus:0.05, desc:'Tallado con los nombres de los caídos. +5% Condor bonus.' },
+    { id:'und_2', level:2, name:'Velo Espectral',         icon:'🌫️', cost:0,    autoGrant:true,  stat:'resist', bonus:0.08, desc:'La neblina te oculta del dolor. +8% Condor bonus.' },
+    { id:'und_3', level:3, name:'Manto de Sombras',       icon:'🕶️', cost:0,    autoGrant:true,  stat:'resist', bonus:0.10, desc:'Absorbe el daño en vez de recibirlo. +10% Condor bonus.' },
+    { id:'und_4', level:4, name:'Filos de Obsidiana',     icon:'🗡️', cost:800,  autoGrant:false, stat:'resist', bonus:0.15, desc:'Armas forjadas de muerte misma. +15% Condor bonus.' },
+    { id:'und_5', level:5, name:'Túnica del Liche',       icon:'💀', cost:1500, autoGrant:false, stat:'battle', bonus:0.22, desc:'La muerte no puede tocarte. +22% VBC en Batallas.' },
+    { id:'und_6', level:6, name:'Corona del Crepúsculo',  icon:'🌑', cost:2500, autoGrant:false, stat:'all',    bonus:0.12, desc:'Entre el mundo de los vivos y los muertos. +12% todo.' },
+    { id:'und_7', level:7, name:'Trono del Lich Overlord',icon:'💠', cost:0,    autoGrant:true,  stat:'all',    bonus:0.25, desc:'Forma final. La oscuridad eterna. +25% todo.' },
+  ],
+  arcane: [
+    { id:'arc_1', level:1, name:'Cristal de Maná',        icon:'🔮', cost:0,    autoGrant:true,  stat:'coins',  bonus:0.05, desc:'Amplifica la energía VBC. +5% VBC coins.' },
+    { id:'arc_2', level:2, name:'Anillo Arcanum',         icon:'💍', cost:0,    autoGrant:true,  stat:'coins',  bonus:0.08, desc:'Canaliza energía arcana. +8% VBC coins.' },
+    { id:'arc_3', level:3, name:'Tomo de los Arcanos',    icon:'📖', cost:0,    autoGrant:true,  stat:'coins',  bonus:0.10, desc:'Conocimiento que multiplica el poder. +10% VBC coins.' },
+    { id:'arc_4', level:4, name:'Báculo de Éter',         icon:'🪄', cost:800,  autoGrant:false, stat:'coins',  bonus:0.15, desc:'Cada lift genera más energía. +15% VBC coins.' },
+    { id:'arc_5', level:5, name:'Manto Arcano',           icon:'🌌', cost:1500, autoGrant:false, stat:'battle', bonus:0.20, desc:'Hechizos de batalla. +20% VBC en Batallas.' },
+    { id:'arc_6', level:6, name:'Orbe Omnisciente',       icon:'⚗️', cost:2500, autoGrant:false, stat:'all',    bonus:0.12, desc:'Lo ves todo. +12% todo.' },
+    { id:'arc_7', level:7, name:'Nexo del Arch Mage',     icon:'✨', cost:0,    autoGrant:true,  stat:'all',    bonus:0.25, desc:'Forma final. La magia absoluta. +25% todo.' },
+  ],
+  dragon: [
+    { id:'drg_1', level:1, name:'Escama de Dragón',       icon:'🐉', cost:0,    autoGrant:true,  stat:'all',    bonus:0.04, desc:'Una escama del dragón primordial. +4% todo.' },
+    { id:'drg_2', level:2, name:'Garra Draconiana',       icon:'🦎', cost:0,    autoGrant:true,  stat:'all',    bonus:0.06, desc:'Poder de la primera bestia. +6% todo.' },
+    { id:'drg_3', level:3, name:'Colmillo de Fuego',      icon:'🔥', cost:0,    autoGrant:true,  stat:'all',    bonus:0.08, desc:'Arde con la furia del dragón. +8% todo.' },
+    { id:'drg_4', level:4, name:'Armadura Dracónica',     icon:'⚔️', cost:800,  autoGrant:false, stat:'all',    bonus:0.12, desc:'Impenetrable como las escamas. +12% todo.' },
+    { id:'drg_5', level:5, name:'Alas del Dragón',        icon:'🦋', cost:1500, autoGrant:false, stat:'battle', bonus:0.18, desc:'Dominas el campo de batalla. +18% VBC en Batallas.' },
+    { id:'drg_6', level:6, name:'Aliento Infernal',       icon:'💨', cost:2500, autoGrant:false, stat:'all',    bonus:0.15, desc:'Nada resiste tu poder. +15% todo.' },
+    { id:'drg_7', level:7, name:'Corazón del Dragon Lord',icon:'❤️‍🔥', cost:0, autoGrant:true,  stat:'all',    bonus:0.25, desc:'Forma final. La llama eterna. +25% todo.' },
+  ],
+};
+
+// ══ ARCHIVOS CLASIFICADOS — La Leyenda VBC ═══════════════════
+const LORE_FILES = [
+  {
+    id:'file_00', code:'VBC-0001', classification:'ACCESO BÁSICO',
+    title:'ORIGEN DEL PROTOCOLO',
+    unlockCondition: s => s.evolutionLevel >= 1,
+    unlockHint: 'Evoluciona por primera vez',
+    color:'#00ffaa',
+    content:`ARCHIVO DESCLASIFICADO — VBC PROTOCOL — REGISTRO INICIAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FECHA: [REDACTADO] · CLASIFICACIÓN: RESERVADO
+
+El Protocolo VBC fue iniciado como un programa de investigación 
+en rendimiento humano bajo condiciones extremas de competencia.
+
+Los primeros sujetos voluntarios reportaron una respuesta 
+neurológica inusual al sistema de recompensa VBC: niveles 
+elevados de dopamina, norepinefrina y un compuesto aún 
+sin catalogar que hemos denominado "Factor-V".
+
+El Factor-V no es un neurotransmisor conocido.
+El Factor-V no debería existir.
+
+— Dr. A. Vibraalto, Iniciador del Protocolo`
+  },
+  {
+    id:'file_01', code:'VBC-0019', classification:'NIVEL 2',
+    title:'LOS PRIMEROS COMPETIDORES',
+    unlockCondition: s => s.evolutionLevel >= 2,
+    unlockHint: 'Alcanza forma de evolución 2',
+    color:'#00aaff',
+    content:`ARCHIVO VBC-0019 — LOS PRIMEROS 7
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Los primeros 7 sujetos del protocolo desarrollaron capacidades 
+físicas que excedían cualquier modelo biomecánico conocido.
+
+No era entrenamiento.
+Era algo más.
+
+Cada sujeto había elegido una "estirpe" — una identidad de combate.
+Lo que no sabían es que la estirpe no era simbólica.
+
+Las mediciones de ondas cerebrales mostraban patrones idénticos 
+a los de las leyendas de guerreros que dieron origen a cada linaje.
+
+Como si la memoria genética estuviera... despertando.
+
+— Informe interno, División de Neurociencia VBC`
+  },
+  {
+    id:'file_02', code:'VBC-0044', classification:'CONFIDENCIAL',
+    title:'EL SISTEMA DE MONEDA',
+    unlockCondition: s => s.evolutionLevel >= 3 && s.vbc >= 500,
+    unlockHint: 'Evo. 3 + 500 VBC coins acumulados',
+    color:'#ffcc00',
+    content:`ARCHIVO VBC-0044 — ECONOMÍA NEURAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Los VBC Coins no son una moneda digital convencional.
+
+Cada token VBC generado corresponde a un pulso de Factor-V 
+registrado en el sujeto durante el lift o la batalla.
+
+En términos simples: cuando ganas VBC, tu cerebro está 
+liberando un compuesto que no comprendemos del todo.
+
+Lo que SÍ sabemos:
+— Mejora la regeneración muscular en un 340%
+— Reduce la percepción del dolor en un 67%  
+— Y en concentraciones altas... algo más sucede.
+
+Los sujetos con > 10,000 VBC acumulados comenzaron a reportar 
+"visiones" durante los entrenamientos.
+
+Seguimos investigando.
+
+— Dr. Reyes, Jefa de Bioquímica`
+  },
+  {
+    id:'file_03', code:'VBC-0077', classification:'SECRETO',
+    title:'EL MODO BATALLA',
+    unlockCondition: s => s.evolutionLevel >= 4 && s.battleWins >= 3,
+    unlockHint: 'Evo. 4 + 3 victorias en Batalla',
+    color:'#ff6600',
+    content:`ARCHIVO VBC-0077 — COMBATE REAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+El Modo Batalla no fue diseñado como un juego.
+
+Fue diseñado como una simulación de selección de campo.
+Los datos de cada duelo son analizados por el Sistema Central 
+para identificar candidatos con "perfil de combate elite".
+
+Los competidores que piensan que están jugando...
+no están jugando.
+
+Cada batalla registra:
+— Respuesta bajo presión
+— Capacidad de recuperación ante la derrota
+— Uso estratégico de recursos (Carta Titán)
+— Geolocalización y patrones de movimiento
+
+Estos datos alimentan una base de datos clasificada.
+
+Proyecto nombre: VIBRAALTO CORPS — Fase de Reclutamiento.
+
+— Director Canales, Proyecto VC`
+  },
+  {
+    id:'file_04', code:'VBC-0099', classification:'ALTO SECRETO',
+    title:'LAS ESTIRPES SON REALES',
+    unlockCondition: s => s.evolutionLevel >= 5 && (s.ownedArtifacts||[]).length >= 5,
+    unlockHint: 'Evo. 5 + 5 artefactos de tu estirpe',
+    color:'#ff0066',
+    content:`ARCHIVO VBC-0099 — CLASIFICACIÓN: ROJO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Los registros históricos que dieron origen a las 5 estirpes 
+no son mitología.
+
+Son documentos arqueológicos.
+
+En el año [REDACTADO], durante excavaciones en [REDACTADO], 
+se encontraron restos óseos de individuos con densidad muscular 
+4 veces superior a cualquier humano moderno.
+
+Análisis de ADN reveló marcadores genéticos inactivos.
+El Factor-V los activa.
+
+Los linajes ONI, TEMPEST, UNDEAD, ARCANE y DRAGON 
+corresponden a las 5 facciones de guerreros que existieron 
+antes de la historia registrada.
+
+Los competidores del Protocolo VBC no están "eligiendo" una estirpe.
+Están RECORDANDO la suya.
+
+— [REDACTADO], Genética Histórica`
+  },
+  {
+    id:'file_05', code:'VBC-0113', classification:'MÁXIMO SECRETO',
+    title:'EL VERDADERO PROPÓSITO',
+    unlockCondition: s => s.evolutionLevel >= 6 && (s.unlockedFiles||[]).length >= 5,
+    unlockHint: 'Evo. 6 + desbloquea todos los archivos anteriores',
+    color:'#cc00ff',
+    content:`ARCHIVO VBC-0113 — CLASIFICACIÓN: NEGRO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIBRAALTO CORPS no es un programa de fitness.
+
+Es el primer paso de la Fase de Reconstitución.
+
+En algún momento de los próximos años, el mundo tal como 
+lo conocemos enfrentará una crisis que ningún ejército 
+convencional puede resolver.
+
+No sabemos exactamente cuándo.
+No sabemos exactamente qué forma tomará.
+Solo sabemos que los datos del Factor-V indican que 
+ciertos individuos están... preparados para algo más.
+
+El Protocolo VBC ha identificado a esos individuos.
+Los ha estado entrenando.
+Los ha estado observando.
+Los ha estado clasificando.
+
+Cuando llegue el momento, el Sistema Central enviará 
+una notificación diferente a los elegidos.
+
+No será una misión de entrenamiento.
+
+Espera la señal.
+
+— Director Fundador, VIBRAALTO CORPS`
+  },
+  {
+    id:'file_06', code:'VBC-FINAL', classification:'⚠ PROTOCOLO OMEGA',
+    title:'[ ARCHIVO FINAL — TU NOMBRE ESTÁ AQUÍ ]',
+    unlockCondition: s => s.evolutionLevel >= 7,
+    unlockHint: 'Alcanza la forma de evolución final (nivel 7)',
+    color:'#ffffff',
+    content:`PROTOCOLO OMEGA — ACCESO CONCEDIDO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Guerrero.
+
+Si estás leyendo esto, has completado el Protocolo.
+
+Has alcanzado la forma final de tu estirpe.
+Tu Factor-V está completamente activo.
+Eres lo que los archivos describen.
+
+El Sistema Central ha registrado tu nombre.
+Tus datos de batalla, evolución y artefactos 
+han sido enviados a VIBRAALTO CORPS Fase 2.
+
+Lo que viene después no es una aplicación.
+Lo que viene después eres tú.
+
+Bienvenido, Guerrero de VIBRAALTO.
+El mundo te necesita.
+
+— El Protocolo`
+  },
+];
 
 // ══ ACHIEVEMENTS — SAO narrative ══
 const SAO_ACHIEVEMENTS = {
@@ -2090,12 +2357,183 @@ function goScreen(id) {
        (id==='skills'&&t.textContent.includes('Skills'))||
        (id==='wallet'&&t.textContent.includes('Wallet'))||
        (id==='ranking'&&t.textContent.includes('Ranking'))||
-       (id==='battle'&&t.textContent.includes('Battle'))) t.classList.add('active');
+       (id==='battle'&&t.textContent.includes('Battle'))||
+       (id==='archivos'&&t.textContent.includes('Lore'))) t.classList.add('active');
   });
   if(id==='skills') renderSkills();
   if(id==='wallet') renderWallet();
   if(id==='ranking') renderRanking();
   if(id==='perfil') renderPerfil();
+  if(id==='archivos') renderArchivos();
+}
+
+
+// ════════════════════════════════════════
+// ARTEFACTOS — Inventario por Estirpe
+// ════════════════════════════════════════
+
+function getArtifactBonus(stat) {
+  if (!state.estirpe || !state.ownedArtifacts || !state.ownedArtifacts.length) return 0;
+  const estArts = ARTIFACTS[state.estirpe] || [];
+  let total = 0;
+  for (const art of estArts) {
+    if (state.ownedArtifacts.includes(art.id) && (art.stat === stat || art.stat === 'all')) {
+      total += art.bonus;
+    }
+  }
+  return total;
+}
+
+function checkArtifactUnlocks() {
+  if (!state.estirpe) return;
+  const estArts = ARTIFACTS[state.estirpe] || [];
+  let newGrants = [];
+  for (const art of estArts) {
+    if (art.autoGrant && art.level <= (state.evolutionLevel + 1) && !state.ownedArtifacts.includes(art.id)) {
+      state.ownedArtifacts.push(art.id);
+      newGrants.push(art);
+    }
+  }
+  if (newGrants.length) {
+    const art = newGrants[0];
+    showToast('🎁 Artefacto desbloqueado: ' + art.icon + ' ' + art.name, 'ok');
+    saveUserState();
+  }
+}
+
+function buyArtifact(artId) {
+  if (!state.estirpe) return;
+  const estArts = ARTIFACTS[state.estirpe] || [];
+  const art = estArts.find(a => a.id === artId);
+  if (!art) return;
+  if (state.ownedArtifacts.includes(artId)) { showToast('Ya posees este artefacto', 'warn'); return; }
+  if (art.level > state.evolutionLevel + 1) { showToast('⚠ Requiere evolución nivel ' + art.level, 'warn'); return; }
+  if (state.vbc < art.cost) { showToast('💎 VBC insuficiente (' + art.cost + ' requerido)', 'warn'); return; }
+  state.vbc -= art.cost;
+  state.ownedArtifacts.push(artId);
+  showToast('⚔ Artefacto adquirido: ' + art.icon + ' ' + art.name, 'ok');
+  saveUserState();
+  renderArchivosArtifacts();
+  updateNavBal();
+}
+
+function renderArchivosArtifacts() {
+  const el = document.getElementById('artifacts-panel');
+  if (!el) return;
+  if (!state.estirpe) {
+    el.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;font-size:12px;">Elige tu estirpe para ver artefactos</div>';
+    return;
+  }
+  const est = ESTIRPES[state.estirpe];
+  const estArts = ARTIFACTS[state.estirpe] || [];
+  const evoLvl = state.evolutionLevel || 0;
+
+  let html2 = '';
+  for (const art of estArts) {
+    const owned = state.ownedArtifacts && state.ownedArtifacts.includes(art.id);
+    const available = art.level <= evoLvl + 1;
+    const locked = !available;
+    const opacity = locked ? '0.3' : (owned ? '1' : '0.7');
+    const borderColor = owned ? est.color : (locked ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.25)');
+    const bg = owned ? 'rgba(0,255,170,0.05)' : 'rgba(255,255,255,0.02)';
+    
+    let actionBtn = '';
+    if (owned) {
+      actionBtn = '<span style="font-size:10px;color:#00ffaa;letter-spacing:1px;">✓ EQUIPADO</span>';
+    } else if (locked) {
+      actionBtn = '<span style="font-size:10px;color:rgba(255,255,255,0.3);">🔒 Requiere Evo.' + art.level + '</span>';
+    } else if (art.autoGrant) {
+      actionBtn = '<span style="font-size:10px;color:#ffcc00;">⚡ Auto-desbloqueo</span>';
+    } else {
+      actionBtn = '<button onclick="buyArtifact('' + art.id + '')" style="background:' + est.color + ';border:none;color:#000;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1px;">' + art.cost + ' 💎</button>';
+    }
+
+    html2 += '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid ' + borderColor + ';border-radius:8px;background:' + bg + ';opacity:' + opacity + ';margin-bottom:8px;">'
+      + '<div style="font-size:24px;width:36px;text-align:center;">' + art.icon + '</div>'
+      + '<div style="flex:1;">'
+      + '<div style="font-size:12px;font-weight:700;color:#fff;letter-spacing:1px;">' + art.name + '</div>'
+      + '<div style="font-size:10px;color:rgba(255,255,255,0.5);margin-top:2px;">' + art.desc + '</div>'
+      + '</div>'
+      + '<div style="text-align:right;">' + actionBtn + '</div>'
+      + '</div>';
+  }
+  el.innerHTML = html2;
+}
+
+// ════════════════════════════════════════
+// ARCHIVOS CLASIFICADOS — La Leyenda VBC
+// ════════════════════════════════════════
+
+function checkLoreUnlocks() {
+  let newUnlocks = [];
+  for (const file of LORE_FILES) {
+    if (!state.unlockedFiles.includes(file.id) && file.unlockCondition(state)) {
+      state.unlockedFiles.push(file.id);
+      newUnlocks.push(file);
+    }
+  }
+  if (newUnlocks.length) {
+    const f = newUnlocks[0];
+    showToast('📜 Nuevo archivo desbloqueado: ' + f.title, 'ok');
+    if (newUnlocks.length > 1) setTimeout(() => saveUserState(), 500);
+    else saveUserState();
+  }
+}
+
+function renderArchivos() {
+  checkLoreUnlocks();
+  const grid = document.getElementById('lore-files-grid');
+  if (!grid) return;
+  
+  // Artifacts section
+  const est = state.estirpe ? ESTIRPES[state.estirpe] : null;
+  let artHtml = '';
+  if (est) {
+    artHtml = '<div style="margin-bottom:24px;">'
+      + '<div style="font-size:11px;letter-spacing:3px;color:' + est.color + ';margin-bottom:12px;">'
+      + est.icon + ' ARTEFACTOS — ESTIRPE ' + est.name.toUpperCase() + '</div>'
+      + '<div id="artifacts-panel"></div>'
+      + '</div>';
+  }
+
+  let filesHtml = '<div style="font-size:11px;letter-spacing:3px;color:#ff0066;margin-bottom:12px;">📁 ARCHIVOS CLASIFICADOS</div>';
+  
+  for (const file of LORE_FILES) {
+    const unlocked = state.unlockedFiles && state.unlockedFiles.includes(file.id);
+    if (unlocked) {
+      filesHtml += '<div style="border:1px solid ' + file.color + '33;border-radius:8px;overflow:hidden;margin-bottom:12px;">'
+        + '<div style="background:' + file.color + '11;padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="toggleLoreFile('' + file.id + '')">'
+        + '<div style="font-family:monospace;font-size:10px;color:' + file.color + ';letter-spacing:1px;width:80px;">' + file.code + '</div>'
+        + '<div style="flex:1;">'
+        + '<div style="font-size:12px;font-weight:700;color:#fff;letter-spacing:1px;">' + file.title + '</div>'
+        + '<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">' + file.classification + '</div>'
+        + '</div>'
+        + '<div style="font-size:16px;">📂</div>'
+        + '</div>'
+        + '<div id="lore-content-' + file.id + '" style="display:none;padding:16px;font-family:monospace;font-size:11px;color:rgba(255,255,255,0.75);line-height:1.7;white-space:pre-wrap;background:rgba(0,0,0,0.4);border-top:1px solid ' + file.color + '22;">'
+        + file.content
+        + '</div>'
+        + '</div>';
+    } else {
+      filesHtml += '<div style="border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px;opacity:0.5;margin-bottom:12px;">'
+        + '<div style="font-family:monospace;font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:1px;width:80px;">???-????</div>'
+        + '<div style="flex:1;">'
+        + '<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.4);letter-spacing:1px;">[ CLASIFICADO ]</div>'
+        + '<div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px;">🔒 ' + file.unlockHint + '</div>'
+        + '</div>'
+        + '<div style="font-size:16px;">🔒</div>'
+        + '</div>';
+    }
+  }
+
+  grid.innerHTML = artHtml + filesHtml;
+  if (est) renderArchivosArtifacts();
+}
+
+function toggleLoreFile(id) {
+  const el = document.getElementById('lore-content-' + id);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 // ════════════════════════════════════════
@@ -2943,6 +3381,8 @@ function saveUserState(isNew) {
     liftHistory: state.liftHistory.slice(0,20),
     txHistory: state.txHistory.slice(0,30),
     ownedSkills: state.ownedSkills,
+    ownedArtifacts: state.ownedArtifacts || [],
+    unlockedFiles: state.unlockedFiles || [],
     equippedSkills: state.equippedSkills,
     streak: state.streak,
     videosUploaded: state.videosUploaded || 0,
@@ -2982,6 +3422,8 @@ function loadUserState(uid, user) {
         if(d.estirpe) state.estirpe = d.estirpe;
         if(d.titanCardUsed) state.titanCardUsed = d.titanCardUsed;
         if(d.equippedSkills) state.equippedSkills = d.equippedSkills;
+        if(d.ownedArtifacts) state.ownedArtifacts = d.ownedArtifacts;
+        if(d.unlockedFiles) state.unlockedFiles = d.unlockedFiles;
         if(d.streak != null) state.streak = d.streak;
         if(d.videosUploaded != null) state.videosUploaded = d.videosUploaded;
         // Pre-select main disc
@@ -2993,6 +3435,7 @@ function loadUserState(uid, user) {
         renderLiftHistory();
         renderRecords();
         addLog('<span class="ok">▶</span> Sesión restaurada · ' + state.name + ' · LVL ' + state.level);
+        checkArtifactUnlocks(); checkLoreUnlocks();
       } else {
         // New user
         onNoUserDoc(user);
@@ -4008,6 +4451,7 @@ function showEvolutionDetail() {
 }
 
 function showEvolutionAnimation(evo) {
+  checkArtifactUnlocks(); checkLoreUnlocks();
   const overlay = document.getElementById('evoOverlay');
   if (!overlay) return;
   document.getElementById('evoOverlayEmoji').textContent = evo.emoji;
