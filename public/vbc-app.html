@@ -2445,7 +2445,7 @@ function renderArchivosArtifacts() {
     } else if (art.autoGrant) {
       actionBtn = '<span style="font-size:10px;color:#ffcc00;">⚡ Auto-desbloqueo</span>';
     } else {
-      actionBtn = '<button onclick="buyArtifact('' + art.id + '')" style="background:' + est.color + ';border:none;color:#000;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1px;">' + art.cost + ' 💎</button>';
+      actionBtn = '<button onclick="buyArtifact(\'' + art.id + '\')" style="background:' + est.color + ';border:none;color:#000;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1px;">' + art.cost + ' 💎</button>';
     }
 
     html2 += '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid ' + borderColor + ';border-radius:8px;background:' + bg + ';opacity:' + opacity + ';margin-bottom:8px;">'
@@ -4116,7 +4116,7 @@ function renderBattleRadarWidget() {
   `;
 }
 
-const // ══ CARTA TITÁN — Attack on Titan fury revival ══════════════════
+// ══ CARTA TITÁN — Attack on Titan fury revival ══════════════════
 const TITAN_COOLDOWN_DAYS = 30;
 
 function canUseTitanCard() {
