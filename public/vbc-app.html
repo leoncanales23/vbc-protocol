@@ -1126,7 +1126,50 @@ body::after{
     </div>
     <div id="lore-files-grid" style="display:flex;flex-direction:column;gap:12px;"></div>
   </div>
+
+
+<!-- ══ SCREEN: QUESTS ══ -->
+<div id="s-quests" class="screen" style="display:none; padding:16px; background:var(--bg);">
+  <div style="max-width:600px; margin:0 auto;">
+
+    <!-- Header -->
+    <div style="text-align:center; margin-bottom:20px;">
+      <div style="font-size:2.2rem; margin-bottom:6px;">⚡</div>
+      <div style="font-family:'Orbitron',sans-serif; font-size:1.3rem; color:var(--accent); letter-spacing:2px;">QUEST ENGINE</div>
+      <div style="font-size:0.75rem; color:var(--muted); letter-spacing:3px;">VBC MISSION SYSTEM · PROTOCOLO ACTIVO</div>
+    </div>
+
+    <!-- XP Bar global -->
+    <div id="quest-xp-bar" style="background:var(--glass); border:1px solid var(--border); border-radius:12px; padding:12px 16px; margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <span style="font-size:0.75rem; color:var(--muted); letter-spacing:2px;">SEASON XP</span>
+        <span id="quest-xp-label" style="font-size:0.85rem; color:var(--accent); font-family:'Orbitron',sans-serif;">0 / 1000 XP</span>
+      </div>
+      <div style="background:rgba(255,255,255,0.08); border-radius:6px; height:8px; overflow:hidden;">
+        <div id="quest-xp-fill" style="height:100%; background:linear-gradient(90deg,var(--accent),#7fff00); border-radius:6px; transition:width 0.6s; width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Filtros -->
+    <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+      <button onclick="filterQuests('all')" id="qf-all" style="padding:6px 14px; border-radius:20px; border:1px solid var(--accent); background:var(--accent); color:#000; font-size:0.75rem; font-family:'Orbitron',sans-serif; cursor:pointer;">TODAS</button>
+      <button onclick="filterQuests('daily')" id="qf-daily" style="padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:0.75rem; font-family:'Orbitron',sans-serif; cursor:pointer;">DIARIAS</button>
+      <button onclick="filterQuests('weekly')" id="qf-weekly" style="padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:0.75rem; font-family:'Orbitron',sans-serif; cursor:pointer;">SEMANALES</button>
+      <button onclick="filterQuests('story')" id="qf-story" style="padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:0.75rem; font-family:'Orbitron',sans-serif; cursor:pointer;">HISTORIA</button>
+    </div>
+
+    <!-- Lista de quests -->
+    <div id="quest-list"></div>
+
+    <!-- Completadas hoy -->
+    <div style="margin-top:20px; padding:12px 16px; background:var(--glass); border:1px solid var(--border); border-radius:12px;">
+      <div style="font-size:0.7rem; color:var(--muted); letter-spacing:3px; margin-bottom:8px;">COMPLETADAS HOY</div>
+      <div id="quest-done-list" style="font-size:0.82rem; color:var(--accent);"></div>
+    </div>
+
+  </div>
 </div>
+
 
 <div id="setup-overlay" class="gone">
   <div class="setup-card">
@@ -1228,6 +1271,7 @@ body::after{
       <button class="nav-tab" onclick="goScreen('ranking')">🏆 Ranking</button>
       <button class="nav-tab" onclick="goScreen('battle')">⚔ Battle</button>
       <button class="nav-tab" onclick="goScreen('archivos')">📜 Lore</button>
+      <button class="nav-tab" onclick="goScreen('quests')">⚡ Quest</button>
     </div>
     <div class="nav-right">
       <!-- 💎 Diamond sprite — moneda VBC */-->
@@ -2424,13 +2468,15 @@ function goScreen(id) {
        (id==='wallet'&&t.textContent.includes('Wallet'))||
        (id==='ranking'&&t.textContent.includes('Ranking'))||
        (id==='battle'&&t.textContent.includes('Battle'))||
-       (id==='archivos'&&t.textContent.includes('Lore'))) t.classList.add('active');
+       (id==='archivos'&&t.textContent.includes('Lore'))||
+       (id==='quests'&&t.textContent.includes('Quest'))) t.classList.add('active');
   });
   if(id==='skills') renderSkills();
   if(id==='wallet') renderWallet();
   if(id==='ranking') renderRanking();
   if(id==='perfil') { renderPerfil(); vbcInitChart(); }
   if(id==='archivos') renderArchivos();
+  if(id==='quests') { vbcInitQuests && vbcInitQuests(); }
 }
 
 
@@ -2675,6 +2721,7 @@ function registerLift() {
   if(r<1||r>30){showToast('Reps inválidas (1-30)','warn');return;}
   const res=calcScore(selectedDisc,w,r);
   if(!res.ok){showToast(res.error,'warn');return;}
+  questIncrCounter && questIncrCounter('lifts_today', 1);
   let finalVBC=res.vbc;
   if(state.ownedSkills.includes('turbo_sync')) finalVBC=Math.round(finalVBC*1.05);
   if(state.ownedSkills.includes('precision_mode')) finalVBC=Math.round(finalVBC*1.08);
@@ -3959,6 +4006,8 @@ function showBattleResult(data) {
   if (won && !isDraw) {
     const _prevEvo = state.evolutionLevel || 1;
     state.battleWins = (state.battleWins || 0) + 1;
+    questIncrCounter && questIncrCounter('battle_wins_wk', 1);
+    questIncrCounter && questIncrCounter('battles_today', 1);
     showCharActionPopup('¡VICTORIA!');
     // Reward VBC locally (server also updates but for immediate feedback)
     if (data.reward) { state.vbc += data.reward; state.totalVBC += data.reward; updateNavBal(); }
@@ -4553,6 +4602,7 @@ let _vbcRestRemain = 60;
 let _vbcRestInterval = null;
 
 function vbcStartRest(secs) {
+  questIncrCounter && questIncrCounter('timer_today', 1);
   secs = secs || _vbcRestSecs;
   _vbcRestSecs = secs;
   _vbcRestRemain = secs;
@@ -4697,6 +4747,236 @@ function vbcInitChart() {
     if (c) vbcRenderProgressionChart(c.id);
   }, 400);
 }
+
+
+// ═══════════════════════════════════════════════════════════
+// ⚡ VBC QUEST ENGINE — Sistema de Misiones
+// ═══════════════════════════════════════════════════════════
+
+const QUEST_DEFINITIONS = [
+  // ── DIARIAS ──
+  { id:'q-d1',  type:'daily',  icon:'💪', name:'Primera Sangre',       desc:'Registra 1 lift hoy',           target:'lifts_today',    req:1,   xp:40,  coins:15, art:null },
+  { id:'q-d2',  type:'daily',  icon:'🔥', name:'Triple Amenaza',       desc:'Registra 3 lifts en un día',    target:'lifts_today',    req:3,   xp:80,  coins:30, art:null },
+  { id:'q-d3',  type:'daily',  icon:'⚔️', name:'Desafío de Batalla',   desc:'Inicia 1 batalla hoy',          target:'battles_today',  req:1,   xp:60,  coins:25, art:null },
+  { id:'q-d4',  type:'daily',  icon:'⏱️', name:'Guerrero de Descanso', desc:'Usa el rest timer 3 veces',     target:'timer_today',    req:3,   xp:30,  coins:10, art:null },
+
+  // ── SEMANALES ──
+  { id:'q-w1',  type:'weekly', icon:'📈', name:'Semana de Hierro',     desc:'5 días de entrenamiento',       target:'training_days',  req:5,   xp:200, coins:80,  art:'Banda de Hierro' },
+  { id:'q-w2',  type:'weekly', icon:'🏆', name:'Campeón de Arena',     desc:'Gana 3 batallas esta semana',   target:'battle_wins_wk', req:3,   xp:300, coins:120, art:'Guante del Campeón' },
+  { id:'q-w3',  type:'weekly', icon:'💎', name:'Acumulador VBC',       desc:'Gana 200 VBC coins',            target:'coins_earned_wk',req:200, xp:150, coins:50,  art:null },
+  { id:'q-w4',  type:'weekly', icon:'🧬', name:'Evolución Activa',     desc:'Sube 1 nivel de evolución',     target:'evo_up_wk',      req:1,   xp:400, coins:200, art:'Núcleo de Evolución' },
+
+  // ── HISTORIA ──
+  { id:'q-s1',  type:'story',  icon:'🩸', name:'El Despertar',        desc:'Completa el onboarding',         target:'onboarding_done',req:1,   xp:100, coins:50,  art:null,  unlocked:true },
+  { id:'q-s2',  type:'story',  icon:'🌑', name:'Primera Conquista',   desc:'Gana tu primera batalla',        target:'battle_wins',    req:1,   xp:250, coins:100, art:'Medalla del Iniciado' },
+  { id:'q-s3',  type:'story',  icon:'⚡', name:'Ascensión',           desc:'Llega a evolución 3',            target:'evo_level',      req:3,   xp:500, coins:250, art:'Cristal de Ascensión' },
+  { id:'q-s4',  type:'story',  icon:'👑', name:'Señor de la Arena',   desc:'10 victorias en batalla',        target:'battle_wins',    req:10,  xp:1000,coins:500, art:'Corona del Señor' },
+  { id:'q-s5',  type:'story',  icon:'🌍', name:'Leyenda VBC',         desc:'Llega a evolución 7 (forma final)',target:'evo_level',   req:7,   xp:2000,coins:1000,art:'Runa OMEGA' },
+];
+
+// Estado de quests en userState
+function ensureQuestState() {
+  if (!userState.quests) userState.quests = {};
+  if (!userState.questXP) userState.questXP = 0;
+  if (!userState.questSeasonXP) userState.questSeasonXP = 0;
+  if (!userState.questDailyReset) userState.questDailyReset = null;
+  if (!userState.questWeeklyReset) userState.questWeeklyReset = null;
+  checkDailyReset();
+  checkWeeklyReset();
+}
+
+function checkDailyReset() {
+  const today = new Date().toDateString();
+  if (userState.questDailyReset !== today) {
+    userState.questDailyReset = today;
+    // Reset contadores diarios
+    ['lifts_today','battles_today','timer_today'].forEach(k => {
+      if (!userState.questCounters) userState.questCounters = {};
+      userState.questCounters[k] = 0;
+    });
+    // Quests diarias: marcar como no completadas
+    QUEST_DEFINITIONS.filter(q => q.type === 'daily').forEach(q => {
+      if (userState.quests[q.id] === 'done-today') delete userState.quests[q.id];
+    });
+  }
+}
+
+function checkWeeklyReset() {
+  const now = new Date();
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
+  const wk = weekStart.toDateString();
+  if (userState.questWeeklyReset !== wk) {
+    userState.questWeeklyReset = wk;
+    if (!userState.questCounters) userState.questCounters = {};
+    ['battle_wins_wk','coins_earned_wk','evo_up_wk','training_days'].forEach(k => {
+      userState.questCounters[k] = 0;
+    });
+    QUEST_DEFINITIONS.filter(q => q.type === 'weekly').forEach(q => {
+      if (userState.quests[q.id] === 'done') delete userState.quests[q.id];
+    });
+  }
+}
+
+function questIncrCounter(key, amount = 1) {
+  ensureQuestState();
+  if (!userState.questCounters) userState.questCounters = {};
+  userState.questCounters[key] = (userState.questCounters[key] || 0) + amount;
+  checkQuestProgress();
+  saveUserState();
+}
+
+function getQuestProgress(q) {
+  ensureQuestState();
+  const c = userState.questCounters || {};
+  const direct = {
+    'battle_wins': userState.battleWins || 0,
+    'evo_level': getEvolution ? (getEvolution(userState).level || 1) : 1,
+    'onboarding_done': userState.onboardingDone ? 1 : 0,
+  };
+  return direct[q.target] !== undefined
+    ? direct[q.target]
+    : (c[q.target] || 0);
+}
+
+function checkQuestProgress() {
+  ensureQuestState();
+  QUEST_DEFINITIONS.forEach(q => {
+    if (userState.quests[q.id] === 'done' || userState.quests[q.id] === 'done-today') return;
+    const prog = getQuestProgress(q);
+    if (prog >= q.req) {
+      completeQuest(q);
+    }
+  });
+}
+
+function completeQuest(q) {
+  if (userState.quests[q.id] === 'done' || userState.quests[q.id] === 'done-today') return;
+  userState.quests[q.id] = q.type === 'daily' ? 'done-today' : 'done';
+  userState.questXP = (userState.questXP || 0) + q.xp;
+  userState.questSeasonXP = (userState.questSeasonXP || 0) + q.xp;
+  userState.vbcCoins = (userState.vbcCoins || 0) + q.coins;
+  // Notificación
+  showQuestComplete(q);
+  // Artefacto especial
+  if (q.art) {
+    if (!userState.questArtifacts) userState.questArtifacts = [];
+    if (!userState.questArtifacts.includes(q.art)) {
+      userState.questArtifacts.push(q.art);
+    }
+  }
+  saveUserState();
+  updateNavBal && updateNavBal();
+}
+
+function showQuestComplete(q) {
+  const notif = document.createElement('div');
+  notif.style.cssText = `
+    position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+    background:linear-gradient(135deg,#0a0a0a,#1a1a2e);
+    border:1px solid var(--accent); border-radius:14px;
+    padding:14px 22px; z-index:9999; text-align:center;
+    box-shadow:0 0 20px rgba(0,255,128,0.3);
+    animation: questIn 0.4s ease; pointer-events:none;
+  `;
+  notif.innerHTML = `
+    <div style="font-size:1.6rem">${q.icon}</div>
+    <div style="font-family:'Orbitron',sans-serif; color:var(--accent); font-size:0.8rem; letter-spacing:2px; margin:4px 0;">QUEST COMPLETADA</div>
+    <div style="color:#fff; font-size:0.9rem; font-weight:700;">${q.name}</div>
+    <div style="color:var(--muted); font-size:0.75rem; margin-top:4px;">+${q.xp} XP · +${q.coins} VBC${q.art ? ' · 🎒 '+q.art : ''}</div>
+  `;
+  document.body.appendChild(notif);
+  setTimeout(() => notif.remove(), 4000);
+}
+
+let questCurrentFilter = 'all';
+
+function filterQuests(type) {
+  questCurrentFilter = type;
+  ['all','daily','weekly','story'].forEach(t => {
+    const btn = document.getElementById('qf-' + t);
+    if (btn) {
+      btn.style.background = t === type ? 'var(--accent)' : 'transparent';
+      btn.style.color = t === type ? '#000' : 'var(--muted)';
+    }
+  });
+  renderQuests();
+}
+
+function renderQuests() {
+  ensureQuestState();
+  checkQuestProgress();
+
+  const el = document.getElementById('quest-list');
+  const doneEl = document.getElementById('quest-done-list');
+  if (!el) return;
+
+  const seasonXP = userState.questSeasonXP || 0;
+  const seasonTarget = 1000;
+  const pct = Math.min(100, (seasonXP / seasonTarget) * 100);
+  const xpLabel = document.getElementById('quest-xp-label');
+  const xpFill  = document.getElementById('quest-xp-fill');
+  if (xpLabel) xpLabel.textContent = seasonXP + ' / ' + seasonTarget + ' XP';
+  if (xpFill)  xpFill.style.width = pct + '%';
+
+  const quests = questCurrentFilter === 'all'
+    ? QUEST_DEFINITIONS
+    : QUEST_DEFINITIONS.filter(q => q.type === questCurrentFilter);
+
+  const pending = quests.filter(q => userState.quests[q.id] !== 'done' && userState.quests[q.id] !== 'done-today');
+  const done    = quests.filter(q => userState.quests[q.id] === 'done' || userState.quests[q.id] === 'done-today');
+
+  el.innerHTML = pending.map(q => {
+    const prog = getQuestProgress(q);
+    const pct  = Math.min(100, (prog / q.req) * 100);
+    const typeLabel = { daily:'DIARIA', weekly:'SEMANAL', story:'HISTORIA' }[q.type] || q.type.toUpperCase();
+    const typeColor = { daily:'#ffcc00', weekly:'#00bfff', story:'#ff6b6b' }[q.type] || '#aaa';
+    return `
+      <div style="background:var(--glass); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:1.5rem">${q.icon}</span>
+            <div>
+              <div style="font-weight:700; color:#fff; font-size:0.9rem;">${q.name}</div>
+              <div style="color:var(--muted); font-size:0.75rem;">${q.desc}</div>
+            </div>
+          </div>
+          <span style="font-size:0.65rem; font-family:'Orbitron',sans-serif; color:${typeColor}; border:1px solid ${typeColor}; padding:2px 8px; border-radius:10px;">${typeLabel}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-size:0.72rem; color:var(--muted);">${prog} / ${q.req}</span>
+          <span style="font-size:0.72rem; color:var(--accent);">+${q.xp} XP · +${q.coins} 💎${q.art ? ' · 🎒' : ''}</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.08); border-radius:4px; height:6px; overflow:hidden;">
+          <div style="width:${pct}%; height:100%; background:linear-gradient(90deg,var(--accent),#7fff00); border-radius:4px; transition:width 0.5s;"></div>
+        </div>
+      </div>
+    `;
+  }).join('') || '<div style="text-align:center;color:var(--muted);padding:20px;font-size:0.85rem;">No hay misiones pendientes en esta categoría</div>';
+
+  if (doneEl) {
+    doneEl.innerHTML = done.length
+      ? done.map(q => `<span style="margin-right:10px; opacity:0.6;">${q.icon} ${q.name} ✓</span>`).join('')
+      : '<span style="color:var(--muted);font-size:0.8rem;">Ninguna completada aún</span>';
+  }
+}
+
+function vbcInitQuests() {
+  ensureQuestState();
+  checkQuestProgress();
+  renderQuests();
+}
+
+// Agregar estilos de animación quest
+(function(){
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes questIn {
+      from { opacity:0; transform:translateX(-50%) translateY(20px); }
+      to   { opacity:1; transform:translateX(-50%) translateY(0); }
+    }
+  `;
+  document.head.appendChild(style);
+})();
 
 </script>
 
