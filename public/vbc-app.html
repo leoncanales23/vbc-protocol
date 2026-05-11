@@ -1007,12 +1007,55 @@ body::after{
   70% { opacity:1; transform:translateY(-10px) scale(1); }
   100% { opacity:0; transform:translateY(-30px) scale(0.8); }
 }
+
+/* ═══ VBC REST TIMER ═══ */
+#vbc-rest-float {
+  position: fixed; bottom: 90px; right: 18px; z-index: 9999;
+  background: rgba(10,10,20,0.96); border: 1.5px solid #0ff;
+  border-radius: 16px; padding: 14px 18px; min-width: 170px;
+  box-shadow: 0 0 24px #0ff4, 0 4px 32px #000a;
+  font-family: 'Orbitron', monospace; color: #0ff;
+  display: none; flex-direction: column; align-items: center; gap: 8px;
+  backdrop-filter: blur(12px);
+}
+#vbc-rest-float.active { display: flex; }
+#vbc-rest-clock {
+  font-size: 2.4rem; font-weight: 900; letter-spacing: 3px;
+  text-shadow: 0 0 16px #0ff;
+}
+#vbc-rest-label { font-size: 0.62rem; letter-spacing: 2px; opacity: 0.7; color: #aff; }
+.vbc-rest-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.vbc-rest-preset {
+  background: transparent; border: 1px solid #0ff5;
+  color: #0ff; border-radius: 8px; padding: 4px 10px;
+  font-size: 0.68rem; font-family: 'Orbitron', monospace;
+  cursor: pointer; transition: all .2s;
+}
+.vbc-rest-preset:hover, .vbc-rest-preset.sel {
+  background: #0ff2; border-color: #0ff; box-shadow: 0 0 8px #0ff5;
+}
+#vbc-rest-stop {
+  background: transparent; border: 1px solid #f55;
+  color: #f55; border-radius: 8px; padding: 4px 14px;
+  font-size: 0.65rem; font-family: 'Orbitron', monospace; cursor: pointer;
+}
+#vbc-rest-stop:hover { background: #f552; }
+/* Trigger button — aparece en registro de sets */
+.vbc-timer-trigger {
+  background: transparent; border: 1px solid #0ff6;
+  color: #0ff; border-radius: 8px; padding: 5px 12px;
+  font-size: 0.7rem; font-family: 'Orbitron', monospace; cursor: pointer;
+  margin-top: 4px; transition: all .2s;
+}
+.vbc-timer-trigger:hover { background: #0ff1; box-shadow: 0 0 8px #0ff4; }
+
 </style>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -1207,6 +1250,23 @@ body::after{
   <div class="screen" id="s-perfil">
     <div class="g2" style="margin-top:8px;">
       <div>
+        
+        <!-- VBC Progression Chart -->
+        <div class="panel" style="margin-bottom:16px;">
+          <div class="scan"></div>
+          <div class="corner-d tl"></div><div class="corner-d tr"></div>
+          <div class="panel-h">
+            <span class="panel-title">📊 VBC · Progresión de Fuerzas</span>
+            <span class="panel-sub">HISTÓRICO DE LIFTS</span>
+          </div>
+          <div class="panel-body">
+            <div id="vbc-progression-chart" style="min-height:80px;">
+              <div style="text-align:center;color:#0ff5;font-size:0.75rem;padding:20px;">
+                Sin lifts registrados aún — empieza a entrenar
+              </div>
+            </div>
+          </div>
+        </div>
         <!-- Mission widget -->
         <div class="vbc-mission-wrap" id="missionWrap" style="display:none;">
           <div id="vbcMissionWidget" class="vbc-mission-widget"></div>
@@ -1367,6 +1427,12 @@ body::after{
               </div>
             </div>
             <button class="lift-btn" onclick="haptic('lift');registerLift()" id="liftBtn">⟶ REGISTRAR LIFT · CALCULAR SCORE</button>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <button class="vbc-timer-trigger" onclick="vbcStartRest(60)">⏱ 60s</button>
+            <button class="vbc-timer-trigger" onclick="vbcStartRest(90)">⏱ 90s</button>
+            <button class="vbc-timer-trigger" onclick="vbcStartRest(120)">⏱ 2:00</button>
+            <button class="vbc-timer-trigger" onclick="vbcStartRest(180)">⏱ 3:00</button>
+          </div>
           </div>
         </div>
       </div>
@@ -1660,12 +1726,12 @@ body::after{
    ══════════════════════════════════════════════════════════ */
 (function VBCAuth() {
   var _FC = {
-    apiKey:            "AIzaSyA-PBjiR6uJtXgO0JZnSc78Aqy4yUK__g8",
+    apiKey:            "AIzaSyD86M9OSkhosZrNHOBHfM6T4vlN38EO6Hc",
     authDomain:        "vibraaltoai-11f55.firebaseapp.com",
     projectId:         "vibraaltoai-11f55",
-    storageBucket:     "vibraaltoai-11f55.firebasestorage.app",
-    messagingSenderId: "852702111467",
-    appId:             "1:852702111467:web:3d118e1e818a51f12740ae",
+    storageBucket:     "vibraaltoai-11f55.appspot.com",
+    messagingSenderId: "482078525826",
+    appId:             "1:482078525826:web:6a1a3e2f4f1a3e2f",
     measurementId:     "G-GQENHLRTC7"
   };
 
@@ -2363,7 +2429,7 @@ function goScreen(id) {
   if(id==='skills') renderSkills();
   if(id==='wallet') renderWallet();
   if(id==='ranking') renderRanking();
-  if(id==='perfil') renderPerfil();
+  if(id==='perfil') { renderPerfil(); vbcInitChart(); }
   if(id==='archivos') renderArchivos();
 }
 
@@ -2502,7 +2568,7 @@ function renderArchivos() {
     const unlocked = state.unlockedFiles && state.unlockedFiles.includes(file.id);
     if (unlocked) {
       filesHtml += '<div style="border:1px solid ' + file.color + '33;border-radius:8px;overflow:hidden;margin-bottom:12px;">'
-        + '<div style="background:' + file.color + '11;padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="toggleLoreFile(\"' + file.id + '\")">'  
+        + '<div style="background:' + file.color + '11;padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="toggleLoreFile('' + file.id + '')">'
         + '<div style="font-family:monospace;font-size:10px;color:' + file.color + ';letter-spacing:1px;width:80px;">' + file.code + '</div>'
         + '<div style="flex:1;">'
         + '<div style="font-size:12px;font-weight:700;color:#fff;letter-spacing:1px;">' + file.title + '</div>'
@@ -2619,6 +2685,7 @@ function registerLift() {
   state.lastLiftTime=now;
   pendingResult={...res,finalVBC,finalCondor:res.condor,disc:selectedDisc,weight:w,reps:r};
   showResult(res,finalVBC,res.condor);
+  vbcStartRest(90); // VBC · Protocolo Descanso Auto
 }
 
 function showResult(res,vbc,condor) {
@@ -4477,6 +4544,160 @@ function checkEvolutionUp(prevLevel) {
   return newEvo;
 }
 
+
+// ═══════════════════════════════════════════════════════
+// VBC REST TIMER MODULE — Protocolo de Recuperación
+// ═══════════════════════════════════════════════════════
+let _vbcRestSecs = 60;
+let _vbcRestRemain = 60;
+let _vbcRestInterval = null;
+
+function vbcStartRest(secs) {
+  secs = secs || _vbcRestSecs;
+  _vbcRestSecs = secs;
+  _vbcRestRemain = secs;
+  document.getElementById('vbc-rest-float').classList.add('active');
+  document.querySelectorAll('.vbc-rest-preset').forEach(b => b.classList.remove('sel'));
+  const labelMap = {60:'60s',90:'90s',120:'2:00',180:'3:00'};
+  document.querySelectorAll('.vbc-rest-preset').forEach(b => {
+    if (b.textContent === (labelMap[secs] || secs+'s')) b.classList.add('sel');
+  });
+  if (_vbcRestInterval) clearInterval(_vbcRestInterval);
+  vbcUpdateRestClock();
+  _vbcRestInterval = setInterval(() => {
+    _vbcRestRemain--;
+    vbcUpdateRestClock();
+    if (_vbcRestRemain <= 0) {
+      clearInterval(_vbcRestInterval);
+      vbcRestAlarm();
+    }
+  }, 1000);
+}
+
+function vbcSetRest(secs) { vbcStartRest(secs); }
+
+function vbcStopRest() {
+  if (_vbcRestInterval) clearInterval(_vbcRestInterval);
+  document.getElementById('vbc-rest-float').classList.remove('active');
+}
+
+function vbcUpdateRestClock() {
+  const m = Math.floor(_vbcRestRemain / 60);
+  const s = _vbcRestRemain % 60;
+  const txt = m + ':' + String(s).padStart(2,'0');
+  document.getElementById('vbc-rest-clock').textContent = txt;
+  // Color urgente
+  const el = document.getElementById('vbc-rest-clock');
+  if (_vbcRestRemain <= 10) el.style.color = '#f55';
+  else if (_vbcRestRemain <= 30) el.style.color = '#fa0';
+  else el.style.color = '#0ff';
+}
+
+function vbcRestAlarm() {
+  document.getElementById('vbc-rest-float').classList.remove('active');
+  // Vibración si disponible
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+  // Notificación push si permiso
+  if (window.Notification && Notification.permission === 'granted') {
+    new Notification('VBC · DESCANSO COMPLETO', {
+      body: 'Protocolo de recuperación finalizado. Siguiente set.',
+      icon: '/vbc-icons/icon-192.png'
+    });
+  }
+  // Alerta visual
+  const fl = document.getElementById('vbc-rest-float');
+  fl.style.borderColor = '#0f0';
+  fl.style.boxShadow = '0 0 32px #0f08';
+  setTimeout(() => {
+    fl.style.borderColor = '#0ff';
+    fl.style.boxShadow = '0 0 24px #0ff4, 0 4px 32px #000a';
+  }, 2000);
+}
+
+// ═══════════════════════════════════════════════════════
+// VBC CHART MODULE — Sistema de Progresión de Fuerzas
+// ═══════════════════════════════════════════════════════
+let _vbcChartInstance = null;
+
+function vbcRenderProgressionChart(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  // Limpiar instancia previa
+  if (_vbcChartInstance) { _vbcChartInstance.destroy(); _vbcChartInstance = null; }
+
+  // Construir dataset desde historial de lifts en state
+  const lifts = (state && state.lifts) ? state.lifts : [];
+  const exercises = {};
+  lifts.forEach(l => {
+    if (!exercises[l.ex]) exercises[l.ex] = [];
+    exercises[l.ex].push({ date: l.date || l.ts || Date.now(), best: parseFloat(l.kg) || 0 });
+  });
+
+  // Top 4 ejercicios por volumen
+  const sorted = Object.entries(exercises)
+    .sort((a,b) => b[1].length - a[1].length)
+    .slice(0, 4);
+
+  const colors = ['#0ff','#f0f','#ff0','#0f0'];
+  const datasets = sorted.map(([name, entries], i) => {
+    const pts = entries.sort((a,b) => a.date - b.date);
+    return {
+      label: name,
+      data: pts.map(p => p.best),
+      borderColor: colors[i],
+      backgroundColor: colors[i] + '18',
+      tension: 0.4, fill: true,
+      pointRadius: 4, pointBackgroundColor: colors[i],
+      borderWidth: 2
+    };
+  });
+
+  const maxLen = Math.max(...(datasets.map(d => d.data.length) || [0]), 1);
+  const labels = Array.from({length: maxLen}, (_,i) => 'Set ' + (i+1));
+
+  container.innerHTML = '<canvas id="vbc-chart-canvas" style="width:100%;max-height:260px;"></canvas>';
+  const ctx = document.getElementById('vbc-chart-canvas').getContext('2d');
+
+  _vbcChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: datasets.length ? datasets : [{
+      label: 'Sin datos aún', data: [0],
+      borderColor: '#0ff', backgroundColor: '#0ff18', borderWidth: 2
+    }]},
+    options: {
+      responsive: true,
+      animation: { duration: 800, easing: 'easeInOutQuart' },
+      plugins: {
+        legend: {
+          labels: { color: '#aff', font: { family: 'Orbitron', size: 10 } }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(0,10,20,0.92)',
+          titleColor: '#0ff', bodyColor: '#eee',
+          borderColor: '#0ff', borderWidth: 1
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#0ff8', font: { size: 10 } }, grid: { color: '#0ff1' } },
+        y: {
+          ticks: { color: '#0ff8', font: { size: 10 }, callback: v => v + ' kg' },
+          grid: { color: '#0ff1' }
+        }
+      }
+    }
+  });
+}
+
+// Auto-render si hay sección de progresión visible
+function vbcInitChart() {
+  setTimeout(() => {
+    const c = document.getElementById('vbc-progression-chart') ||
+              document.getElementById('chart-container') ||
+              document.getElementById('progression-chart');
+    if (c) vbcRenderProgressionChart(c.id);
+  }, 400);
+}
+
 </script>
 
 
@@ -4491,6 +4712,20 @@ function checkEvolutionUp(prevLevel) {
       <button class="evo-overlay-close" onclick="document.getElementById('evoOverlay').classList.remove('active')">[ CERRAR ]</button>
     </div>
   </div>
+</div>
+
+
+<!-- VBC REST TIMER FLOAT -->
+<div id="vbc-rest-float">
+  <div id="vbc-rest-label">⏱ VBC · DESCANSO PROTOCOLAR</div>
+  <div id="vbc-rest-clock">01:00</div>
+  <div class="vbc-rest-btns">
+    <button class="vbc-rest-preset" onclick="vbcSetRest(60)">60s</button>
+    <button class="vbc-rest-preset" onclick="vbcSetRest(90)">90s</button>
+    <button class="vbc-rest-preset" onclick="vbcSetRest(120)">2:00</button>
+    <button class="vbc-rest-preset" onclick="vbcSetRest(180)">3:00</button>
+  </div>
+  <button id="vbc-rest-stop" onclick="vbcStopRest()">■ CANCELAR</button>
 </div>
 
 </body>
