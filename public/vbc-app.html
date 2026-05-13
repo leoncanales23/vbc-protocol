@@ -1272,6 +1272,7 @@ body::after{
       <button class="nav-tab" onclick="goScreen('battle')">⚔ Battle</button>
       <button class="nav-tab" onclick="goScreen('archivos')">📜 Lore</button>
       <button class="nav-tab" onclick="goScreen('quests')">⚡ Quest</button>
+      <button class="nav-tab" onclick="goScreen('guild')">🏛 Guild</button>
     </div>
     <div class="nav-right">
       <!-- 💎 Diamond sprite — moneda VBC */-->
@@ -1291,7 +1292,161 @@ body::after{
   </nav>
 
   <!-- ══ SCREEN: PERFIL ══ -->
-  <div class="screen" id="s-perfil">
+  
+<!-- 🏛 GUILD SCREEN -->
+<div id="s-guild" class="screen" style="display:none; padding:16px; background:var(--bg);">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+    <div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--cyan);letter-spacing:.2em;text-transform:uppercase;">VBC PROTOCOL</div>
+      <div style="font-size:22px;font-weight:900;letter-spacing:.05em;">🏛 GUILD SYSTEM</div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text2);margin-top:2px;">Fuerza colectiva · Guerra persistente</div>
+    </div>
+    <div style="text-align:center;padding:8px 14px;border:1px solid var(--border2);border-radius:10px;background:var(--bg3);">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text2);">SEASON</div>
+      <div style="font-size:16px;font-weight:900;color:var(--cyan);">I</div>
+    </div>
+  </div>
+
+  <!-- No Guild -->
+  <div id="guild-no-guild" style="display:none;">
+    <div style="text-align:center;padding:32px 16px;">
+      <div style="font-size:48px;margin-bottom:12px;">🏛</div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:6px;">Sin Guild</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text2);margin-bottom:24px;">Únete a una guild o funda la tuya propia</div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <button onclick="showCreateGuild()" style="padding:12px 22px;background:linear-gradient(135deg,var(--green),#00a86b);color:#000;border:none;border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;">⚔ FUNDAR GUILD</button>
+        <button onclick="showJoinGuild()" style="padding:12px 22px;background:var(--bg3);color:var(--cyan);border:1px solid var(--cyan);border-radius:10px;font-weight:800;font-size:13px;cursor:pointer;">🔗 UNIRSE</button>
+      </div>
+    </div>
+    <div style="margin-top:8px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text2);letter-spacing:.15em;margin-bottom:10px;">▶ GUILDS ACTIVAS</div>
+      <div id="guild-browse-list" style="display:flex;flex-direction:column;gap:8px;">
+        <div style="text-align:center;padding:20px;font-family:var(--mono);font-size:11px;color:var(--text2);">Cargando guilds...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Has Guild -->
+  <div id="guild-has-guild" style="display:none;">
+    <div id="guild-card" style="border:1px solid var(--border2);border-radius:14px;padding:18px;background:var(--bg3);margin-bottom:14px;position:relative;overflow:hidden;">
+      <div id="guild-card-banner" style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--green),var(--cyan));"></div>
+      <div style="display:flex;align-items:flex-start;gap:14px;">
+        <div id="guild-emblem-display" style="font-size:42px;line-height:1;filter:drop-shadow(0 0 8px rgba(0,255,136,.4));"></div>
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span id="guild-name-display" style="font-size:18px;font-weight:900;letter-spacing:.05em;"></span>
+            <span id="guild-type-badge" style="font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:4px;font-weight:700;"></span>
+          </div>
+          <div id="guild-leader-display" style="font-family:var(--mono);font-size:10px;color:var(--text2);margin-bottom:8px;"></div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;">
+            <div style="text-align:center;"><div id="guild-xp-display" style="font-size:16px;font-weight:900;color:var(--green);">0</div><div style="font-family:var(--mono);font-size:8px;color:var(--text2);">GUILD XP</div></div>
+            <div style="text-align:center;"><div id="guild-members-count" style="font-size:16px;font-weight:900;color:var(--cyan);">0</div><div style="font-family:var(--mono);font-size:8px;color:var(--text2);">MIEMBROS</div></div>
+            <div style="text-align:center;"><div id="guild-rank-display" style="font-size:16px;font-weight:900;color:#e2c36a;">#—</div><div style="font-family:var(--mono);font-size:8px;color:var(--text2);">RANK</div></div>
+            <div style="text-align:center;"><div id="guild-war-streak" style="font-size:16px;font-weight:900;color:#ff6b6b;">0</div><div style="font-family:var(--mono);font-size:8px;color:var(--text2);">VICTORIAS</div></div>
+          </div>
+        </div>
+      </div>
+      <div id="guild-description-display" style="margin-top:12px;font-family:var(--mono);font-size:10px;color:var(--text2);border-top:1px solid var(--border);padding-top:10px;"></div>
+      <div id="guild-leader-actions" style="display:none;margin-top:10px;">
+        <button onclick="openGuildSettings()" style="padding:6px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text2);cursor:pointer;">⚙ Configurar</button>
+      </div>
+    </div>
+
+    <!-- Guild War -->
+    <div style="border:1px solid rgba(255,107,107,.3);border-radius:14px;padding:14px;background:linear-gradient(135deg,rgba(255,107,107,.06),rgba(255,50,50,.02));margin-bottom:14px;">
+      <div style="font-family:var(--mono);font-size:10px;color:#ff6b6b;letter-spacing:.2em;margin-bottom:10px;">⚔ GUERRA DE GUILDS</div>
+      <div id="guild-war-content" style="text-align:center;padding:10px;">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text2);">Cargando estado de guerra...</div>
+      </div>
+    </div>
+
+    <!-- Guild Quests -->
+    <div style="border:1px solid rgba(0,255,136,.2);border-radius:14px;padding:14px;background:linear-gradient(135deg,rgba(0,255,136,.04),transparent);margin-bottom:14px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--green);letter-spacing:.2em;margin-bottom:10px;">⚡ MISIONES DE GUILD</div>
+      <div id="guild-quests-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
+    <!-- Members -->
+    <div style="border:1px solid var(--border);border-radius:14px;padding:14px;background:var(--bg3);margin-bottom:14px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--cyan);letter-spacing:.2em;margin-bottom:10px;">👥 MIEMBROS</div>
+      <div id="guild-members-list" style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;"></div>
+    </div>
+
+    <div style="text-align:center;margin-top:8px;">
+      <button onclick="confirmLeaveGuild()" style="padding:8px 18px;background:transparent;border:1px solid rgba(255,100,100,.3);border-radius:8px;color:rgba(255,100,100,.6);font-size:11px;cursor:pointer;">Abandonar Guild</button>
+    </div>
+  </div>
+
+  <!-- Create Guild Modal -->
+  <div id="create-guild-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9000;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:16px;padding:24px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;">
+      <div style="font-size:18px;font-weight:900;margin-bottom:4px;">⚔ Fundar Guild</div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text2);margin-bottom:20px;">Crea tu facción en el mundo VBC</div>
+      <div style="margin-bottom:14px;">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--cyan);margin-bottom:6px;">EMBLEMA</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;" id="guild-emblem-picker">
+          <span onclick="selectEmblema(this,'🔥')" style="font-size:24px;cursor:pointer;padding:6px;border-radius:8px;border:2px solid var(--green);background:rgba(0,255,136,.12);" class="emblem-opt">🔥</span>
+          <span onclick="selectEmblema(this,'⚡')" style="font-size:24px;cursor:pointer;padding:6px;border-radius:8px;border:2px solid transparent;" class="emblem-opt">⚡</span>
+          <span onclick="selectEmblema(this,'🐉')" style="font-size:24px;cursor:pointer;padding:6px;border-radius:8px;border:2px solid transparent;" class="emblem-opt">🐉</span>
+          <span onclick="selectEmblema(this,'🩸')" style="font-size:24px;cursor:pointer;padding:6px;border-radius:8px;border:2px solid transparent;" class="emblem-opt">🩸</span>
+          <span onclick="selectEmblema(this,'🌪️')" style="font-size:24px;cursor:pointer;padding:6px;border-radius:8px;border:2px solid transparent;" class="emblem-opt">🌪️</span>
+          <span onclick="selectEmblema(this,'🦴')" style="font-size:24px;cursor:pointer;padding:6px;border-radius:8px;border:2px solid transparent;" class="emblem-opt">🦴</span>
+          <span onclick="selectEmblema(this,'🔮')" style="font-size:24px;cursor:pointer;padding:6px;border-radius:8px;border:2px solid transparent;" class="emblem-opt">🔮</span>
+          <span onclick="selectEmblema(this,'🏔️')" style="font-size:24px;cursor:pointer;padding:6px;border-radius:8px;border:2px solid transparent;" class="emblem-opt">🏔️</span>
+          <span onclick="selectEmblema(this,'🌊')" style="font-size:24px;cursor:pointer;padding:6px;border-radius:8px;border:2px solid transparent;" class="emblem-opt">🌊</span>
+          <span onclick="selectEmblema(this,'💀')" style="font-size:24px;cursor:pointer;padding:6px;border-radius:8px;border:2px solid transparent;" class="emblem-opt">💀</span>
+          <span onclick="selectEmblema(this,'⚔️')" style="font-size:24px;cursor:pointer;padding:6px;border-radius:8px;border:2px solid transparent;" class="emblem-opt">⚔️</span>
+          <span onclick="selectEmblema(this,'🦅')" style="font-size:24px;cursor:pointer;padding:6px;border-radius:8px;border:2px solid transparent;" class="emblem-opt">🦅</span>
+        </div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--cyan);margin-bottom:6px;">NOMBRE DE GUILD</div>
+        <input id="guild-name-input" type="text" maxlength="30" placeholder="Ej: Iron Temple Santiago" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:14px;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--cyan);margin-bottom:6px;">DESCRIPCIÓN (opcional)</div>
+        <textarea id="guild-desc-input" maxlength="100" placeholder="El lema de tu guild..." style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:12px;box-sizing:border-box;resize:none;height:60px;font-family:var(--mono);"></textarea>
+      </div>
+      <div style="margin-bottom:20px;">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--cyan);margin-bottom:8px;">TIPO</div>
+        <div style="display:flex;gap:8px;">
+          <div onclick="selectGuildType('free')" id="gtype-free" style="flex:1;padding:10px;border:2px solid var(--green);border-radius:10px;text-align:center;cursor:pointer;background:rgba(0,255,136,.08);">
+            <div style="font-size:18px;">🌐</div><div style="font-size:11px;font-weight:700;margin-top:4px;">Libre</div>
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text2);">Cualquiera puede unirse</div>
+          </div>
+          <div onclick="selectGuildType('gym')" id="gtype-gym" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:10px;text-align:center;cursor:pointer;">
+            <div style="font-size:18px;">🏋️</div><div style="font-size:11px;font-weight:700;margin-top:4px;">Gimnasio</div>
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text2);">Verificado con código</div>
+          </div>
+        </div>
+        <div id="gym-code-section" style="display:none;margin-top:10px;">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--cyan);margin-bottom:6px;">CÓDIGO DE GYM</div>
+          <input id="guild-gym-code" type="text" maxlength="10" placeholder="GYM-XXXXX" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box;font-family:var(--mono);">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="closeCreateGuild()" style="flex:1;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-weight:700;cursor:pointer;">Cancelar</button>
+        <button onclick="createGuildSubmit()" style="flex:2;padding:12px;background:linear-gradient(135deg,var(--green),#00c875);color:#000;border:none;border-radius:10px;font-weight:900;font-size:14px;cursor:pointer;">⚔ FUNDAR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Join Guild Modal -->
+  <div id="join-guild-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9000;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:16px;padding:24px;width:100%;max-width:420px;">
+      <div style="font-size:18px;font-weight:900;margin-bottom:4px;">🔗 Unirse a Guild</div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text2);margin-bottom:20px;">ID de guild o código de gym</div>
+      <input id="join-guild-input" type="text" placeholder="ID o código GYM-XXXXX" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:14px;box-sizing:border-box;margin-bottom:14px;">
+      <div style="display:flex;gap:10px;">
+        <button onclick="closeJoinGuild()" style="flex:1;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-weight:700;cursor:pointer;">Cancelar</button>
+        <button onclick="joinGuildSubmit()" style="flex:2;padding:12px;background:linear-gradient(135deg,var(--cyan),#0088cc);color:#000;border:none;border-radius:10px;font-weight:900;font-size:14px;cursor:pointer;">🔗 UNIRSE</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div class="screen" id="s-perfil">
     <div class="g2" style="margin-top:8px;">
       <div>
         
@@ -2469,7 +2624,8 @@ function goScreen(id) {
        (id==='ranking'&&t.textContent.includes('Ranking'))||
        (id==='battle'&&t.textContent.includes('Battle'))||
        (id==='archivos'&&t.textContent.includes('Lore'))||
-       (id==='quests'&&t.textContent.includes('Quest'))) t.classList.add('active');
+       (id==='quests'&&t.textContent.includes('Quest'))||
+       (id==='guild'&&t.textContent.includes('Guild'))) t.classList.add('active');
   });
   if(id==='skills') renderSkills();
   if(id==='wallet') renderWallet();
@@ -2477,6 +2633,7 @@ function goScreen(id) {
   if(id==='perfil') { renderPerfil(); vbcInitChart(); }
   if(id==='archivos') renderArchivos();
   if(id==='quests') { vbcInitQuests && vbcInitQuests(); }
+  if(id==='guild') { vbcInitGuild && vbcInitGuild(); }
 }
 
 
@@ -3493,6 +3650,8 @@ function saveUserState(isNew) {
     level: state.level,
     records: state.records,
     liftHistory: state.liftHistory.slice(0,20),
+    guildId: state.guildId || null,
+    guildName: state.guildName || null,
     txHistory: state.txHistory.slice(0,30),
     ownedSkills: state.ownedSkills,
     ownedArtifacts: state.ownedArtifacts || [],
@@ -3537,6 +3696,8 @@ function loadUserState(uid, user) {
         if(d.titanCardUsed) state.titanCardUsed = d.titanCardUsed;
         if(d.equippedSkills) state.equippedSkills = d.equippedSkills;
         if(d.ownedArtifacts) state.ownedArtifacts = d.ownedArtifacts;
+        state.guildId = d.guildId || null;
+        state.guildName = d.guildName || null;
         if(d.unlockedFiles) state.unlockedFiles = d.unlockedFiles;
         if(d.streak != null) state.streak = d.streak;
         if(d.videosUploaded != null) state.videosUploaded = d.videosUploaded;
@@ -4978,6 +5139,757 @@ function vbcInitQuests() {
   document.head.appendChild(style);
 })();
 
+
+
+// ════════════════════════════════════════════════════════════════
+// 🏛 GUILD SYSTEM — VBC Protocol
+// ════════════════════════════════════════════════════════════════
+
+var _selectedGuildEmblema = '🔥';
+var _selectedGuildType = 'free';
+var _currentGuildData = null;
+var _guildWarData = null;
+
+const GUILD_QUESTS = [
+  { id:'gq1', name:'Lluvia de Hierro', desc:'Guild completa 20 lifts esta semana', target:20, field:'lifts', reward:{xp:200, vbc:100} },
+  { id:'gq2', name:'Arena de Campeones', desc:'Guild gana 5 batallas esta semana', target:5, field:'wins', reward:{xp:300, vbc:150} },
+  { id:'gq3', name:'Acumulación Total', desc:'Guild acumula 50,000 pts de fuerza', target:50000, field:'strength', reward:{xp:500, vbc:250} }
+];
+
+function vbcInitGuild() {
+  if (!window._fbDb || !_currentUid) return;
+  if (state.guildId) {
+    loadGuildData(state.guildId);
+  } else {
+    showNoGuildState();
+    loadGuildBrowse();
+  }
+}
+
+function showNoGuildState() {
+  var ng = document.getElementById('guild-no-guild');
+  var hg = document.getElementById('guild-has-guild');
+  if (ng) ng.style.display = 'block';
+  if (hg) hg.style.display = 'none';
+}
+
+function showHasGuildState() {
+  var ng = document.getElementById('guild-no-guild');
+  var hg = document.getElementById('guild-has-guild');
+  if (ng) ng.style.display = 'none';
+  if (hg) hg.style.display = 'block';
+}
+
+function loadGuildData(guildId) {
+  if (!window._fbDb) return;
+  window._fbDb.collection('vbc_guilds').doc(guildId).get().then(function(doc) {
+    if (!doc.exists) {
+      state.guildId = null; state.guildName = null;
+      saveUserState(false);
+      showNoGuildState();
+      loadGuildBrowse();
+      return;
+    }
+    _currentGuildData = Object.assign({id: doc.id}, doc.data());
+    renderGuildCard(_currentGuildData);
+    loadGuildMembers(guildId);
+    loadGuildWar(guildId);
+    renderGuildQuests(_currentGuildData);
+    showHasGuildState();
+  }).catch(function(e) { console.warn('Guild load error:', e); });
+}
+
+function renderGuildCard(g) {
+  var el = function(id) { return document.getElementById(id); };
+  if (el('guild-emblem-display')) el('guild-emblem-display').textContent = g.emblem || '🏛';
+  if (el('guild-name-display')) el('guild-name-display').textContent = g.name || 'Sin nombre';
+  if (el('guild-leader-display')) el('guild-leader-display').textContent = '👑 Líder: ' + (g.leaderName || '—') + (g.type==='gym' ? '  ·  🏋️ GYM VERIFICADO' : '');
+  if (el('guild-xp-display')) el('guild-xp-display').textContent = (g.xp || 0).toLocaleString();
+  if (el('guild-members-count')) el('guild-members-count').textContent = g.memberCount || 1;
+  if (el('guild-war-streak')) el('guild-war-streak').textContent = g.warWins || 0;
+  if (el('guild-description-display') && g.description) el('guild-description-display').textContent = '"' + g.description + '"';
+  // Rank badge
+  if (el('guild-rank-display')) {
+    el('guild-rank-display').textContent = g.rank ? '#' + g.rank : '#—';
+  }
+  var typeBadge = el('guild-type-badge');
+  if (typeBadge) {
+    if (g.type === 'gym') {
+      typeBadge.textContent = '🏋️ GYM';
+      typeBadge.style.background = 'rgba(226,195,106,.15)';
+      typeBadge.style.color = '#e2c36a';
+      typeBadge.style.border = '1px solid rgba(226,195,106,.3)';
+    } else {
+      typeBadge.textContent = '🌐 LIBRE';
+      typeBadge.style.background = 'rgba(0,255,136,.1)';
+      typeBadge.style.color = 'var(--green)';
+      typeBadge.style.border = '1px solid rgba(0,255,136,.25)';
+    }
+  }
+  var banner = el('guild-card-banner');
+  if (banner) {
+    var colors = {
+      '🔥':'linear-gradient(90deg,#ff4500,#ff8c00)',
+      '⚡':'linear-gradient(90deg,#ffd700,#00cfff)',
+      '🐉':'linear-gradient(90deg,#9b59b6,#e74c3c)',
+      '🩸':'linear-gradient(90deg,#c0392b,#8e1a1a)',
+      '🌪️':'linear-gradient(90deg,#74b9ff,#0984e3)',
+      '🦴':'linear-gradient(90deg,#b2bec3,#636e72)',
+      '🔮':'linear-gradient(90deg,#6c5ce7,#a29bfe)',
+      '💀':'linear-gradient(90deg,#2d3436,#636e72)',
+      '🌊':'linear-gradient(90deg,#00cec9,#0984e3)',
+      '🦅':'linear-gradient(90deg,#fdcb6e,#e17055)',
+    };
+    banner.style.background = colors[g.emblem] || 'linear-gradient(90deg,var(--green),var(--cyan))';
+  }
+  // Show leader actions if current user is leader
+  if (el('guild-leader-actions')) {
+    el('guild-leader-actions').style.display = (g.leaderId === _currentUid) ? 'block' : 'none';
+  }
+}
+
+function loadGuildMembers(guildId) {
+  var el = document.getElementById('guild-members-list');
+  if (!el) return;
+  window._fbDb.collection('vbc_guild_members')
+    .where('guildId','==',guildId)
+    .orderBy('contribution','desc')
+    .limit(20)
+    .get().then(function(snap) {
+      if (snap.empty) { el.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text2);text-align:center;padding:12px;">Solo tú por ahora. ¡Recluta!</div>'; return; }
+      var html = '';
+      var rank = 0;
+      snap.forEach(function(doc) {
+        rank++;
+        var m = doc.data();
+        var rankEmoji = rank===1?'👑':rank===2?'🥈':rank===3?'🥉':'▸';
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg);border-radius:8px;">' +
+          '<span style="font-size:14px;min-width:20px;">' + rankEmoji + '</span>' +
+          '<div style="flex:1;">' +
+            '<div style="font-size:13px;font-weight:700;">' + (m.memberName||'Guerrero') + '</div>' +
+            '<div style="font-family:var(--mono);font-size:9px;color:var(--text2);">' + (m.estirpe||'') + ' · ' + (m.memberForm||'') + '</div>' +
+          '</div>' +
+          '<div style="text-align:right;">' +
+            '<div style="font-size:12px;font-weight:700;color:var(--green);">+' + ((m.contribution||0)).toLocaleString() + '</div>' +
+            '<div style="font-family:var(--mono);font-size:9px;color:var(--text2);">XP esta semana</div>' +
+          '</div>' +
+        '</div>';
+      });
+      el.innerHTML = html;
+    }).catch(function(e) { el.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text2);text-align:center;">Error cargando miembros</div>'; });
+}
+
+function loadGuildWar(guildId) {
+  var el = document.getElementById('guild-war-content');
+  if (!el) return;
+  // Check if guild has an active war
+  window._fbDb.collection('vbc_guild_wars')
+    .where('guilds','array-contains',guildId)
+    .where('active','==',true)
+    .limit(1)
+    .get().then(function(snap) {
+      if (snap.empty) {
+        // Try to find a matchup
+        el.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text2);">Buscando rival de guerra...</div>' +
+          '<button onclick="startGuildWarSearch()" style="margin-top:10px;padding:8px 16px;background:rgba(255,107,107,.15);border:1px solid rgba(255,107,107,.4);border-radius:8px;color:#ff6b6b;font-weight:700;font-size:12px;cursor:pointer;">⚔ DECLARAR GUERRA</button>';
+        return;
+      }
+      var war = snap.docs[0].data();
+      war.id = snap.docs[0].id;
+      _guildWarData = war;
+      renderWarStatus(war, guildId);
+    }).catch(function() {
+      el.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text2);">Paz temporal...</div>';
+    });
+}
+
+function renderWarStatus(war, myGuildId) {
+  var el = document.getElementById('guild-war-content');
+  if (!el) return;
+  var myScore = war.scores ? (war.scores[myGuildId] || 0) : 0;
+  var opponentId = war.guilds.find(function(g) { return g !== myGuildId; });
+  var opponentName = war.guildNames ? (war.guildNames[opponentId] || 'Rival') : 'Rival';
+  var opponentEmblema = war.guildEmblems ? (war.guildEmblems[opponentId] || '🏛') : '🏛';
+  var opponentScore = war.scores ? (war.scores[opponentId] || 0) : 0;
+  var myEmblema = _currentGuildData ? (_currentGuildData.emblem || '🏛') : '🏛';
+  var myName = _currentGuildData ? (_currentGuildData.name || 'Mi Guild') : 'Mi Guild';
+  var total = myScore + opponentScore;
+  var myPct = total > 0 ? Math.round((myScore/total)*100) : 50;
+  var oppPct = 100 - myPct;
+  var endDate = war.endsAt ? new Date(war.endsAt.seconds*1000).toLocaleDateString() : '—';
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;">' +
+      '<div style="text-align:center;flex:1;">' +
+        '<div style="font-size:28px;">' + myEmblema + '</div>' +
+        '<div style="font-size:11px;font-weight:700;margin-top:4px;">' + myName + '</div>' +
+        '<div style="font-size:18px;font-weight:900;color:var(--green);margin-top:4px;">' + myScore.toLocaleString() + '</div>' +
+        '<div style="font-family:var(--mono);font-size:9px;color:var(--text2);">STRENGTH PTS</div>' +
+      '</div>' +
+      '<div style="text-align:center;">' +
+        '<div style="font-size:16px;font-weight:900;color:#ff6b6b;">VS</div>' +
+        '<div style="font-family:var(--mono);font-size:9px;color:var(--text2);margin-top:4px;">Fin: ' + endDate + '</div>' +
+      '</div>' +
+      '<div style="text-align:center;flex:1;">' +
+        '<div style="font-size:28px;">' + opponentEmblema + '</div>' +
+        '<div style="font-size:11px;font-weight:700;margin-top:4px;">' + opponentName + '</div>' +
+        '<div style="font-size:18px;font-weight:900;color:#ff6b6b;margin-top:4px;">' + opponentScore.toLocaleString() + '</div>' +
+        '<div style="font-family:var(--mono);font-size:9px;color:var(--text2);">STRENGTH PTS</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="background:var(--bg);border-radius:6px;overflow:hidden;height:8px;display:flex;">' +
+      '<div style="width:' + myPct + '%;background:var(--green);transition:width .5s;"></div>' +
+      '<div style="width:' + oppPct + '%;background:#ff6b6b;transition:width .5s;"></div>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:space-between;margin-top:4px;">' +
+      '<span style="font-family:var(--mono);font-size:9px;color:var(--green);">' + myPct + '%</span>' +
+      '<span style="font-family:var(--mono);font-size:9px;color:#ff6b6b;">' + oppPct + '%</span>' +
+    '</div>';
+}
+
+function renderGuildQuests(guildData) {
+  var el = document.getElementById('guild-quests-list');
+  if (!el) return;
+  var progress = guildData.questProgress || {};
+  var html = '';
+  GUILD_QUESTS.forEach(function(q) {
+    var prog = progress[q.id] || 0;
+    var pct = Math.min(100, Math.round((prog/q.target)*100));
+    var done = pct >= 100;
+    html += '<div style="padding:10px 12px;background:var(--bg);border-radius:10px;border:1px solid ' + (done?'rgba(0,255,136,.3)':'var(--border)') + ';">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+        '<span style="font-size:13px;font-weight:700;">' + (done?'✅ ':'⚡ ') + q.name + '</span>' +
+        '<span style="font-family:var(--mono);font-size:10px;color:#e2c36a;">+' + q.reward.vbc + ' VBC</span>' +
+      '</div>' +
+      '<div style="font-family:var(--mono);font-size:10px;color:var(--text2);margin-bottom:8px;">' + q.desc + '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<div style="flex:1;background:rgba(255,255,255,.05);border-radius:4px;overflow:hidden;height:5px;">' +
+          '<div style="width:' + pct + '%;height:100%;background:' + (done?'var(--green)':'var(--cyan)') + ';transition:width .4s;"></div>' +
+        '</div>' +
+        '<span style="font-family:var(--mono);font-size:10px;color:var(--text2);min-width:60px;text-align:right;">' + prog.toLocaleString() + ' / ' + q.target.toLocaleString() + '</span>' +
+      '</div>' +
+    '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function loadGuildBrowse() {
+  var el = document.getElementById('guild-browse-list');
+  if (!el) return;
+  window._fbDb.collection('vbc_guilds')
+    .orderBy('xp','desc')
+    .limit(8)
+    .get().then(function(snap) {
+      if (snap.empty) {
+        el.innerHTML = '<div style="text-align:center;padding:16px;font-family:var(--mono);font-size:11px;color:var(--text2);">No hay guilds aún. ¡Sé el primero en fundar una!</div>';
+        return;
+      }
+      var html = '';
+      var rank = 0;
+      snap.forEach(function(doc) {
+        rank++;
+        var g = doc.data();
+        html += '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;">' +
+          '<div style="font-size:28px;">' + (g.emblem||'🏛') + '</div>' +
+          '<div style="flex:1;">' +
+            '<div style="font-size:13px;font-weight:700;">' + (g.name||'Guild') + '</div>' +
+            '<div style="font-family:var(--mono);font-size:9px;color:var(--text2);">' + (g.memberCount||1) + ' miembros · ' + (g.xp||0).toLocaleString() + ' XP</div>' +
+          '</div>' +
+          '<div style="text-align:right;">' +
+            '<div style="font-family:var(--mono);font-size:10px;color:#e2c36a;font-weight:700;">#' + rank + '</div>' +
+            (g.type==='gym'?'<div style="font-family:var(--mono);font-size:8px;color:#e2c36a;">🏋️ GYM</div>':
+             '<button onclick="joinGuildById('' + doc.id + '')" style="margin-top:4px;padding:4px 10px;background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.3);border-radius:5px;color:var(--green);font-size:10px;font-weight:700;cursor:pointer;">UNIRSE</button>') +
+          '</div>' +
+        '</div>';
+      });
+      el.innerHTML = html;
+    }).catch(function(e) {
+      el.innerHTML = '<div style="text-align:center;padding:16px;font-family:var(--mono);font-size:11px;color:var(--text2);">Error cargando guilds</div>';
+    });
+}
+
+// ── Create Guild ──────────────────────────────────────────────
+function showCreateGuild() {
+  var m = document.getElementById('create-guild-modal');
+  if (m) { m.style.display = 'flex'; }
+}
+function closeCreateGuild() {
+  var m = document.getElementById('create-guild-modal');
+  if (m) m.style.display = 'none';
+}
+function showJoinGuild() {
+  var m = document.getElementById('join-guild-modal');
+  if (m) m.style.display = 'flex';
+}
+function closeJoinGuild() {
+  var m = document.getElementById('join-guild-modal');
+  if (m) m.style.display = 'none';
+}
+function selectEmblema(el, emoji) {
+  _selectedGuildEmblema = emoji;
+  document.querySelectorAll('.emblem-opt').forEach(function(e) {
+    e.style.border = '2px solid transparent';
+    e.style.background = 'transparent';
+  });
+  el.style.border = '2px solid var(--green)';
+  el.style.background = 'rgba(0,255,136,.12)';
+}
+function selectGuildType(type) {
+  _selectedGuildType = type;
+  var free = document.getElementById('gtype-free');
+  var gym = document.getElementById('gtype-gym');
+  var gymSection = document.getElementById('gym-code-section');
+  if (type === 'free') {
+    if (free) { free.style.border = '2px solid var(--green)'; free.style.background = 'rgba(0,255,136,.08)'; }
+    if (gym) { gym.style.border = '1px solid var(--border)'; gym.style.background = 'transparent'; }
+    if (gymSection) gymSection.style.display = 'none';
+  } else {
+    if (gym) { gym.style.border = '2px solid #e2c36a'; gym.style.background = 'rgba(226,195,106,.08)'; }
+    if (free) { free.style.border = '1px solid var(--border)'; free.style.background = 'transparent'; }
+    if (gymSection) gymSection.style.display = 'block';
+  }
+}
+
+function createGuildSubmit() {
+  var nameEl = document.getElementById('guild-name-input');
+  var descEl = document.getElementById('guild-desc-input');
+  if (!nameEl) return;
+  var name = (nameEl.value || '').trim();
+  if (!name) { alert('Pon un nombre a tu guild'); return; }
+  if (name.length < 3) { alert('El nombre debe tener al menos 3 caracteres'); return; }
+  var gymCode = '';
+  if (_selectedGuildType === 'gym') {
+    var gcEl = document.getElementById('guild-gym-code');
+    gymCode = gcEl ? (gcEl.value||'').trim().toUpperCase() : '';
+    if (!gymCode) { gymCode = 'GYM-' + Math.random().toString(36).substring(2,7).toUpperCase(); }
+  }
+  var guildId = 'g_' + _currentUid.substring(0,8) + '_' + Date.now().toString(36);
+  var guildDoc = {
+    name: name,
+    emblem: _selectedGuildEmblema,
+    description: descEl ? (descEl.value||'').trim() : '',
+    leaderId: _currentUid,
+    leaderName: state.name || 'Líder',
+    type: _selectedGuildType,
+    gymCode: gymCode,
+    xp: 0,
+    weeklyScore: 0,
+    memberCount: 1,
+    warWins: 0,
+    questProgress: { gq1:0, gq2:0, gq3:0 },
+    rank: 999,
+    created: firebase.firestore.FieldValue.serverTimestamp(),
+    season: 1
+  };
+  var memberDoc = {
+    guildId: guildId,
+    guildName: name,
+    memberId: _currentUid,
+    memberName: state.name || 'Guerrero',
+    estirpe: state.estirpe || '',
+    memberForm: (state.estirpe && ESTIRPES[state.estirpe]) ? (ESTIRPES[state.estirpe].forms[state.evoLevel||0]||{}).name : '',
+    contribution: 0,
+    joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  var batch = window._fbDb.batch();
+  batch.set(window._fbDb.collection('vbc_guilds').doc(guildId), guildDoc);
+  batch.set(window._fbDb.collection('vbc_guild_members').doc(_currentUid), memberDoc);
+  batch.commit().then(function() {
+    state.guildId = guildId;
+    state.guildName = name;
+    saveUserState(false);
+    closeCreateGuild();
+    _currentGuildData = Object.assign({id: guildId}, guildDoc);
+    renderGuildCard(_currentGuildData);
+    renderGuildQuests(_currentGuildData);
+    loadGuildMembers(guildId);
+    loadGuildWar(guildId);
+    showHasGuildState();
+    showToast('🏛 Guild "' + name + '" fundada. ¡Recluta guerreros!');
+    if (gymCode) showToast('🏋️ Código de gym: ' + gymCode, 4000);
+  }).catch(function(e) { alert('Error creando guild: ' + e.message); });
+}
+
+function joinGuildById(guildId) {
+  if (!window._fbDb || !_currentUid) return;
+  window._fbDb.collection('vbc_guilds').doc(guildId).get().then(function(doc) {
+    if (!doc.exists) { alert('Guild no encontrada'); return; }
+    if (doc.data().type === 'gym') { alert('Esta es una guild de gym. Necesitas el código de gym para unirte.'); return; }
+    doJoinGuild(guildId, doc.data());
+  });
+}
+
+function joinGuildSubmit() {
+  var input = document.getElementById('join-guild-input');
+  if (!input) return;
+  var val = (input.value||'').trim();
+  if (!val) { alert('Ingresa un ID o código'); return; }
+  // Search by gym code first
+  window._fbDb.collection('vbc_guilds').where('gymCode','==',val.toUpperCase()).limit(1).get().then(function(snap) {
+    if (!snap.empty) {
+      doJoinGuild(snap.docs[0].id, snap.docs[0].data());
+      closeJoinGuild();
+      return;
+    }
+    // Try direct ID
+    window._fbDb.collection('vbc_guilds').doc(val).get().then(function(doc) {
+      if (!doc.exists) { alert('Guild no encontrada. Verifica el ID o código.'); return; }
+      doJoinGuild(doc.id, doc.data());
+      closeJoinGuild();
+    });
+  });
+}
+
+function doJoinGuild(guildId, guildData) {
+  var batch = window._fbDb.batch();
+  var memberDoc = {
+    guildId: guildId,
+    guildName: guildData.name,
+    memberId: _currentUid,
+    memberName: state.name || 'Guerrero',
+    estirpe: state.estirpe || '',
+    memberForm: (state.estirpe && ESTIRPES[state.estirpe]) ? (ESTIRPES[state.estirpe].forms[state.evoLevel||0]||{}).name : '',
+    contribution: 0,
+    joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  batch.set(window._fbDb.collection('vbc_guild_members').doc(_currentUid), memberDoc);
+  batch.update(window._fbDb.collection('vbc_guilds').doc(guildId), {
+    memberCount: firebase.firestore.FieldValue.increment(1)
+  });
+  batch.commit().then(function() {
+    state.guildId = guildId;
+    state.guildName = guildData.name;
+    saveUserState(false);
+    loadGuildData(guildId);
+    showToast('🏛 Te uniste a "' + guildData.name + '"!');
+  }).catch(function(e) { alert('Error uniéndote: ' + e.message); });
+}
+
+function confirmLeaveGuild() {
+  if (!confirm('¿Seguro que quieres abandonar tu guild? Perderás tu contribución semanal.')) return;
+  if (!window._fbDb || !_currentUid || !state.guildId) return;
+  var guildId = state.guildId;
+  var batch = window._fbDb.batch();
+  batch.delete(window._fbDb.collection('vbc_guild_members').doc(_currentUid));
+  batch.update(window._fbDb.collection('vbc_guilds').doc(guildId), {
+    memberCount: firebase.firestore.FieldValue.increment(-1)
+  });
+  batch.commit().then(function() {
+    state.guildId = null;
+    state.guildName = null;
+    _currentGuildData = null;
+    saveUserState(false);
+    showNoGuildState();
+    loadGuildBrowse();
+    showToast('Has abandonado la guild.');
+  });
+}
+
+function startGuildWarSearch() {
+  if (!_currentGuildData) return;
+  // Find an opponent guild with similar XP
+  var myXp = _currentGuildData.xp || 0;
+  window._fbDb.collection('vbc_guilds')
+    .orderBy('xp','desc')
+    .limit(20)
+    .get().then(function(snap) {
+      var candidates = [];
+      snap.forEach(function(doc) {
+        if (doc.id !== state.guildId) candidates.push({id:doc.id, data:doc.data()});
+      });
+      if (!candidates.length) { showToast('No hay guilds disponibles para guerra aún. ¡Vuelve pronto!'); return; }
+      // Pick closest XP
+      candidates.sort(function(a,b) { return Math.abs((a.data.xp||0)-myXp) - Math.abs((b.data.xp||0)-myXp); });
+      var opp = candidates[0];
+      // Create war doc
+      var warId = 'war_' + state.guildId + '_' + opp.id + '_' + Date.now().toString(36);
+      var now = new Date();
+      var end = new Date(now.getTime() + 7*24*60*60*1000);
+      var scores = {}; scores[state.guildId] = 0; scores[opp.id] = 0;
+      var names = {}; names[state.guildId] = _currentGuildData.name; names[opp.id] = opp.data.name;
+      var emblems = {}; emblems[state.guildId] = _currentGuildData.emblem; emblems[opp.id] = opp.data.emblem;
+      var warDoc = {
+        guilds: [state.guildId, opp.id],
+        guildNames: names,
+        guildEmblems: emblems,
+        scores: scores,
+        active: true,
+        endsAt: firebase.firestore.Timestamp.fromDate(end),
+        startedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      window._fbDb.collection('vbc_guild_wars').doc(warId).set(warDoc).then(function() {
+        _guildWarData = Object.assign({id: warId}, warDoc);
+        renderWarStatus(_guildWarData, state.guildId);
+        showToast('⚔ ¡GUERRA DECLARADA contra ' + opp.data.name + '!');
+      });
+    });
+}
+
+function openGuildSettings() {
+  showToast('⚙ Configuración de guild — próximamente');
+}
+
+// ── Contribute guild XP on lift/battle ──────────────────────────
+function contributeToGuild(xpAmount, strengthPts, isBattleWin) {
+  if (!state.guildId || !window._fbDb || !_currentUid) return;
+  var memberUpdate = { contribution: firebase.firestore.FieldValue.increment(xpAmount || 0) };
+  var guildUpdate = {
+    xp: firebase.firestore.FieldValue.increment(xpAmount || 0),
+    weeklyScore: firebase.firestore.FieldValue.increment(strengthPts || 0)
+  };
+  // Update quest progress
+  if (strengthPts) {
+    guildUpdate['questProgress.gq3'] = firebase.firestore.FieldValue.increment(strengthPts);
+  }
+  if (isBattleWin) {
+    guildUpdate['questProgress.gq2'] = firebase.firestore.FieldValue.increment(1);
+  }
+  // Update war score
+  if (_guildWarData && _guildWarData.id) {
+    var warUpdate = {};
+    warUpdate['scores.' + state.guildId] = firebase.firestore.FieldValue.increment(strengthPts || 0);
+    window._fbDb.collection('vbc_guild_wars').doc(_guildWarData.id).update(warUpdate).catch(function(){});
+  }
+  window._fbDb.collection('vbc_guild_members').doc(_currentUid).update(memberUpdate).catch(function(){});
+  window._fbDb.collection('vbc_guilds').doc(state.guildId).update(guildUpdate).catch(function(){});
+}
+
+
+// ═══════════════════════════════════════════════════════
+//  🏛 GUILD ENGINE — VBC Hybrid Guild System
+// ═══════════════════════════════════════════════════════
+
+let selectedGuildBanner = '🏛';
+
+function selectBanner(el, emoji) {
+  selectedGuildBanner = emoji;
+  document.getElementById('guild-create-banner').value = emoji;
+  document.querySelectorAll('.banner-opt').forEach(b => b.style.borderColor = 'transparent');
+  el.style.borderColor = 'var(--cyan)';
+}
+
+function openCreateGuild() {
+  const modal = document.getElementById('modal-create-guild');
+  modal.style.display = 'flex';
+}
+
+function openJoinGuild() {
+  const modal = document.getElementById('modal-join-guild');
+  modal.style.display = 'flex';
+}
+
+function openGuildWar() {
+  showToast('⚔️ Guild War – próximamente en Season 1');
+}
+
+function openGuildQuests() {
+  showToast('📋 Misiones de Guild – próximamente');
+}
+
+function closeModal(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+async function submitCreateGuild() {
+  if (!currentUser) { showToast('Inicia sesión primero'); return; }
+  
+  const name  = document.getElementById('guild-create-name').value.trim();
+  const tag   = document.getElementById('guild-create-tag').value.trim().toUpperCase();
+  const type  = document.getElementById('guild-create-type').value;
+  const banner = selectedGuildBanner;
+
+  if (!name || name.length < 3) { showToast('Nombre muy corto (mín. 3 caracteres)'); return; }
+  if (!tag || tag.length < 2)   { showToast('TAG muy corto (mín. 2 letras)'); return; }
+
+  try {
+    // Check user doesn't already have a guild
+    const userDoc = await db.collection('vbc_users').doc(currentUser.uid).get();
+    const userData = userDoc.data() || {};
+    if (userData.guildId) { showToast('Ya perteneces a un Guild'); return; }
+
+    // Check tag not taken
+    const tagCheck = await db.collection('vbc_guilds').where('tag','==',tag).get();
+    if (!tagCheck.empty) { showToast('TAG ya en uso. Elige otro.'); return; }
+
+    // Cost: 200 VBC coins
+    const coins = userData.vbcCoins || 0;
+    if (coins < 200) { showToast(`Necesitas 200 VBC coins (tienes ${coins})`); return; }
+
+    const guildRef = db.collection('vbc_guilds').doc();
+    const batch = db.batch();
+
+    batch.set(guildRef, {
+      name, tag, type, banner,
+      leaderId:   currentUser.uid,
+      leaderName: currentUser.displayName || 'Anon',
+      members:    [currentUser.uid],
+      memberCount: 1,
+      guildXP:    0,
+      warScore:   0,
+      rank:       999,
+      season:     1,
+      createdAt:  firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    batch.update(db.collection('vbc_users').doc(currentUser.uid), {
+      guildId:   guildRef.id,
+      guildName: name,
+      guildTag:  tag,
+      vbcCoins:  firebase.firestore.FieldValue.increment(-200)
+    });
+
+    await batch.commit();
+    closeModal('modal-create-guild');
+    showToast(`🏛 Guild "${name}" [${tag}] creado! -200 VBC`);
+    loadGuildScreen();
+  } catch(e) {
+    console.error(e);
+    showToast('Error creando guild: ' + e.message);
+  }
+}
+
+async function searchGuilds() {
+  const q = document.getElementById('guild-search-input').value.trim().toUpperCase();
+  const resultsEl = document.getElementById('guild-search-results');
+  if (!q) { resultsEl.innerHTML = '<div style="color:var(--text3);font-size:.82rem;text-align:center;padding:12px">Escribe un nombre o TAG</div>'; return; }
+  
+  resultsEl.innerHTML = '<div style="color:var(--text3);font-size:.82rem;text-align:center;padding:12px">Buscando…</div>';
+  
+  try {
+    const snap = await db.collection('vbc_guilds').where('tag','==',q).limit(5).get();
+    const snap2 = await db.collection('vbc_guilds').orderBy('name').startAt(q).endAt(q + '\uf8ff').limit(5).get();
+    
+    const guilds = {};
+    snap.docs.forEach(d => guilds[d.id] = { id: d.id, ...d.data() });
+    snap2.docs.forEach(d => guilds[d.id] = { id: d.id, ...d.data() });
+    
+    const list = Object.values(guilds);
+    if (!list.length) {
+      resultsEl.innerHTML = '<div style="color:var(--text3);font-size:.82rem;text-align:center;padding:12px">No se encontraron guilds</div>';
+      return;
+    }
+    
+    resultsEl.innerHTML = list.map(g => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
+        <span style="font-size:1.6rem">${g.banner || '🏛'}</span>
+        <div style="flex:1">
+          <div style="color:var(--text1);font-weight:700;font-size:.88rem">${g.name} <span style="color:var(--cyan)">[${g.tag}]</span></div>
+          <div style="color:var(--text3);font-size:.72rem">${g.memberCount || 0} miembros · ${g.type === 'gym' ? '🏋️ Gimnasio' : g.type === 'hybrid' ? '🌐 Híbrido' : '⚔️ Digital'}</div>
+        </div>
+        <button onclick="joinGuild('${g.id}','${g.name}','${g.tag}')" class="btn-primary" style="font-size:.72rem;padding:5px 10px">Unirse</button>
+      </div>
+    `).join('');
+  } catch(e) {
+    resultsEl.innerHTML = '<div style="color:var(--red);font-size:.82rem;text-align:center;padding:12px">Error en búsqueda</div>';
+  }
+}
+
+async function joinGuild(guildId, guildName, guildTag) {
+  if (!currentUser) { showToast('Inicia sesión primero'); return; }
+  try {
+    const userDoc = await db.collection('vbc_users').doc(currentUser.uid).get();
+    if ((userDoc.data() || {}).guildId) { showToast('Ya perteneces a un Guild. Sal primero.'); return; }
+    
+    const batch = db.batch();
+    batch.update(db.collection('vbc_guilds').doc(guildId), {
+      members:     firebase.firestore.FieldValue.arrayUnion(currentUser.uid),
+      memberCount: firebase.firestore.FieldValue.increment(1)
+    });
+    batch.update(db.collection('vbc_users').doc(currentUser.uid), {
+      guildId, guildName, guildTag
+    });
+    await batch.commit();
+    closeModal('modal-join-guild');
+    showToast(`⚔️ Te uniste a ${guildName} [${guildTag}]!`);
+    loadGuildScreen();
+  } catch(e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+async function loadGuildScreen() {
+  if (!currentUser) return;
+  
+  try {
+    const userDoc = await db.collection('vbc_users').doc(currentUser.uid).get();
+    const userData = userDoc.data() || {};
+    
+    if (userData.guildId) {
+      // Has a guild
+      document.getElementById('guild-no-guild').style.display = 'none';
+      document.getElementById('guild-my-guild').style.display = 'block';
+      
+      const gDoc = await db.collection('vbc_guilds').doc(userData.guildId).get();
+      if (gDoc.exists) {
+        const g = gDoc.data();
+        document.getElementById('guild-banner-display').textContent = g.banner || '🏛';
+        document.getElementById('guild-name-display').textContent = g.name;
+        document.getElementById('guild-tag-display').textContent = '[' + g.tag + ']';
+        document.getElementById('guild-type-display').textContent = g.type === 'gym' ? '🏋️ Gimnasio Verificado' : g.type === 'hybrid' ? '🌐 Híbrido' : '⚔️ Guild Digital';
+        document.getElementById('guild-rank-display').textContent = '#' + (g.rank || '?');
+        document.getElementById('guild-members-display').textContent = g.memberCount || 1;
+        document.getElementById('guild-xp-display').textContent = (g.guildXP || 0).toLocaleString();
+        document.getElementById('guild-score-display').textContent = (g.warScore || 0).toLocaleString();
+      }
+    } else {
+      document.getElementById('guild-no-guild').style.display = 'block';
+      document.getElementById('guild-my-guild').style.display = 'none';
+    }
+
+    // Load global ranking
+    const rankSnap = await db.collection('vbc_guilds').orderBy('guildXP','desc').limit(10).get();
+    const rankEl = document.getElementById('guild-ranking-list');
+    
+    if (rankSnap.empty) {
+      rankEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:.82rem">Sé el primero en crear un Guild ⚡</div>';
+    } else {
+      const medals = ['🥇','🥈','🥉'];
+      rankEl.innerHTML = rankSnap.docs.map((d, i) => {
+        const g = d.data();
+        const isMe = g.members && g.members.includes(currentUser.uid);
+        return `
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;background:${isMe ? 'var(--green2)' : 'var(--bg3)'};border-radius:8px;margin-bottom:5px;border:1px solid ${isMe ? 'var(--green)' : 'var(--border)'}">
+          <span style="font-size:1.1rem;width:28px;text-align:center">${medals[i] || '#' + (i+1)}</span>
+          <span style="font-size:1.4rem">${g.banner || '🏛'}</span>
+          <div style="flex:1">
+            <div style="color:${isMe ? 'var(--green)' : 'var(--text1)'};font-weight:700;font-size:.85rem">${g.name} <span style="color:var(--cyan);font-size:.72rem">[${g.tag}]</span></div>
+            <div style="color:var(--text3);font-size:.7rem">${g.memberCount || 0} miembros</div>
+          </div>
+          <div style="text-align:right">
+            <div style="color:var(--green);font-weight:700;font-size:.85rem">${(g.guildXP || 0).toLocaleString()}</div>
+            <div style="color:var(--text3);font-size:.68rem">XP</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  } catch(e) {
+    console.error('Guild load error:', e);
+  }
+}
+
+// Hook: add Guild XP when user registers lift
+const _origRegisterLift = typeof registerLift !== 'undefined' ? registerLift : null;
+
+// Guild XP on lift registration
+async function addGuildXPOnLift(amount) {
+  if (!currentUser) return;
+  try {
+    const userDoc = await db.collection('vbc_users').doc(currentUser.uid).get();
+    const guildId = (userDoc.data() || {}).guildId;
+    if (!guildId) return;
+    await db.collection('vbc_guilds').doc(guildId).update({
+      guildXP:  firebase.firestore.FieldValue.increment(amount),
+      warScore: firebase.firestore.FieldValue.increment(amount)
+    });
+  } catch(e) { /* silent */ }
+}
+
+// Auto-load when guild tab is opened (hook into goScreen)
+const _origGoScreenGuild = goScreen;
+goScreen = function(screen) {
+  _origGoScreenGuild(screen);
+  if (screen === 'guild') loadGuildScreen();
+};
+
 </script>
 
 
@@ -5007,6 +5919,130 @@ function vbcInitQuests() {
   </div>
   <button id="vbc-rest-stop" onclick="vbcStopRest()">■ CANCELAR</button>
 </div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     🏛 GUILD SYSTEM — VBC Hybrid Guild Engine
+══════════════════════════════════════════════════════════ -->
+<div id="screen-guild" class="screen" style="display:none">
+  <div class="section-card" style="text-align:center;padding:24px 16px 8px">
+    <div style="font-size:2.8rem">🏛</div>
+    <h2 style="color:var(--cyan);margin:6px 0 4px;font-size:1.3rem;letter-spacing:.1em">GUILD SYSTEM</h2>
+    <p style="color:var(--text2);font-size:.82rem;margin:0">Gimnasios verificados · Alianzas digitales · Guerra de Guilds</p>
+  </div>
+
+  <!-- Estado actual del usuario -->
+  <div id="guild-status-card" class="section-card" style="margin:12px 16px">
+    <div id="guild-no-guild" style="text-align:center;padding:12px 0">
+      <div style="font-size:2rem;margin-bottom:8px">⚔️</div>
+      <div style="color:var(--text2);font-size:.88rem;margin-bottom:16px">No perteneces a ningún Guild todavía</div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button class="btn-primary" onclick="openCreateGuild()" style="font-size:.82rem;padding:8px 16px">+ Crear Guild</button>
+        <button class="btn-secondary" onclick="openJoinGuild()" style="font-size:.82rem;padding:8px 16px">🔍 Buscar Guild</button>
+      </div>
+    </div>
+    <div id="guild-my-guild" style="display:none">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div id="guild-banner-display" style="width:52px;height:52px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.8rem;background:var(--bg3);border:2px solid var(--border)"></div>
+        <div>
+          <div id="guild-name-display" style="color:var(--text1);font-weight:700;font-size:1.05rem"></div>
+          <div id="guild-tag-display" style="color:var(--cyan);font-size:.78rem;font-weight:600"></div>
+          <div id="guild-type-display" style="color:var(--text3);font-size:.72rem"></div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div id="guild-rank-display" style="color:var(--yellow);font-weight:700;font-size:1.1rem"></div>
+          <div style="color:var(--text3);font-size:.7rem">GUILD RANK</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+        <div style="background:var(--bg3);border-radius:8px;padding:8px;text-align:center">
+          <div id="guild-members-display" style="color:var(--cyan);font-weight:700;font-size:1.1rem">0</div>
+          <div style="color:var(--text3);font-size:.68rem">MIEMBROS</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:8px;text-align:center">
+          <div id="guild-xp-display" style="color:var(--green);font-weight:700;font-size:1.1rem">0</div>
+          <div style="color:var(--text3);font-size:.68rem">GUILD XP</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:8px;text-align:center">
+          <div id="guild-score-display" style="color:var(--yellow);font-weight:700;font-size:1.1rem">0</div>
+          <div style="color:var(--text3);font-size:.68rem">WAR SCORE</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-secondary" onclick="goScreen('guild-detail')" style="font-size:.78rem;padding:6px 12px;flex:1">🏛 Ver Guild</button>
+        <button class="btn-secondary" onclick="openGuildWar()" style="font-size:.78rem;padding:6px 12px;flex:1">⚔️ Guild War</button>
+        <button class="btn-secondary" onclick="openGuildQuests()" style="font-size:.78rem;padding:6px 12px;flex:1">📋 Misiones</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ranking Global de Guilds -->
+  <div class="section-card" style="margin:0 16px 12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="color:var(--text1);font-weight:700;font-size:.95rem">⚡ RANKING GLOBAL</div>
+      <div style="color:var(--text3);font-size:.72rem" id="guild-ranking-season">TEMPORADA 1</div>
+    </div>
+    <div id="guild-ranking-list">
+      <div style="text-align:center;padding:20px;color:var(--text3);font-size:.82rem">Cargando guilds…</div>
+    </div>
+  </div>
+
+  <!-- Crear Guild Modal -->
+  <div id="modal-create-guild" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;display:none;align-items:center;justify-content:center;padding:16px">
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:420px;padding:24px;position:relative">
+      <div style="font-size:1.5rem;text-align:center;margin-bottom:4px">🏛</div>
+      <h3 style="text-align:center;color:var(--cyan);margin:0 0 20px;font-size:1.1rem">CREAR GUILD</h3>
+      <div style="margin-bottom:12px">
+        <label style="color:var(--text2);font-size:.78rem;font-weight:600">NOMBRE DEL GUILD</label>
+        <input id="guild-create-name" type="text" maxlength="30" placeholder="Ej: Iron Temple Santiago" style="width:100%;margin-top:4px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text1);font-size:.88rem;box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="color:var(--text2);font-size:.78rem;font-weight:600">TAG (2–5 letras)</label>
+        <input id="guild-create-tag" type="text" maxlength="5" placeholder="Ej: ITS" style="width:100%;margin-top:4px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text1);font-size:.88rem;box-sizing:border-box;text-transform:uppercase">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="color:var(--text2);font-size:.78rem;font-weight:600">TIPO</label>
+        <select id="guild-create-type" style="width:100%;margin-top:4px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text1);font-size:.88rem;box-sizing:border-box">
+          <option value="digital">⚔️ Guild Digital (abierto a todos)</option>
+          <option value="gym">🏋️ Gimnasio Verificado (requiere código)</option>
+          <option value="hybrid">🌐 Híbrido (gimnasio + miembros remotos)</option>
+        </select>
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="color:var(--text2);font-size:.78rem;font-weight:600">BANNER (emoji)</label>
+        <div id="guild-banner-picker" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+          <span class="banner-opt" onclick="selectBanner(this,'🦁')" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:2px solid transparent;transition:.2s">🦁</span>
+          <span class="banner-opt" onclick="selectBanner(this,'🐉')" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:2px solid transparent;transition:.2s">🐉</span>
+          <span class="banner-opt" onclick="selectBanner(this,'⚔️')" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:2px solid transparent;transition:.2s">⚔️</span>
+          <span class="banner-opt" onclick="selectBanner(this,'🔥')" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:2px solid transparent;transition:.2s">🔥</span>
+          <span class="banner-opt" onclick="selectBanner(this,'💀')" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:2px solid transparent;transition:.2s">💀</span>
+          <span class="banner-opt" onclick="selectBanner(this,'🌪️')" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:2px solid transparent;transition:.2s">🌪️</span>
+          <span class="banner-opt" onclick="selectBanner(this,'🩸')" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:2px solid transparent;transition:.2s">🩸</span>
+          <span class="banner-opt" onclick="selectBanner(this,'🔮')" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:6px;border:2px solid transparent;transition:.2s">🔮</span>
+        </div>
+        <input type="hidden" id="guild-create-banner" value="🏛">
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="closeModal('modal-create-guild')" class="btn-secondary" style="flex:1;font-size:.82rem;padding:9px">Cancelar</button>
+        <button onclick="submitCreateGuild()" class="btn-primary" style="flex:1;font-size:.82rem;padding:9px">Crear Guild</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Join Guild Modal -->
+  <div id="modal-join-guild" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center;padding:16px">
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:420px;padding:24px">
+      <h3 style="text-align:center;color:var(--cyan);margin:0 0 16px;font-size:1.1rem">🔍 BUSCAR GUILD</h3>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input id="guild-search-input" type="text" placeholder="Nombre o TAG del guild…" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text1);font-size:.88rem">
+        <button onclick="searchGuilds()" class="btn-primary" style="padding:9px 14px;font-size:.82rem">Buscar</button>
+      </div>
+      <div id="guild-search-results" style="min-height:60px"></div>
+      <button onclick="closeModal('modal-join-guild')" class="btn-secondary" style="width:100%;margin-top:12px;font-size:.82rem;padding:9px">Cerrar</button>
+    </div>
+  </div>
+</div>
+<!-- /screen-guild -->
 
 </body>
 </html>
