@@ -1273,6 +1273,7 @@ body::after{
       <button class="nav-tab" onclick="goScreen('archivos')">📜 Lore</button>
       <button class="nav-tab" onclick="goScreen('quests')">⚡ Quest</button>
       <button class="nav-tab" onclick="goScreen('guild')">🏛 Guild</button>
+      <button class="nav-tab" onclick="goScreen('season')">🏆 Season</button>
     </div>
     <div class="nav-right">
       <!-- 💎 Diamond sprite — moneda VBC */-->
@@ -2625,7 +2626,8 @@ function goScreen(id) {
        (id==='battle'&&t.textContent.includes('Battle'))||
        (id==='archivos'&&t.textContent.includes('Lore'))||
        (id==='quests'&&t.textContent.includes('Quest'))||
-       (id==='guild'&&t.textContent.includes('Guild'))) t.classList.add('active');
+       (id==='guild'&&t.textContent.includes('Guild'))||
+       (id==='season'&&t.textContent.includes('Season'))) t.classList.add('active');
   });
   if(id==='skills') renderSkills();
   if(id==='wallet') renderWallet();
@@ -2634,6 +2636,7 @@ function goScreen(id) {
   if(id==='archivos') renderArchivos();
   if(id==='quests') { vbcInitQuests && vbcInitQuests(); }
   if(id==='guild') { vbcInitGuild && vbcInitGuild(); }
+  if(id==='season') { vbcInitSeason && vbcInitSeason(); }
 }
 
 
@@ -6044,5 +6047,304 @@ goScreen = function(screen) {
 </div>
 <!-- /screen-guild -->
 
+
+<!-- ═══════════════════════════════════════════════════════════
+     VBC SEASON PASS — Temporada 90 días
+═══════════════════════════════════════════════════════════ -->
+<div class="screen" id="s-season">
+  <div style="padding:16px;">
+
+    <!-- Season Header -->
+    <div id="season-header" style="background:linear-gradient(135deg,#1a0033,#0d001a);border:1px solid #7c3aed;border-radius:16px;padding:20px;margin-bottom:16px;text-align:center;">
+      <div style="font-size:11px;letter-spacing:.3em;color:#a855f7;margin-bottom:4px;">TEMPORADA ACTIVA</div>
+      <div id="season-name" style="font-size:22px;font-weight:900;color:#fff;letter-spacing:.05em;">⚔ AGE OF TITANS</div>
+      <div id="season-subtitle" style="font-size:12px;color:#c4b5fd;margin-top:4px;">Temporada I — 2025</div>
+      <div id="season-timer" style="font-size:13px;color:#7c3aed;margin-top:10px;font-weight:700;">Cargando...</div>
+      <div style="background:#2d1b69;border-radius:8px;padding:6px 12px;display:inline-block;margin-top:8px;">
+        <span id="season-pts-val" style="font-size:18px;font-weight:900;color:#a855f7;">0</span>
+        <span style="font-size:11px;color:#c4b5fd;margin-left:4px;">SEASON POINTS</span>
+      </div>
+    </div>
+
+    <!-- Tier Progress -->
+    <div style="background:#111;border:1px solid #333;border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:11px;letter-spacing:.2em;color:#7c3aed;margin-bottom:12px;">⬆ TIER PROGRESS</div>
+      <div id="season-tier-bar" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
+    <!-- Rewards Track -->
+    <div style="background:#111;border:1px solid #333;border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:11px;letter-spacing:.2em;color:#7c3aed;margin-bottom:12px;">🎁 REWARDS TRACK</div>
+      <div id="season-rewards-track" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;"></div>
+    </div>
+
+    <!-- Leaderboard Season -->
+    <div style="background:#111;border:1px solid #333;border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:11px;letter-spacing:.2em;color:#7c3aed;margin-bottom:12px;">🌍 RANKING DE TEMPORADA</div>
+      <div id="season-leaderboard" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+
+    <!-- Guild War Banner -->
+    <div id="season-guildwar" style="background:linear-gradient(135deg,#1a0a00,#2d1500);border:1px solid #f97316;border-radius:12px;padding:16px;margin-bottom:16px;text-align:center;">
+      <div style="font-size:11px;letter-spacing:.3em;color:#f97316;margin-bottom:6px;">⚔ GUILD WAR ACTIVA</div>
+      <div id="season-gw-status" style="font-size:14px;color:#fed7aa;">Cargando estado de guerra...</div>
+      <button onclick="goScreen('guild')" style="margin-top:10px;padding:8px 20px;background:#f97316;border:none;border-radius:8px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;">
+        🏛 VER MI GUILD
+      </button>
+    </div>
+
+    <!-- Season Rules -->
+    <div style="background:#0a0a0a;border:1px solid #222;border-radius:12px;padding:14px;">
+      <div style="font-size:11px;letter-spacing:.2em;color:#555;margin-bottom:10px;">📋 REGLAS DE TEMPORADA</div>
+      <div style="font-size:12px;color:#888;line-height:1.8;">
+        🏋 Registrar lifts → +10 Season Points<br>
+        ⚡ Completar quests → +50 Season Points<br>
+        ⚔ Ganar batalla → +100 Season Points<br>
+        🏛 Contribuir a guild → +25 Season Points<br>
+        📈 Evolucionar → +200 Season Points<br><br>
+        <span style="color:#a855f7;font-weight:700;">Top 3 Season → Artefacto Legendario único</span><br>
+        <span style="color:#f97316;font-weight:700;">Top Guild → World Banner por 90 días</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+<!-- ═══════════════ END SEASON SCREEN ═══════════════ -->
+
+<script>
+
+// ═══════════════════════════════════════════════════════════
+// VBC SEASON PASS ENGINE
+// Temporada 90 días con tiers, rewards track y guild wars
+// ═══════════════════════════════════════════════════════════
+(function() {
+
+const SEASON_CONFIG = {
+  name: "AGE OF TITANS",
+  subtitle: "Temporada I — 2025",
+  startDate: new Date("2025-01-01"),
+  endDate: new Date("2025-04-01"),
+  tiers: [
+    { name:"Bronce",    pts:0,    color:"#cd7f32", icon:"🥉" },
+    { name:"Plata",     pts:500,  color:"#c0c0c0", icon:"🥈" },
+    { name:"Oro",       pts:1500, color:"#ffd700", icon:"🥇" },
+    { name:"Platino",   pts:3000, color:"#00bcd4", icon:"💎" },
+    { name:"Diamante",  pts:6000, color:"#a855f7", icon:"💜" },
+    { name:"Legendario",pts:10000,color:"#f97316", icon:"🔥" },
+    { name:"TITÁN",     pts:20000,color:"#ef4444", icon:"⚔" }
+  ],
+  rewards: [
+    { pts:100,   icon:"💎",  label:"50 VBC",         type:"vbc",  val:50  },
+    { pts:300,   icon:"⚡",  label:"Quest Boost x2", type:"boost", val:2  },
+    { pts:500,   icon:"🥉",  label:"Tier: Bronce",   type:"tier", val:"Bronce" },
+    { pts:800,   icon:"🗡",  label:"Artefacto N1",   type:"artifact", val:1 },
+    { pts:1200,  icon:"💎",  label:"100 VBC",        type:"vbc",  val:100 },
+    { pts:1500,  icon:"🥈",  label:"Tier: Plata",    type:"tier", val:"Plata" },
+    { pts:2000,  icon:"🔮",  label:"Artefacto N2",   type:"artifact", val:2 },
+    { pts:3000,  icon:"🥇",  label:"Tier: Oro",      type:"tier", val:"Oro" },
+    { pts:4000,  icon:"💎",  label:"200 VBC",        type:"vbc",  val:200 },
+    { pts:5000,  icon:"🗡",  label:"Artefacto N3",   type:"artifact", val:3 },
+    { pts:6000,  icon:"💎",  label:"Tier: Platino",  type:"tier", val:"Platino" },
+    { pts:8000,  icon:"💎",  label:"300 VBC",        type:"vbc",  val:300 },
+    { pts:10000, icon:"💜",  label:"Tier: Diamante", type:"tier", val:"Diamante" },
+    { pts:15000, icon:"🗡",  label:"Artefacto N5",   type:"artifact", val:5 },
+    { pts:20000, icon:"⚔",  label:"TITÁN — Runa OMEGA", type:"legendary", val:"omega" }
+  ]
+};
+
+function getSeasonPts() {
+  if(!window.state) return 0;
+  return state.seasonPts || 0;
+}
+
+function getCurrentTier(pts) {
+  let tier = SEASON_CONFIG.tiers[0];
+  for(let t of SEASON_CONFIG.tiers) {
+    if(pts >= t.pts) tier = t;
+    else break;
+  }
+  return tier;
+}
+
+function getNextTier(pts) {
+  for(let t of SEASON_CONFIG.tiers) {
+    if(pts < t.pts) return t;
+  }
+  return null;
+}
+
+function addSeasonPts(amount, reason) {
+  if(!window.state) return;
+  state.seasonPts = (state.seasonPts || 0) + amount;
+  saveUserState(false);
+  showSeasonToast("+" + amount + " Season Pts — " + reason);
+  if(document.getElementById('season-pts-val'))
+    document.getElementById('season-pts-val').textContent = state.seasonPts.toLocaleString();
+}
+
+function showSeasonToast(msg) {
+  var t = document.createElement('div');
+  t.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:8px 18px;border-radius:20px;font-size:12px;font-weight:700;z-index:9999;pointer-events:none;';
+  t.textContent = "🏆 " + msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2500);
+}
+
+// ── Render ──
+window.vbcInitSeason = function() {
+  var pts = getSeasonPts();
+
+  // Timer
+  var now = new Date();
+  var end = SEASON_CONFIG.endDate;
+  var diff = Math.max(0, end - now);
+  var days = Math.floor(diff / 86400000);
+  var hours = Math.floor((diff % 86400000) / 3600000);
+  var el = document.getElementById('season-timer');
+  if(el) el.textContent = days > 0 ? "⏳ " + days + " días " + hours + "h restantes" : "✅ Temporada finalizada";
+
+  // Season pts
+  var sp = document.getElementById('season-pts-val');
+  if(sp) sp.textContent = pts.toLocaleString();
+
+  // Season name
+  var sn = document.getElementById('season-name');
+  if(sn) sn.textContent = "⚔ " + SEASON_CONFIG.name;
+  var ss = document.getElementById('season-subtitle');
+  if(ss) ss.textContent = SEASON_CONFIG.subtitle;
+
+  // Tier bar
+  var tierBar = document.getElementById('season-tier-bar');
+  if(tierBar) {
+    tierBar.innerHTML = '';
+    var curTier = getCurrentTier(pts);
+    var nextTier = getNextTier(pts);
+    SEASON_CONFIG.tiers.forEach(function(t) {
+      var unlocked = pts >= t.pts;
+      var isCurrent = t.name === curTier.name;
+      var div = document.createElement('div');
+      div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;' +
+        (isCurrent ? 'background:rgba(168,85,247,0.15);border:1px solid ' + t.color + ';' : 'background:#0a0a0a;border:1px solid #222;');
+      div.innerHTML = '<span style="font-size:18px;">' + t.icon + '</span>' +
+        '<div style="flex:1;">' +
+          '<div style="font-size:12px;font-weight:700;color:' + (unlocked ? t.color : '#444') + ';">' + t.name + '</div>' +
+          '<div style="font-size:10px;color:#555;">' + t.pts.toLocaleString() + ' pts</div>' +
+        '</div>' +
+        (isCurrent ? '<span style="font-size:10px;background:' + t.color + ';color:#fff;padding:2px 8px;border-radius:10px;">ACTUAL</span>' : '') +
+        (unlocked && !isCurrent ? '<span style="font-size:14px;">✅</span>' : '') +
+        (!unlocked ? '<span style="font-size:12px;color:#333;">🔒</span>' : '');
+      tierBar.appendChild(div);
+    });
+  }
+
+  // Rewards track
+  var track = document.getElementById('season-rewards-track');
+  if(track) {
+    track.innerHTML = '';
+    SEASON_CONFIG.rewards.forEach(function(r) {
+      var claimed = pts >= r.pts;
+      var div = document.createElement('div');
+      div.style.cssText = 'min-width:80px;background:' + (claimed ? 'rgba(168,85,247,0.2)' : '#0a0a0a') + ';' +
+        'border:1px solid ' + (claimed ? '#7c3aed' : '#222') + ';border-radius:10px;padding:10px 8px;text-align:center;flex-shrink:0;';
+      div.innerHTML = '<div style="font-size:20px;">' + r.icon + '</div>' +
+        '<div style="font-size:9px;color:' + (claimed ? '#a855f7' : '#555') + ';margin-top:4px;line-height:1.3;">' + r.label + '</div>' +
+        '<div style="font-size:9px;color:#333;margin-top:2px;">' + r.pts.toLocaleString() + 'p</div>' +
+        (claimed ? '<div style="font-size:9px;color:#7c3aed;margin-top:2px;">✅</div>' : '<div style="font-size:9px;color:#333;">🔒</div>');
+      track.appendChild(div);
+    });
+  }
+
+  // Leaderboard from Firestore
+  var lb = document.getElementById('season-leaderboard');
+  if(lb && window._fbDb) {
+    lb.innerHTML = '<div style="color:#555;font-size:12px;text-align:center;padding:10px;">Cargando...</div>';
+    window._fbDb.collection('vbc_users')
+      .orderBy('seasonPts','desc')
+      .limit(10)
+      .get()
+      .then(function(snap) {
+        if(snap.empty) { lb.innerHTML = '<div style="color:#555;font-size:12px;text-align:center;">Sin datos aún</div>'; return; }
+        lb.innerHTML = '';
+        var medals = ['🥇','🥈','🥉'];
+        snap.docs.forEach(function(doc, i) {
+          var d = doc.data();
+          var pts2 = d.seasonPts || 0;
+          var tier = getCurrentTier(pts2);
+          var isMe = doc.id === window._currentUid;
+          var row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;' +
+            (isMe ? 'background:rgba(168,85,247,0.15);border:1px solid #7c3aed;' : 'background:#0a0a0a;border:1px solid #1a1a1a;');
+          row.innerHTML = '<span style="font-size:16px;min-width:24px;">' + (medals[i] || '#'+(i+1)) + '</span>' +
+            '<span style="font-size:16px;">' + tier.icon + '</span>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:12px;font-weight:700;color:' + (isMe?'#a855f7':'#ccc') + ';">' + (d.name||'Atleta') + '</div>' +
+              '<div style="font-size:10px;color:#555;">' + tier.name + '</div>' +
+            '</div>' +
+            '<div style="font-size:13px;font-weight:700;color:#7c3aed;">' + pts2.toLocaleString() + 'p</div>';
+          lb.appendChild(row);
+        });
+      }).catch(function() {
+        lb.innerHTML = '<div style="color:#555;font-size:12px;text-align:center;">Error cargando</div>';
+      });
+  }
+
+  // Guild War status
+  var gws = document.getElementById('season-gw-status');
+  if(gws && window._fbDb) {
+    window._fbDb.collection('vbc_guilds')
+      .orderBy('warScore','desc')
+      .limit(3)
+      .get()
+      .then(function(snap) {
+        if(snap.empty) { gws.textContent = 'No hay guilds en guerra todavía. ¡Crea el primero!'; return; }
+        var top = snap.docs.map(function(d,i) {
+          var data = d.data();
+          return (i===0?'👑 ':i===1?'⚔ ':'🛡 ') + (data.banner||'🏛') + ' ' + (data.name||'Guild') + ' — ' + (data.warScore||0) + ' WSP';
+        });
+        gws.innerHTML = top.join('<br>');
+      }).catch(function() { gws.textContent = 'Estado de guerra no disponible'; });
+  }
+};
+
+// ── Hook into game events ──
+
+// Hook registerLift to award Season Points
+var _origRegisterLift = window.registerLift;
+if(typeof _origRegisterLift === 'function') {
+  window.registerLift = function() {
+    _origRegisterLift.apply(this, arguments);
+    setTimeout(function() { addSeasonPts(10, "Lift registrado"); }, 500);
+  };
+}
+
+// Hook quest completion
+var _origVbcClaimQuest = window.vbcClaimQuest;
+window.vbcSeasonOnQuestClaim = function() {
+  addSeasonPts(50, "Quest completada");
+};
+
+// Hook battle win
+var _origBattleWin = window.processBattleResult;
+if(typeof _origBattleWin === 'function') {
+  window.processBattleResult = function(won) {
+    _origBattleWin.apply(this, arguments);
+    if(won) setTimeout(function() { addSeasonPts(100, "Victoria en batalla"); }, 500);
+  };
+}
+
+// Persist seasonPts in saveUserState (patch)
+var _origSaveState = window.saveUserState;
+if(typeof _origSaveState === 'function') {
+  window.saveUserState = function(isNew) {
+    _origSaveState.call(this, isNew);
+    // seasonPts is already on state object, gets saved automatically
+  };
+}
+
+console.log("[VBC] Season Pass Engine loaded ✅");
+})();
+// ═══════════════════════════════════ END SEASON ENGINE ═══════════════════════════════════
+
+</script>
 </body>
 </html>
