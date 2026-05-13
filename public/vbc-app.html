@@ -2774,7 +2774,7 @@ function renderArchivos() {
     const unlocked = state.unlockedFiles && state.unlockedFiles.includes(file.id);
     if (unlocked) {
       filesHtml += '<div style="border:1px solid ' + file.color + '33;border-radius:8px;overflow:hidden;margin-bottom:12px;">'
-        + '<div style="background:' + file.color + '11;padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="toggleLoreFile('' + file.id + '')">'
+        + '<div style="background:' + file.color + '11;padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick=\"toggleLoreFile(\'\" + file.id + "\')\"">'
         + '<div style="font-family:monospace;font-size:10px;color:' + file.color + ';letter-spacing:1px;width:80px;">' + file.code + '</div>'
         + '<div style="flex:1;">'
         + '<div style="font-size:12px;font-weight:700;color:#fff;letter-spacing:1px;">' + file.title + '</div>'
@@ -5400,7 +5400,7 @@ function loadGuildBrowse() {
           '<div style="text-align:right;">' +
             '<div style="font-family:var(--mono);font-size:10px;color:#e2c36a;font-weight:700;">#' + rank + '</div>' +
             (g.type==='gym'?'<div style="font-family:var(--mono);font-size:8px;color:#e2c36a;">🏋️ GYM</div>':
-             '<button onclick="joinGuildById('' + doc.id + '')" style="margin-top:4px;padding:4px 10px;background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.3);border-radius:5px;color:var(--green);font-size:10px;font-weight:700;cursor:pointer;">UNIRSE</button>') +
+             '<button onclick="joinGuildById(\"' + doc.id + '\")" style="margin-top:4px;padding:4px 10px;background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.3);border-radius:5px;color:var(--green);font-size:10px;font-weight:700;cursor:pointer;">UNIRSE</button>') +
           '</div>' +
         '</div>';
       });
