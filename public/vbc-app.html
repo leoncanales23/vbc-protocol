@@ -1049,13 +1049,24 @@ body::after{
 }
 .vbc-timer-trigger:hover { background: #0ff1; box-shadow: 0 0 8px #0ff4; }
 
-</style>
+
+  /* World Map pulse */
+  @keyframes worldPulse {
+    0% { box-shadow: 0 0 0 0 rgba(255,68,68,0.6); }
+    70% { box-shadow: 0 0 0 10px rgba(255,68,68,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,68,68,0); }
+  }
+
+  </style>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Leaflet.js World Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -1274,6 +1285,7 @@ body::after{
       <button class="nav-tab" onclick="goScreen('quests')">⚡ Quest</button>
       <button class="nav-tab" onclick="goScreen('guild')">🏛 Guild</button>
       <button class="nav-tab" onclick="goScreen('season')">🏆 Season</button>
+    <button class="nav-tab" onclick="goScreen('world')">🗺 Mundo</button>
     </div>
     <div class="nav-right">
       <!-- 💎 Diamond sprite — moneda VBC */-->
@@ -1926,7 +1938,7 @@ body::after{
    ══════════════════════════════════════════════════════════ */
 (function VBCAuth() {
   var _FC = {
-    apiKey:            "AIzaSyA-PBjiR6uJtXgO0JZnSc78Aqy4yUK__g8",
+    apiKey:            "AIzaSyD86M9OSkhosZrNHOBHfM6T4vlN38EO6Hc",
     authDomain:        "vibraaltoai-11f55.firebaseapp.com",
     projectId:         "vibraaltoai-11f55",
     storageBucket:     "vibraaltoai-11f55.appspot.com",
@@ -2627,7 +2639,8 @@ function goScreen(id) {
        (id==='archivos'&&t.textContent.includes('Lore'))||
        (id==='quests'&&t.textContent.includes('Quest'))||
        (id==='guild'&&t.textContent.includes('Guild'))||
-       (id==='season'&&t.textContent.includes('Season'))) t.classList.add('active');
+       (id==='season'&&t.textContent.includes('Season'))||
+       (id==='world'&&t.textContent.includes('Mundo'))) t.classList.add('active');
   });
   if(id==='skills') renderSkills();
   if(id==='wallet') renderWallet();
@@ -2637,6 +2650,7 @@ function goScreen(id) {
   if(id==='quests') { vbcInitQuests && vbcInitQuests(); }
   if(id==='guild') { vbcInitGuild && vbcInitGuild(); }
   if(id==='season') { vbcInitSeason && vbcInitSeason(); }
+  if(id==='world') { initWorldMap && initWorldMap(); }
 }
 
 
@@ -2717,7 +2731,7 @@ function renderArchivosArtifacts() {
     } else if (art.autoGrant) {
       actionBtn = '<span style="font-size:10px;color:#ffcc00;">⚡ Auto-desbloqueo</span>';
     } else {
-      actionBtn = '<button onclick="buyArtifact(\"' + art.id + '\")"" style="background:' + est.color + ';border:none;color:#000;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1px;">' + art.cost + ' 💎</button>';
+      actionBtn = '<button onclick="buyArtifact(\'' + art.id + '\')" style="background:' + est.color + ';border:none;color:#000;padding:4px 10px;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1px;">' + art.cost + ' 💎</button>';
     }
 
     html2 += '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid ' + borderColor + ';border-radius:8px;background:' + bg + ';opacity:' + opacity + ';margin-bottom:8px;">'
@@ -2774,7 +2788,7 @@ function renderArchivos() {
     const unlocked = state.unlockedFiles && state.unlockedFiles.includes(file.id);
     if (unlocked) {
       filesHtml += '<div style="border:1px solid ' + file.color + '33;border-radius:8px;overflow:hidden;margin-bottom:12px;">'
-        + '<div style="background:' + file.color + '11;padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick=\"toggleLoreFile(\'\" + file.id + "\')\"">'
+        + '<div style="background:' + file.color + '11;padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="toggleLoreFile('' + file.id + '')">'
         + '<div style="font-family:monospace;font-size:10px;color:' + file.color + ';letter-spacing:1px;width:80px;">' + file.code + '</div>'
         + '<div style="flex:1;">'
         + '<div style="font-size:12px;font-weight:700;color:#fff;letter-spacing:1px;">' + file.title + '</div>'
@@ -5400,7 +5414,7 @@ function loadGuildBrowse() {
           '<div style="text-align:right;">' +
             '<div style="font-family:var(--mono);font-size:10px;color:#e2c36a;font-weight:700;">#' + rank + '</div>' +
             (g.type==='gym'?'<div style="font-family:var(--mono);font-size:8px;color:#e2c36a;">🏋️ GYM</div>':
-             '<button onclick="joinGuildById(\"' + doc.id + '\")" style="margin-top:4px;padding:4px 10px;background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.3);border-radius:5px;color:var(--green);font-size:10px;font-weight:700;cursor:pointer;">UNIRSE</button>') +
+             '<button onclick="joinGuildById('' + doc.id + '')" style="margin-top:4px;padding:4px 10px;background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.3);border-radius:5px;color:var(--green);font-size:10px;font-weight:700;cursor:pointer;">UNIRSE</button>') +
           '</div>' +
         '</div>';
       });
@@ -6111,6 +6125,40 @@ goScreen = function(screen) {
 </div>
 <!-- ═══════════════ END SEASON SCREEN ═══════════════ -->
 
+<!-- ═══════════════ WORLD MAP SCREEN ═══════════════ -->
+<div id="s-world" class="screen" style="padding:0;overflow:hidden;display:none;">
+  <div style="padding:16px 16px 8px;background:#0a0a0a;">
+    <h2 style="color:#00ff88;font-size:1.1rem;margin:0 0 4px;">🗺 MUNDO VBC</h2>
+    <p style="color:#666;font-size:0.75rem;margin:0;">Atletas · Guilds · Batallas en tiempo real</p>
+  </div>
+  <div style="display:flex;gap:12px;padding:8px 16px;background:#111;border-bottom:1px solid #1a1a1a;overflow-x:auto;flex-wrap:nowrap;">
+    <span style="color:#fff;font-size:0.7rem;white-space:nowrap;">🔴 Atleta online</span>
+    <span style="color:#fff;font-size:0.7rem;white-space:nowrap;">🟡 Batalla activa</span>
+    <span style="color:#fff;font-size:0.7rem;white-space:nowrap;">🔵 Guild base</span>
+    <span style="color:#fff;font-size:0.7rem;white-space:nowrap;">🟢 Tú</span>
+  </div>
+  <div id="vbc-world-map" style="width:100%;height:calc(100vh - 210px);min-height:380px;"></div>
+  <div style="padding:10px 16px;background:#0d0d0d;border-top:1px solid #1a1a1a;">
+    <div style="display:flex;gap:20px;justify-content:center;margin-bottom:8px;">
+      <div style="text-align:center;">
+        <div id="world-online-count" style="color:#00ff88;font-size:1.2rem;font-weight:bold;">0</div>
+        <div style="color:#555;font-size:0.65rem;">Online</div>
+      </div>
+      <div style="text-align:center;">
+        <div id="world-battles-count" style="color:#ff4444;font-size:1.2rem;font-weight:bold;">0</div>
+        <div style="color:#555;font-size:0.65rem;">Batallas</div>
+      </div>
+      <div style="text-align:center;">
+        <div id="world-guilds-count" style="color:#4488ff;font-size:1.2rem;font-weight:bold;">0</div>
+        <div style="color:#555;font-size:0.65rem;">Guilds</div>
+      </div>
+    </div>
+    <button onclick="centerWorldMapOnMe()" style="width:100%;background:#1a1a1a;color:#00ff88;border:1px solid #00ff88;padding:8px;border-radius:6px;font-size:0.8rem;cursor:pointer;">📍 Centrar en mi ubicación</button>
+  </div>
+</div>
+<!-- ═══════════════ END WORLD SCREEN ═══════════════ -->
+
+
 <script>
 
 // ═══════════════════════════════════════════════════════════
@@ -6344,6 +6392,247 @@ if(typeof _origSaveState === 'function') {
 console.log("[VBC] Season Pass Engine loaded ✅");
 })();
 // ═══════════════════════════════════ END SEASON ENGINE ═══════════════════════════════════
+
+
+
+// ═══════════════════════════════════════════════════════
+// 🗺 WORLD MAP ENGINE — VBC v4
+// ═══════════════════════════════════════════════════════
+
+let worldMapInstance = null;
+let worldMapInitialized = false;
+let worldMarkersLayer = null;
+let worldUpdateInterval = null;
+
+function initWorldMap() {
+  if (worldMapInitialized && worldMapInstance) {
+    worldMapInstance.invalidateSize();
+    updateWorldMapMarkers();
+    return;
+  }
+
+  const mapEl = document.getElementById('vbc-world-map');
+  if (!mapEl || typeof L === 'undefined') {
+    setTimeout(initWorldMap, 500);
+    return;
+  }
+
+  // Dark tile layer (CartoDB Dark Matter — no API key needed)
+  worldMapInstance = L.map('vbc-world-map', {
+    center: [-33.4489, -70.6693], // Santiago default
+    zoom: 12,
+    zoomControl: true,
+    attributionControl: false
+  });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap © CARTO'
+  }).addTo(worldMapInstance);
+
+  worldMarkersLayer = L.layerGroup().addTo(worldMapInstance);
+  worldMapInitialized = true;
+
+  // Try to center on user GPS
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      const { latitude, longitude } = pos.coords;
+      worldMapInstance.setView([latitude, longitude], 13);
+      addMyMarker(latitude, longitude);
+      saveMyGPSToFirestore(latitude, longitude);
+    }, err => {
+      console.log('GPS not available, using default');
+      loadWorldMarkersFromFirestore();
+    });
+  } else {
+    loadWorldMarkersFromFirestore();
+  }
+
+  // Update every 30 seconds
+  worldUpdateInterval = setInterval(updateWorldMapMarkers, 30000);
+  updateWorldMapMarkers();
+}
+
+function addMyMarker(lat, lng) {
+  const myIcon = L.divIcon({
+    html: '<div style="width:16px;height:16px;background:#00ff88;border-radius:50%;border:2px solid #fff;box-shadow:0 0 8px #00ff88;"></div>',
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+    className: ''
+  });
+  L.marker([lat, lng], { icon: myIcon })
+    .addTo(worldMarkersLayer)
+    .bindPopup('<b style="color:#00ff88">📍 Tú estás aquí</b>');
+}
+
+function saveMyGPSToFirestore(lat, lng) {
+  if (!currentUser || typeof db === 'undefined') return;
+  try {
+    db.collection('vbc_users').doc(currentUser.uid).update({
+      gpsLat: lat,
+      gpsLng: lng,
+      gpsUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+      online: true
+    });
+  } catch(e) {}
+}
+
+async function loadWorldMarkersFromFirestore() {
+  if (typeof db === 'undefined') return;
+  
+  try {
+    // Load online athletes (updated in last 30 min)
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const athletesSnap = await db.collection('vbc_users')
+      .where('online', '==', true)
+      .limit(100)
+      .get();
+    
+    let onlineCount = 0;
+    
+    athletesSnap.forEach(doc => {
+      const d = doc.data();
+      if (d.gpsLat && d.gpsLng && doc.id !== (currentUser && currentUser.uid)) {
+        const estirpeColors = {
+          'Oni': '#ff4444', 'Tempest': '#aaddff', 'Undead': '#aaaaaa',
+          'Arcane': '#cc88ff', 'Dragon': '#ff8800'
+        };
+        const color = estirpeColors[d.estirpe] || '#ff4444';
+        const icon = L.divIcon({
+          html: `<div style="width:12px;height:12px;background:${color};border-radius:50%;border:2px solid #fff;box-shadow:0 0 6px ${color};"></div>`,
+          iconSize: [12, 12], iconAnchor: [6, 6], className: ''
+        });
+        L.marker([d.gpsLat, d.gpsLng], { icon })
+          .addTo(worldMarkersLayer)
+          .bindPopup(`<b style="color:${color}">${d.displayName || 'Atleta VBC'}</b><br><span style="color:#aaa">Evo ${d.evolutionLevel || 1} · ${d.estirpe || '?'}</span>`);
+        onlineCount++;
+      }
+    });
+    
+    document.getElementById('world-online-count').textContent = onlineCount;
+    
+    // Load active battles
+    const battlesSnap = await db.collection('vbc_battles')
+      .where('status', '==', 'active')
+      .limit(20)
+      .get();
+    
+    let battleCount = 0;
+    battlesSnap.forEach(doc => {
+      const d = doc.data();
+      if (d.gpsLat && d.gpsLng) {
+        const pulseIcon = L.divIcon({
+          html: '<div style="width:20px;height:20px;background:rgba(255,68,68,0.3);border-radius:50%;border:2px solid #ff4444;animation:pulse 1s infinite;"></div>',
+          iconSize: [20, 20], iconAnchor: [10, 10], className: ''
+        });
+        L.marker([d.gpsLat, d.gpsLng], { icon: pulseIcon })
+          .addTo(worldMarkersLayer)
+          .bindPopup(`<b style="color:#ff4444">⚔ BATALLA ACTIVA</b><br><span style="color:#aaa">${d.challenger || '?'} vs ${d.opponent || '?'}</span>`);
+        battleCount++;
+      }
+    });
+    document.getElementById('world-battles-count').textContent = battleCount;
+    
+    // Load guilds
+    const guildsSnap = await db.collection('vbc_guilds')
+      .orderBy('guildXP', 'desc')
+      .limit(50)
+      .get();
+    
+    let guildCount = 0;
+    guildsSnap.forEach(doc => {
+      const d = doc.data();
+      if (d.gpsLat && d.gpsLng) {
+        const guildIcon = L.divIcon({
+          html: `<div style="padding:3px 6px;background:#4488ff;border-radius:4px;color:#fff;font-size:10px;font-weight:bold;white-space:nowrap;">${d.emoji || '🏛'} ${d.tag || d.name}</div>`,
+          iconSize: [60, 22], iconAnchor: [30, 11], className: ''
+        });
+        L.marker([d.gpsLat, d.gpsLng], { icon: guildIcon })
+          .addTo(worldMarkersLayer)
+          .bindPopup(`<b style="color:#4488ff">${d.emoji || '🏛'} ${d.name}</b><br><span style="color:#aaa">XP: ${(d.guildXP||0).toLocaleString()} · ${d.memberCount || 0} miembros</span>`);
+        guildCount++;
+      }
+    });
+    document.getElementById('world-guilds-count').textContent = guildCount;
+
+    // Add demo markers if empty (for visual)
+    if (onlineCount === 0) addDemoWorldMarkers();
+    
+  } catch(e) {
+    console.error('World map load error:', e);
+    addDemoWorldMarkers();
+  }
+}
+
+function addDemoWorldMarkers() {
+  // Santiago area demo markers
+  const demos = [
+    { lat: -33.4489, lng: -70.6693, type: 'athlete', name: 'Atlas Prime', evo: 5, estirpe: 'Dragon', color: '#ff8800' },
+    { lat: -33.4600, lng: -70.6500, type: 'athlete', name: 'Iron Sentinel', evo: 3, estirpe: 'Oni', color: '#ff4444' },
+    { lat: -33.4350, lng: -70.6800, type: 'athlete', name: 'Void Walker', evo: 6, estirpe: 'Arcane', color: '#cc88ff' },
+    { lat: -33.4700, lng: -70.6900, type: 'battle', name: 'BATALLA ACTIVA', evo: 0, estirpe: '', color: '#ff4444' },
+    { lat: -33.4200, lng: -70.6600, type: 'guild', name: 'Iron Temple', evo: 0, estirpe: '', color: '#4488ff' },
+  ];
+  
+  demos.forEach(d => {
+    let iconHtml = '';
+    if (d.type === 'athlete') {
+      iconHtml = `<div style="width:12px;height:12px;background:${d.color};border-radius:50%;border:2px solid #fff;box-shadow:0 0 6px ${d.color};"></div>`;
+    } else if (d.type === 'battle') {
+      iconHtml = '<div style="width:20px;height:20px;background:rgba(255,68,68,0.3);border-radius:50%;border:2px solid #ff4444;"></div>';
+    } else {
+      iconHtml = `<div style="padding:2px 5px;background:#4488ff;border-radius:4px;color:#fff;font-size:10px;font-weight:bold;">🏛 ${d.name}</div>`;
+    }
+    
+    const icon = L.divIcon({ html: iconHtml, iconSize: [20,20], iconAnchor:[10,10], className: '' });
+    L.marker([d.lat, d.lng], { icon })
+      .addTo(worldMarkersLayer)
+      .bindPopup(d.type === 'athlete'
+        ? `<b style="color:${d.color}">${d.name}</b><br><span style="color:#aaa">Evo ${d.evo} · ${d.estirpe}</span>`
+        : d.type === 'battle'
+        ? '<b style="color:#ff4444">⚔ BATALLA ACTIVA</b>'
+        : `<b style="color:#4488ff">🏛 ${d.name}</b>`
+      );
+  });
+  
+  document.getElementById('world-online-count').textContent = '3';
+  document.getElementById('world-battles-count').textContent = '1';
+  document.getElementById('world-guilds-count').textContent = '1';
+}
+
+function updateWorldMapMarkers() {
+  if (!worldMarkersLayer) return;
+  worldMarkersLayer.clearLayers();
+  
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      addMyMarker(pos.coords.latitude, pos.coords.longitude);
+    });
+  }
+  loadWorldMarkersFromFirestore();
+}
+
+function centerWorldMapOnMe() {
+  if (!worldMapInstance) { initWorldMap(); return; }
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      worldMapInstance.setView([pos.coords.latitude, pos.coords.longitude], 15);
+      addMyMarker(pos.coords.latitude, pos.coords.longitude);
+      saveMyGPSToFirestore(pos.coords.latitude, pos.coords.longitude);
+    }, () => {
+      alert('No se pudo obtener tu ubicación. Activa el GPS.');
+    });
+  }
+}
+
+// Mark user offline when leaving
+window.addEventListener('beforeunload', () => {
+  if (currentUser && typeof db !== 'undefined') {
+    try {
+      db.collection('vbc_users').doc(currentUser.uid).update({ online: false });
+    } catch(e) {}
+  }
+});
 
 </script>
 </body>
