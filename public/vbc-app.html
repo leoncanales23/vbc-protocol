@@ -1286,6 +1286,7 @@ body::after{
       <button class="nav-tab" onclick="goScreen('guild')">🏛 Guild</button>
       <button class="nav-tab" onclick="goScreen('season')">🏆 Season</button>
     <button class="nav-tab" onclick="goScreen('world')">🗺 Mundo</button>
+    <button class="nav-tab" onclick="goScreen('dungeon')">🔥 Dungeon</button>
     </div>
     <div class="nav-right">
       <!-- 💎 Diamond sprite — moneda VBC */-->
@@ -2640,7 +2641,8 @@ function goScreen(id) {
        (id==='quests'&&t.textContent.includes('Quest'))||
        (id==='guild'&&t.textContent.includes('Guild'))||
        (id==='season'&&t.textContent.includes('Season'))||
-       (id==='world'&&t.textContent.includes('Mundo'))) t.classList.add('active');
+       (id==='world'&&t.textContent.includes('Mundo'))||
+       (id==='dungeon'&&t.textContent.includes('Dungeon'))) t.classList.add('active');
   });
   if(id==='skills') renderSkills();
   if(id==='wallet') renderWallet();
@@ -2651,6 +2653,7 @@ function goScreen(id) {
   if(id==='guild') { vbcInitGuild && vbcInitGuild(); }
   if(id==='season') { vbcInitSeason && vbcInitSeason(); }
   if(id==='world') { initWorldMap && initWorldMap(); }
+  if(id==='dungeon') { initDungeon && initDungeon(); }
 }
 
 
@@ -6158,6 +6161,127 @@ goScreen = function(screen) {
 </div>
 <!-- ═══════════════ END WORLD SCREEN ═══════════════ -->
 
+<!-- ═══════════════ DUNGEON EVENTS SCREEN ═══════════════ -->
+<div id="s-dungeon" class="screen" style="display:none;padding:0;overflow-y:auto;background:#0a0a0a;">
+
+  <!-- Header -->
+  <div style="background:linear-gradient(135deg,#1a0000,#0d0d0d);padding:20px 16px 12px;border-bottom:1px solid #ff2200;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <span style="font-size:1.8rem;">🔥</span>
+      <div>
+        <h2 style="color:#ff4400;font-size:1.2rem;margin:0;letter-spacing:1px;">DUNGEON EVENTS</h2>
+        <p style="color:#666;font-size:0.7rem;margin:0;">Eventos de combate temporal · Guilds vs Boss</p>
+      </div>
+    </div>
+    <!-- Active Dungeon Banner -->
+    <div id="dungeon-active-banner" style="display:none;background:rgba(255,68,0,0.15);border:1px solid #ff4400;border-radius:8px;padding:10px;margin-top:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="color:#ff6600;font-size:0.8rem;font-weight:bold;">⚔ DUNGEON ACTIVO</span>
+        <span id="dungeon-timer-badge" style="color:#fff;font-size:0.75rem;background:#ff2200;padding:2px 8px;border-radius:12px;"></span>
+      </div>
+      <div id="dungeon-boss-name-banner" style="color:#fff;font-size:1rem;font-weight:bold;margin-top:4px;"></div>
+    </div>
+  </div>
+
+  <!-- Active Dungeon Card -->
+  <div id="dungeon-active-section" style="display:none;padding:16px;">
+    <div style="background:#110000;border:2px solid #ff2200;border-radius:12px;overflow:hidden;">
+      <!-- Boss Header -->
+      <div style="background:linear-gradient(135deg,#2a0000,#1a0000);padding:16px;text-align:center;">
+        <div id="dungeon-boss-svg" style="font-size:4rem;margin-bottom:8px;">🐉</div>
+        <h3 id="dungeon-boss-title" style="color:#ff4400;font-size:1.1rem;margin:0 0 4px;"></h3>
+        <p id="dungeon-boss-subtitle" style="color:#888;font-size:0.75rem;margin:0;"></p>
+      </div>
+
+      <!-- HP Bar -->
+      <div style="padding:12px 16px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+          <span style="color:#ff4400;font-size:0.75rem;font-weight:bold;">BOSS HP</span>
+          <span id="dungeon-hp-text" style="color:#fff;font-size:0.75rem;"></span>
+        </div>
+        <div style="background:#1a0000;border-radius:4px;height:14px;overflow:hidden;border:1px solid #ff2200;">
+          <div id="dungeon-hp-bar" style="height:100%;background:linear-gradient(90deg,#ff0000,#ff6600);transition:width 0.8s;width:100%;"></div>
+        </div>
+      </div>
+
+      <!-- Timer -->
+      <div style="display:flex;gap:12px;padding:4px 16px 12px;justify-content:center;">
+        <div style="text-align:center;background:#1a1a1a;padding:8px 16px;border-radius:8px;">
+          <div id="dungeon-countdown" style="color:#ff6600;font-size:1.4rem;font-weight:bold;font-family:monospace;">--:--:--</div>
+          <div style="color:#555;font-size:0.65rem;">TIEMPO RESTANTE</div>
+        </div>
+      </div>
+
+      <!-- My contribution -->
+      <div style="background:#0d0000;padding:12px 16px;border-top:1px solid #1a1a1a;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+          <span style="color:#888;font-size:0.75rem;">Tu daño total</span>
+          <span id="dungeon-my-damage" style="color:#ff6600;font-size:0.85rem;font-weight:bold;">0 kg</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+          <span style="color:#888;font-size:0.75rem;">Posición en dungeon</span>
+          <span id="dungeon-my-rank" style="color:#ffd700;font-size:0.85rem;font-weight:bold;">#-</span>
+        </div>
+        <!-- Attack button -->
+        <button onclick="dungeonAttack()" id="dungeon-attack-btn" style="width:100%;background:linear-gradient(135deg,#cc2200,#ff4400);color:#fff;border:none;padding:14px;border-radius:8px;font-size:0.95rem;font-weight:bold;cursor:pointer;letter-spacing:1px;">
+          ⚔ REGISTRAR LIFT COMO DAÑO
+        </button>
+        <p style="color:#555;font-size:0.65rem;text-align:center;margin:6px 0 0;">Cada kg levantado = 1 punto de daño al Boss</p>
+      </div>
+
+      <!-- Leaderboard -->
+      <div style="padding:12px 16px;border-top:1px solid #1a1a1a;">
+        <div style="color:#888;font-size:0.75rem;margin-bottom:8px;">🏆 TOP GUERREROS</div>
+        <div id="dungeon-leaderboard" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+
+      <!-- Rewards preview -->
+      <div style="padding:12px 16px;border-top:1px solid #1a1a1a;background:#0d0d00;">
+        <div style="color:#ffd700;font-size:0.75rem;font-weight:bold;margin-bottom:8px;">💎 RECOMPENSAS AL VENCER</div>
+        <div id="dungeon-rewards" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- No Active Dungeon -->
+  <div id="dungeon-empty-section" style="display:none;padding:24px 16px;text-align:center;">
+    <div style="font-size:3rem;margin-bottom:12px;opacity:0.4;">🔒</div>
+    <div style="color:#555;font-size:0.9rem;margin-bottom:4px;">Ningún dungeon activo</div>
+    <div style="color:#333;font-size:0.75rem;">Los events duran 48h · Próximo evento en:</div>
+    <div id="dungeon-next-countdown" style="color:#ff4400;font-size:1.2rem;font-weight:bold;margin-top:8px;font-family:monospace;">--:--:--</div>
+  </div>
+
+  <!-- Past Dungeons -->
+  <div style="padding:16px;">
+    <div style="color:#444;font-size:0.75rem;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;">Historial</div>
+    <div id="dungeon-history" style="display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+
+  <!-- Dungeon Types Info -->
+  <div style="padding:16px;border-top:1px solid #1a1a1a;">
+    <div style="color:#444;font-size:0.75rem;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;">Tipos de Dungeon</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div style="background:#111;border-radius:8px;padding:12px;border-left:3px solid #ff4400;">
+        <div style="color:#ff4400;font-size:0.8rem;font-weight:bold;">🐉 TITAN DUNGEON</div>
+        <div style="color:#666;font-size:0.7rem;margin-top:4px;">Boss HP: 1,000,000 kg · 48h · Toda la comunidad</div>
+        <div style="color:#888;font-size:0.7rem;">Recompensa: Artefacto N5 + Runa Épica</div>
+      </div>
+      <div style="background:#111;border-radius:8px;padding:12px;border-left:3px solid #ff8800;">
+        <div style="color:#ff8800;font-size:0.8rem;font-weight:bold;">⚔ GUILD DUNGEON</div>
+        <div style="color:#666;font-size:0.7rem;margin-top:4px;">Boss HP: 100,000 kg · 24h · Solo tu guild</div>
+        <div style="color:#888;font-size:0.7rem;">Recompensa: Guild XP ×3 + Artefacto N3</div>
+      </div>
+      <div style="background:#111;border-radius:8px;padding:12px;border-left:3px solid #ffcc00;">
+        <div style="color:#ffcc00;font-size:0.8rem;font-weight:bold;">💀 SOLO DUNGEON</div>
+        <div style="color:#666;font-size:0.7rem;margin-top:4px;">Boss HP: 5,000 kg · 12h · Solo tú</div>
+        <div style="color:#888;font-size:0.7rem;">Recompensa: +200 Season Points + VBC Coins</div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ═══════════════ END DUNGEON SCREEN ═══════════════ -->
+
+
 
 <script>
 
@@ -6635,5 +6759,266 @@ window.addEventListener('beforeunload', () => {
 });
 
 </script>
+
+<!-- ═══════════════ DUNGEON EVENTS JS ═══════════════ -->
+<script>
+// ─── Dungeon Engine ───────────────────────────────────────────
+let dungeonCountdownInterval = null;
+let activeDungeon = null;
+
+const DUNGEON_CATALOG = [
+  {
+    id: 'titan-deadlift',
+    name: 'Titan Deadlift Dungeon',
+    subtitle: 'El suelo tiembla. El boss espera.',
+    emoji: '🏋️',
+    bossHp: 1000000,
+    duration: 48,
+    type: 'TITAN',
+    rewards: [
+      { icon: '🪙', text: '+500 VBC Coins' },
+      { icon: '⚗️', text: 'Artefacto N5' },
+      { icon: '🔮', text: 'Runa Épica' },
+      { icon: '⭐', text: '+300 Season Points' }
+    ]
+  },
+  {
+    id: 'guild-bench-war',
+    name: 'Guild Bench War',
+    subtitle: 'Tu guild contra el Iron Warden.',
+    emoji: '⚔️',
+    bossHp: 100000,
+    duration: 24,
+    type: 'GUILD',
+    rewards: [
+      { icon: '🪙', text: '+200 VBC Coins' },
+      { icon: '⚗️', text: 'Artefacto N3' },
+      { icon: '⭐', text: 'Guild XP ×3' }
+    ]
+  },
+  {
+    id: 'solo-squat-challenge',
+    name: 'Solo Squat Gauntlet',
+    subtitle: 'Solo tú y el bar. Sin excusas.',
+    emoji: '💀',
+    bossHp: 5000,
+    duration: 12,
+    type: 'SOLO',
+    rewards: [
+      { icon: '🪙', text: '+150 VBC Coins' },
+      { icon: '⭐', text: '+200 Season Points' }
+    ]
+  }
+];
+
+const DUNGEON_HISTORY_DEMO = [
+  { name: 'Titan Deadlift Dungeon', result: 'VENCIDO', date: 'Hace 5 días', emoji: '🏋️', participated: true },
+  { name: 'Guild Bench War', result: 'VENCIDO', date: 'Hace 12 días', emoji: '⚔️', participated: false },
+  { name: 'Solo Squat Gauntlet', result: 'FALLIDO', date: 'Hace 18 días', emoji: '💀', participated: true }
+];
+
+function initDungeon() {
+  clearInterval(dungeonCountdownInterval);
+  loadActiveDungeon();
+  renderDungeonHistory();
+}
+
+function loadActiveDungeon() {
+  // Check Firestore for active dungeon
+  if (typeof db !== 'undefined') {
+    db.collection('vbc_dungeons')
+      .where('status', '==', 'active')
+      .limit(1)
+      .get()
+      .then(snap => {
+        if (!snap.empty) {
+          const doc = snap.docs[0];
+          activeDungeon = { id: doc.id, ...doc.data() };
+          renderActiveDungeon(activeDungeon);
+        } else {
+          // Demo dungeon for first launch
+          const demo = buildDemoDungeon();
+          renderActiveDungeon(demo);
+        }
+      })
+      .catch(() => {
+        const demo = buildDemoDungeon();
+        renderActiveDungeon(demo);
+      });
+  } else {
+    const demo = buildDemoDungeon();
+    renderActiveDungeon(demo);
+  }
+}
+
+function buildDemoDungeon() {
+  const now = Date.now();
+  const endTime = now + (47 * 3600 * 1000) + (23 * 60 * 1000); // 47h 23m from now
+  const catalog = DUNGEON_CATALOG[0];
+  return {
+    id: 'demo-titan',
+    name: catalog.name,
+    subtitle: catalog.subtitle,
+    emoji: catalog.emoji,
+    bossHp: catalog.bossHp,
+    currentDamage: 387420,
+    duration: catalog.duration,
+    type: catalog.type,
+    rewards: catalog.rewards,
+    endTime: endTime,
+    myDamage: 0,
+    myRank: '-',
+    participants: []
+  };
+}
+
+function renderActiveDungeon(dungeon) {
+  if (!dungeon) return;
+
+  document.getElementById('dungeon-active-section').style.display = 'block';
+  document.getElementById('dungeon-empty-section').style.display = 'none';
+  document.getElementById('dungeon-active-banner').style.display = 'block';
+
+  document.getElementById('dungeon-boss-svg').textContent = dungeon.emoji || '🐉';
+  document.getElementById('dungeon-boss-title').textContent = dungeon.name;
+  document.getElementById('dungeon-boss-subtitle').textContent = dungeon.subtitle || '';
+  document.getElementById('dungeon-boss-name-banner').textContent = dungeon.name;
+
+  // HP bar
+  const pct = Math.max(0, Math.min(100, 100 - ((dungeon.currentDamage || 0) / dungeon.bossHp * 100)));
+  document.getElementById('dungeon-hp-bar').style.width = pct + '%';
+  const dmgK = ((dungeon.currentDamage || 0) / 1000).toFixed(1);
+  const hpK = (dungeon.bossHp / 1000).toFixed(0);
+  document.getElementById('dungeon-hp-text').textContent = `${dmgK}k / ${hpK}k kg`;
+
+  // My stats
+  document.getElementById('dungeon-my-damage').textContent = (dungeon.myDamage || 0) + ' kg';
+  document.getElementById('dungeon-my-rank').textContent = '#' + (dungeon.myRank || '-');
+
+  // Countdown
+  dungeonCountdownInterval = setInterval(() => {
+    const remaining = (dungeon.endTime || 0) - Date.now();
+    if (remaining <= 0) {
+      document.getElementById('dungeon-countdown').textContent = '¡FINALIZADO!';
+      document.getElementById('dungeon-timer-badge').textContent = 'CERRADO';
+      clearInterval(dungeonCountdownInterval);
+      return;
+    }
+    const h = Math.floor(remaining / 3600000);
+    const m = Math.floor((remaining % 3600000) / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    const t = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    document.getElementById('dungeon-countdown').textContent = t;
+    document.getElementById('dungeon-timer-badge').textContent = t;
+  }, 1000);
+
+  // Rewards
+  const rewardsEl = document.getElementById('dungeon-rewards');
+  rewardsEl.innerHTML = (dungeon.rewards || []).map(r =>
+    `<span style="background:#1a1a00;border:1px solid #ffd700;border-radius:20px;padding:4px 10px;font-size:0.7rem;color:#ffd700;">${r.icon} ${r.text}</span>`
+  ).join('');
+
+  // Demo leaderboard
+  renderDungeonLeaderboard(dungeon);
+}
+
+function renderDungeonLeaderboard(dungeon) {
+  const demoPlayers = [
+    { name: 'IronDragon_CL', estirpe: '🐉', damage: 42380 },
+    { name: 'OniKing', estirpe: '🩸', damage: 38920 },
+    { name: 'TempestRider', estirpe: '🌪️', damage: 31450 },
+    { name: 'UndeadLifter', estirpe: '🦴', damage: 28100 },
+    { name: 'ArcaneMage', estirpe: '🔮', damage: 19800 }
+  ];
+
+  const lb = document.getElementById('dungeon-leaderboard');
+  lb.innerHTML = demoPlayers.map((p, i) => `
+    <div style="display:flex;align-items:center;gap:10px;background:#0d0000;border-radius:6px;padding:8px 10px;">
+      <span style="color:${i===0?'#ffd700':i===1?'#c0c0c0':i===2?'#cd7f32':'#555'};font-size:0.85rem;font-weight:bold;min-width:20px;">#${i+1}</span>
+      <span style="font-size:0.9rem;">${p.estirpe}</span>
+      <span style="color:#ccc;font-size:0.8rem;flex:1;">${p.name}</span>
+      <span style="color:#ff6600;font-size:0.8rem;font-weight:bold;">${p.damage.toLocaleString()} kg</span>
+    </div>
+  `).join('');
+}
+
+function renderDungeonHistory() {
+  const el = document.getElementById('dungeon-history');
+  el.innerHTML = DUNGEON_HISTORY_DEMO.map(d => `
+    <div style="background:#111;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;opacity:${d.participated?1:0.5};">
+      <span style="font-size:1.5rem;">${d.emoji}</span>
+      <div style="flex:1;">
+        <div style="color:#ccc;font-size:0.8rem;">${d.name}</div>
+        <div style="color:#555;font-size:0.65rem;">${d.date}</div>
+      </div>
+      <span style="font-size:0.7rem;padding:3px 8px;border-radius:12px;font-weight:bold;
+        background:${d.result==='VENCIDO'?'#003300':'#330000'};
+        color:${d.result==='VENCIDO'?'#00ff88':'#ff4444'};">
+        ${d.result}
+      </span>
+    </div>
+  `).join('');
+}
+
+function dungeonAttack() {
+  if (!currentUser) {
+    alert('Debes iniciar sesión primero.');
+    return;
+  }
+  // Open lift screen pre-filled for dungeon
+  const lastLift = parseInt(localStorage.getItem('vbc_last_lift_total') || '0');
+  if (lastLift > 0) {
+    const dmg = lastLift;
+    // Save damage to Firestore
+    if (typeof db !== 'undefined' && activeDungeon) {
+      const userId = currentUser.uid;
+      db.collection('vbc_dungeons').doc(activeDungeon.id || 'demo-titan')
+        .collection('participants').doc(userId)
+        .set({
+          displayName: currentUser.displayName || 'Atleta',
+          damage: firebase.firestore.FieldValue.increment(dmg),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      // Increment boss damage
+      db.collection('vbc_dungeons').doc(activeDungeon.id || 'demo-titan')
+        .update({ currentDamage: firebase.firestore.FieldValue.increment(dmg) });
+    }
+    // Update local
+    const myDmgEl = document.getElementById('dungeon-my-damage');
+    const current = parseInt((myDmgEl.textContent || '0').replace(/[^0-9]/g,'')) || 0;
+    myDmgEl.textContent = (current + dmg) + ' kg';
+    // Flash button
+    const btn = document.getElementById('dungeon-attack-btn');
+    btn.textContent = `⚔ +${dmg} kg DE DAÑO!`;
+    btn.style.background = 'linear-gradient(135deg,#006600,#00aa00)';
+    setTimeout(() => {
+      btn.textContent = '⚔ REGISTRAR LIFT COMO DAÑO';
+      btn.style.background = 'linear-gradient(135deg,#cc2200,#ff4400)';
+    }, 2000);
+    showToast(`⚔ Infligiste ${dmg} kg de daño al boss!`, '#ff4400');
+  } else {
+    // Go to lift screen
+    showToast('Registra un lift primero para atacar al boss', '#ff8800');
+    setTimeout(() => goScreen('lift'), 1000);
+  }
+}
+
+// Admin: create dungeon (admin only - for future use)
+function createDungeonEvent(catalogId, startOffset = 0) {
+  const cat = DUNGEON_CATALOG.find(d => d.id === catalogId);
+  if (!cat || typeof db === 'undefined') return;
+  const now = Date.now();
+  db.collection('vbc_dungeons').add({
+    ...cat,
+    status: 'active',
+    currentDamage: 0,
+    startTime: now + startOffset,
+    endTime: now + startOffset + (cat.duration * 3600 * 1000),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(() => showToast('🔥 Dungeon creado!', '#ff4400'));
+}
+</script>
+<!-- ═══════════════ END DUNGEON JS ═══════════════ -->
+
 </body>
 </html>
