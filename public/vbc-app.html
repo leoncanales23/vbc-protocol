@@ -1287,6 +1287,7 @@ body::after{
       <button class="nav-tab" onclick="goScreen('season')">🏆 Season</button>
     <button class="nav-tab" onclick="goScreen('world')">🗺 Mundo</button>
     <button class="nav-tab" onclick="goScreen('dungeon')">🔥 Dungeon</button>
+        <button class="nav-tab" onclick="goScreen('aiboss')">🤖 AI Boss</button>
     </div>
     <div class="nav-right">
       <!-- 💎 Diamond sprite — moneda VBC */-->
@@ -2642,7 +2643,8 @@ function goScreen(id) {
        (id==='guild'&&t.textContent.includes('Guild'))||
        (id==='season'&&t.textContent.includes('Season'))||
        (id==='world'&&t.textContent.includes('Mundo'))||
-       (id==='dungeon'&&t.textContent.includes('Dungeon'))) t.classList.add('active');
+       (id==='dungeon'&&t.textContent.includes('Dungeon'))||
+       (id==='aiboss'&&t.textContent.includes('AI Boss'))) t.classList.add('active');
   });
   if(id==='skills') renderSkills();
   if(id==='wallet') renderWallet();
@@ -2654,6 +2656,7 @@ function goScreen(id) {
   if(id==='season') { vbcInitSeason && vbcInitSeason(); }
   if(id==='world') { initWorldMap && initWorldMap(); }
   if(id==='dungeon') { initDungeon && initDungeon(); }
+  if(id==='aiboss') { initAIBoss && initAIBoss(); }
 }
 
 
@@ -7017,8 +7020,336 @@ function createDungeonEvent(catalogId, startOffset = 0) {
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(() => showToast('🔥 Dungeon creado!', '#ff4400'));
 }
+
+// ══════════════════════════════════════════════════════ AI COACH BOSS ENGINE
+const AI_BOSS_CONFIGS = [
+  { name:"IRON SENTINEL", avatar:"⚙", subtitle:"La máquina del progreso", tier:"I", diff:"NORMAL",
+    multipliers:{bench:1.05,squat:1.05,dead:1.05}, hpBase:100, xp:300, coins:150,
+    reward:"Artefacto N2 + 150 VBC", color:"#6366f1" },
+  { name:"STEEL TITAN", avatar:"🦾", subtitle:"Tu límite… desafiado", tier:"II", diff:"DIFÍCIL",
+    multipliers:{bench:1.10,squat:1.10,dead:1.10}, hpBase:200, xp:600, coins:300,
+    reward:"Artefacto N3 + 300 VBC + 200 SP", color:"#8b5cf6" },
+  { name:"VOID CRUSHER", avatar:"💀", subtitle:"El abismo te mira", tier:"III", diff:"BRUTAL",
+    multipliers:{bench:1.15,squat:1.15,dead:1.15}, hpBase:350, xp:1000, coins:500,
+    reward:"Artefacto N4 + 500 VBC + Runa Épica", color:"#dc2626" },
+  { name:"OMEGA PROTOCOL", avatar:"🌑", subtitle:"Más allá del umbral", tier:"IV", diff:"OMEGA",
+    multipliers:{bench:1.20,squat:1.20,dead:1.20}, hpBase:500, xp:2000, coins:1000,
+    reward:"Artefacto N5 + 1000 VBC + Runa OMEGA", color:"#f59e0b" },
+];
+
+let currentBoss = null;
+let bossGenerated = false;
+
+function initAIBoss() {
+  renderAIBossHistory();
+}
+
+function getUserLifts() {
+  // Pull from userData lifts array or fallback to defaults
+  const lifts = (userData && userData.lifts && userData.lifts.length > 0) ? userData.lifts : [];
+  const byEx = {};
+  lifts.forEach(l => {
+    if (!byEx[l.exercise]) byEx[l.exercise] = [];
+    byEx[l.exercise].push(l.weight || 0);
+  });
+  const best = ex => byEx[ex] ? Math.max(...byEx[ex]) : null;
+  return {
+    bench: best('Bench Press') || best('Press Banca') || 80,
+    squat: best('Sentadilla') || best('Squat') || 100,
+    dead:  best('Peso Muerto') || best('Deadlift') || 120,
+  };
+}
+
+function generateAIBoss() {
+  const lifts = getUserLifts();
+  
+  // Pick boss tier based on evolution level
+  const evo = (userData && userData.evolutionLevel) ? userData.evolutionLevel : 1;
+  const tierIdx = Math.min(Math.floor((evo - 1) / 2), 3);
+  const cfg = AI_BOSS_CONFIGS[tierIdx];
+  
+  const bBench = Math.round(lifts.bench * cfg.multipliers.bench);
+  const bSquat = Math.round(lifts.squat * cfg.multipliers.squat);
+  const bDead  = Math.round(lifts.dead  * cfg.multipliers.dead);
+  const reps   = 3 + tierIdx;
+  
+  currentBoss = {
+    ...cfg,
+    challenges: [
+      { lift: "🏋 Bench Press", target: bBench + "kg × " + reps + " reps", base: lifts.bench },
+      { lift: "🦵 Sentadilla",  target: bSquat + "kg × " + reps + " reps", base: lifts.squat },
+      { lift: "💀 Peso Muerto",  target: bDead  + "kg × " + reps + " reps", base: lifts.dead  },
+    ],
+    power: Math.round((bBench + bSquat + bDead) / 3),
+    hp: cfg.hpBase,
+    timestamp: Date.now(),
+  };
+  
+  // Render boss card
+  document.getElementById('boss-name').textContent = cfg.name;
+  document.getElementById('boss-subtitle').textContent = cfg.subtitle;
+  document.getElementById('boss-avatar').textContent = cfg.avatar;
+  document.getElementById('boss-avatar').style.background = 
+    `linear-gradient(135deg,${cfg.color},#111)`;
+  document.getElementById('boss-difficulty').textContent = cfg.diff;
+  document.getElementById('boss-tier').textContent = "TIER " + cfg.tier;
+  document.getElementById('boss-power').textContent = currentBoss.power + "kg";
+  document.getElementById('boss-hp').textContent = currentBoss.hp + "%";
+  document.getElementById('boss-xp').textContent = "+" + cfg.xp;
+  
+  // Challenge rows
+  const rows = document.getElementById('challenge-rows');
+  rows.innerHTML = '';
+  currentBoss.challenges.forEach(ch => {
+    const pct = Math.round((parseFloat(ch.target) / ch.base - 1) * 100);
+    rows.innerHTML += `
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="color:#d1d5db;font-size:13px;">${ch.lift}</span>
+        <div style="text-align:right;">
+          <span style="color:#f59e0b;font-size:13px;font-weight:bold;">${ch.target}</span>
+          <span style="color:#ef4444;font-size:10px;margin-left:6px;">↑${Math.round(cfg.multipliers.bench * 100 - 100)}%</span>
+        </div>
+      </div>`;
+  });
+  
+  // Rewards
+  document.getElementById('boss-rewards').innerHTML = cfg.reward
+    .split('+').map(r => `<div>▸ ${r.trim()}</div>`).join('');
+  
+  // Enable fight button
+  const fightBtn = document.getElementById('fight-btn');
+  fightBtn.disabled = false;
+  fightBtn.style.opacity = '1';
+  bossGenerated = true;
+  
+  // Hide old battle log
+  document.getElementById('ai-battle-log').style.display = 'none';
+  
+  showToast(`⚙ Boss generado: ${cfg.name} — TIER ${cfg.tier}`);
+}
+
+async function fightAIBoss() {
+  if (!currentBoss || !bossGenerated) {
+    showToast("⚠ Genera un boss primero"); return;
+  }
+  
+  const logDiv  = document.getElementById('ai-battle-log');
+  const logLines = document.getElementById('battle-log-lines');
+  const resultBanner = document.getElementById('battle-result-banner');
+  
+  logDiv.style.display = 'block';
+  logLines.innerHTML = '';
+  resultBanner.style.display = 'none';
+  
+  const fightBtn = document.getElementById('fight-btn');
+  fightBtn.disabled = true;
+  fightBtn.style.opacity = '0.5';
+  
+  // Simulate combat log
+  const logs = [
+    { t: 300,  txt: `> Iniciando protocolo de combate...`, col: '#6b7280' },
+    { t: 700,  txt: `> Boss detectado: ${currentBoss.name}`, col: '#a78bfa' },
+    { t: 1200, txt: `> Analizando historial de lifts...`, col: '#6b7280' },
+    { t: 1800, txt: `> Calculando potencial máximo...`, col: '#6b7280' },
+    { t: 2400, txt: `> ⚔ COMBATE INICIADO`, col: '#f59e0b' },
+  ];
+  
+  currentBoss.challenges.forEach((ch, i) => {
+    const delay = 3000 + i * 1200;
+    const win = Math.random() > 0.35; // 65% chance per challenge
+    logs.push({ t: delay,   txt: `> ${ch.lift}: ${ch.target}`, col: '#d1d5db' });
+    logs.push({ t: delay+500, txt: win
+      ? `  ✅ SUPERADO — Daño infligido`
+      : `  ❌ FALLIDO — Sin suficiente fuerza`,
+      col: win ? '#10b981' : '#ef4444' });
+  });
+  
+  // Evaluate result
+  const winCount = currentBoss.challenges.filter(() => Math.random() > 0.35).length;
+  const victory = winCount >= 2;
+  
+  logs.push({ t: 7000, txt: `> ━━━━━━━━━━━━━━━━━━━━━━━`, col: '#374151' });
+  logs.push({ t: 7200, txt: victory
+    ? `> 🏆 VICTORIA — Boss derrotado`
+    : `> 💀 DERROTA — El boss fue más fuerte`,
+    col: victory ? '#10b981' : '#ef4444' });
+  
+  // Schedule log lines
+  logs.forEach(entry => {
+    setTimeout(() => {
+      logLines.innerHTML += `<div style="color:${entry.col}">${entry.txt}</div>`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }, entry.t);
+  });
+  
+  // Final result after 8s
+  setTimeout(async () => {
+    resultBanner.style.display = 'block';
+    if (victory) {
+      resultBanner.style.background = 'linear-gradient(135deg,rgba(16,185,129,0.2),rgba(16,185,129,0.05))';
+      resultBanner.style.border = '1px solid rgba(16,185,129,0.4)';
+      resultBanner.innerHTML = `
+        <div style="font-size:32px;margin-bottom:8px;">🏆</div>
+        <div style="color:#10b981;font-size:16px;font-weight:bold;margin-bottom:4px;">BOSS DERROTADO</div>
+        <div style="color:#d1d5db;font-size:12px;margin-bottom:12px;">${currentBoss.reward}</div>
+        <div style="display:flex;gap:8px;justify-content:center;">
+          <div style="background:rgba(16,185,129,0.15);border-radius:8px;padding:6px 14px;color:#10b981;font-size:12px;">+${currentBoss.xp} XP</div>
+          <div style="background:rgba(245,158,11,0.15);border-radius:8px;padding:6px 14px;color:#f59e0b;font-size:12px;">+${currentBoss.coins} VBC</div>
+        </div>`;
+      // Grant rewards
+      if (userData) {
+        userData.vbcCoins = (userData.vbcCoins || 0) + currentBoss.coins;
+        userData.xp = (userData.xp || 0) + currentBoss.xp;
+        userData.seasonPoints = (userData.seasonPoints || 0) + 150;
+        await saveUserState();
+        showToast(`🏆 ${currentBoss.name} derrotado! +${currentBoss.xp} XP +${currentBoss.coins} VBC`);
+      }
+    } else {
+      resultBanner.style.background = 'linear-gradient(135deg,rgba(220,38,38,0.2),rgba(220,38,38,0.05))';
+      resultBanner.style.border = '1px solid rgba(220,38,38,0.4)';
+      resultBanner.innerHTML = `
+        <div style="font-size:32px;margin-bottom:8px;">💀</div>
+        <div style="color:#ef4444;font-size:16px;font-weight:bold;margin-bottom:4px;">DERROTA</div>
+        <div style="color:#9ca3af;font-size:12px;">Entrena más fuerte y vuelve</div>
+        <button onclick="generateAIBoss()" style="margin-top:12px;background:#374151;border:none;color:#d1d5db;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:12px;">↻ NUEVO INTENTO</button>`;
+    }
+    
+    // Save to history
+    const battle = {
+      bossName: currentBoss.name,
+      tier: currentBoss.tier,
+      victory,
+      reward: victory ? currentBoss.reward : null,
+      timestamp: Date.now(),
+    };
+    if (userData) {
+      if (!userData.aiBossHistory) userData.aiBossHistory = [];
+      userData.aiBossHistory.unshift(battle);
+      if (userData.aiBossHistory.length > 10) userData.aiBossHistory.pop();
+      await saveUserState();
+    }
+    renderAIBossHistory();
+    fightBtn.disabled = false;
+    fightBtn.style.opacity = '1';
+    bossGenerated = false;
+  }, 8000);
+}
+
+function renderAIBossHistory() {
+  const hist = (userData && userData.aiBossHistory) ? userData.aiBossHistory : [];
+  const el = document.getElementById('ai-boss-history');
+  if (!el) return;
+  if (hist.length === 0) {
+    el.innerHTML = '<div style="color:#374151;font-size:12px;text-align:center;padding:12px;">Sin combates anteriores</div>';
+    return;
+  }
+  el.innerHTML = hist.slice(0,5).map(b => {
+    const d = new Date(b.timestamp).toLocaleDateString('es-CL');
+    return `
+      <div style="background:rgba(0,0,0,0.4);border:1px solid ${b.victory ? 'rgba(16,185,129,0.3)' : 'rgba(220,38,38,0.3)'};border-radius:10px;padding:12px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="color:${b.victory ? '#10b981' : '#ef4444'};font-size:13px;font-weight:bold;">${b.bossName}</div>
+          <div style="color:#6b7280;font-size:10px;">TIER ${b.tier} · ${d}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:18px;">${b.victory ? '🏆' : '💀'}</div>
+          <div style="color:${b.victory ? '#10b981' : '#ef4444'};font-size:10px;">${b.victory ? 'VENCIDO' : 'FALLIDO'}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+// ══════════════════════════════════════════════════════ END AI COACH BOSS
 </script>
 <!-- ═══════════════ END DUNGEON JS ═══════════════ -->
 
+
+<!-- ═══════════════════════════════════════════════════════ AI COACH BOSS -->
+<div id="s-aiboss" class="screen" style="display:none;">
+  <div style="padding:16px;max-width:480px;margin:0 auto;">
+
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-size:48px;margin-bottom:8px;">🤖</div>
+      <h2 style="color:#a78bfa;font-size:22px;margin:0;letter-spacing:2px;">AI COACH BOSS</h2>
+      <p style="color:#6b7280;font-size:12px;margin:4px 0 0;">Tu enemigo eres tú mismo — pero más fuerte</p>
+    </div>
+
+    <!-- Boss Card -->
+    <div id="ai-boss-card" style="background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid #7c3aed;border-radius:16px;padding:20px;margin-bottom:20px;position:relative;overflow:hidden;">
+      <div style="position:absolute;top:0;right:0;width:80px;height:80px;background:radial-gradient(circle,rgba(124,58,237,0.3),transparent);border-radius:0 16px 0 0;"></div>
+      
+      <!-- Boss name -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <div id="boss-avatar" style="width:56px;height:56px;background:linear-gradient(135deg,#7c3aed,#dc2626);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;">⚙</div>
+        <div>
+          <div id="boss-name" style="color:#a78bfa;font-size:16px;font-weight:bold;letter-spacing:1px;">IRON SENTINEL</div>
+          <div id="boss-subtitle" style="color:#6b7280;font-size:11px;">Boss generado desde tu historial</div>
+        </div>
+        <div style="margin-left:auto;text-align:right;">
+          <div id="boss-difficulty" style="background:#dc2626;color:#fff;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:bold;">DIFÍCIL</div>
+          <div id="boss-tier" style="color:#f59e0b;font-size:11px;margin-top:2px;">TIER III</div>
+        </div>
+      </div>
+
+      <!-- Challenge -->
+      <div id="boss-challenge" style="background:rgba(0,0,0,0.4);border-radius:10px;padding:12px;margin-bottom:14px;">
+        <div style="color:#9ca3af;font-size:10px;letter-spacing:1px;margin-bottom:8px;">▸ DESAFÍO</div>
+        <div id="challenge-rows" style="display:flex;flex-direction:column;gap:8px;">
+          <!-- populated by JS -->
+        </div>
+      </div>
+
+      <!-- Boss stats -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+        <div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:8px;text-align:center;">
+          <div id="boss-power" style="color:#ef4444;font-size:18px;font-weight:bold;">—</div>
+          <div style="color:#6b7280;font-size:9px;">POWER</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:8px;text-align:center;">
+          <div id="boss-hp" style="color:#10b981;font-size:18px;font-weight:bold;">—</div>
+          <div style="color:#6b7280;font-size:9px;">HP</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:8px;text-align:center;">
+          <div id="boss-xp" style="color:#f59e0b;font-size:18px;font-weight:bold;">—</div>
+          <div style="color:#6b7280;font-size:9px;">XP REWARD</div>
+        </div>
+      </div>
+
+      <!-- Rewards preview -->
+      <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:10px;">
+        <div style="color:#f59e0b;font-size:10px;letter-spacing:1px;margin-bottom:6px;">▸ RECOMPENSAS AL VENCER</div>
+        <div id="boss-rewards" style="color:#d1d5db;font-size:12px;line-height:1.6;">
+          <!-- populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Generate / Battle buttons -->
+    <div style="display:flex;gap:10px;margin-bottom:20px;">
+      <button onclick="generateAIBoss()" style="flex:1;background:linear-gradient(135deg,#4c1d95,#7c3aed);border:none;color:#fff;padding:14px;border-radius:10px;font-size:13px;font-weight:bold;cursor:pointer;letter-spacing:1px;">
+        ⚙ GENERAR BOSS
+      </button>
+      <button onclick="fightAIBoss()" id="fight-btn" style="flex:1;background:linear-gradient(135deg,#7f1d1d,#dc2626);border:none;color:#fff;padding:14px;border-radius:10px;font-size:13px;font-weight:bold;cursor:pointer;letter-spacing:1px;opacity:0.5;" disabled>
+        ⚔ COMBATIR
+      </button>
+    </div>
+
+    <!-- Battle log -->
+    <div id="ai-battle-log" style="display:none;background:rgba(0,0,0,0.6);border:1px solid #374151;border-radius:12px;padding:16px;margin-bottom:20px;">
+      <div style="color:#6b7280;font-size:10px;letter-spacing:2px;margin-bottom:10px;">▸ COMBAT LOG</div>
+      <div id="battle-log-lines" style="font-family:monospace;font-size:12px;line-height:1.8;color:#d1d5db;"></div>
+      <div id="battle-result-banner" style="display:none;text-align:center;margin-top:16px;padding:16px;border-radius:10px;"></div>
+    </div>
+
+    <!-- History -->
+    <div>
+      <div style="color:#6b7280;font-size:10px;letter-spacing:2px;margin-bottom:10px;">▸ HISTORIAL DE BOSSES</div>
+      <div id="ai-boss-history" style="display:flex;flex-direction:column;gap:8px;">
+        <div style="color:#374151;font-size:12px;text-align:center;padding:12px;">Sin combates anteriores</div>
+      </div>
+    </div>
+
+  </div>
+</div>
 </body>
 </html>
