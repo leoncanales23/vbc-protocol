@@ -1288,6 +1288,7 @@ body::after{
     <button class="nav-tab" onclick="goScreen('world')">🗺 Mundo</button>
     <button class="nav-tab" onclick="goScreen('dungeon')">🔥 Dungeon</button>
         <button class="nav-tab" onclick="goScreen('aiboss')">🤖 AI Boss</button>
+        <button class="nav-tab" onclick="goScreen('gym')">🏋 Gym</button>
     </div>
     <div class="nav-right">
       <!-- 💎 Diamond sprite — moneda VBC */-->
@@ -2644,7 +2645,8 @@ function goScreen(id) {
        (id==='season'&&t.textContent.includes('Season'))||
        (id==='world'&&t.textContent.includes('Mundo'))||
        (id==='dungeon'&&t.textContent.includes('Dungeon'))||
-       (id==='aiboss'&&t.textContent.includes('AI Boss'))) t.classList.add('active');
+       (id==='aiboss'&&t.textContent.includes('AI Boss'))||
+       (id==='gym'&&t.textContent.includes('Gym'))) t.classList.add('active');
   });
   if(id==='skills') renderSkills();
   if(id==='wallet') renderWallet();
@@ -2656,7 +2658,8 @@ function goScreen(id) {
   if(id==='season') { vbcInitSeason && vbcInitSeason(); }
   if(id==='world') { initWorldMap && initWorldMap(); }
   if(id==='dungeon') { initDungeon && initDungeon(); }
-  if(id==='aiboss') { initAIBoss && initAIBoss(); }
+  if(id==='aiboss')
+  if(id==='gym') { vbcInitGym && vbcInitGym(); } { initAIBoss && initAIBoss(); }
 }
 
 
@@ -7351,5 +7354,480 @@ function renderAIBossHistory() {
 
   </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════════
+     🏋 GYM CLAIM SYSTEM — Territorio, Check-in, Guild Base
+     ══════════════════════════════════════════════════════ -->
+<div id="s-gym" class="screen" style="display:none;">
+  <div style="padding:16px;max-width:520px;margin:0 auto;">
+
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:32px;margin-bottom:6px;">🏋</div>
+      <div style="font-size:18px;font-weight:bold;color:#10b981;letter-spacing:2px;">GYM CLAIM SYSTEM</div>
+      <div style="color:#6b7280;font-size:11px;letter-spacing:1px;margin-top:4px;">RECLAMA TU TERRITORIO · ENTRENA · DOMINA</div>
+    </div>
+
+    <!-- GPS Status Bar -->
+    <div id="gym-gps-bar" style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.4);border:1px solid #1f2937;border-radius:8px;padding:10px 14px;margin-bottom:16px;">
+      <div id="gym-gps-dot" style="width:8px;height:8px;border-radius:50%;background:#374151;flex-shrink:0;"></div>
+      <div id="gym-gps-text" style="color:#6b7280;font-size:11px;font-family:monospace;">GPS · Inicializando...</div>
+      <div style="margin-left:auto;font-size:10px;color:#374151;" id="gym-gps-coords"></div>
+    </div>
+
+    <!-- Inner tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:18px;">
+      <button id="gym-tab-discover" onclick="gymTab('discover')"
+        style="flex:1;padding:9px;border-radius:8px;border:1px solid #10b981;background:rgba(16,185,129,0.15);color:#10b981;font-size:11px;font-weight:bold;cursor:pointer;letter-spacing:1px;">
+        🗺 DESCUBRIR
+      </button>
+      <button id="gym-tab-claim" onclick="gymTab('claim')"
+        style="flex:1;padding:9px;border-radius:8px;border:1px solid #374151;background:rgba(0,0,0,0.3);color:#6b7280;font-size:11px;font-weight:bold;cursor:pointer;letter-spacing:1px;">
+        📍 RECLAMAR
+      </button>
+      <button id="gym-tab-mine" onclick="gymTab('mine')"
+        style="flex:1;padding:9px;border-radius:8px;border:1px solid #374151;background:rgba(0,0,0,0.3);color:#6b7280;font-size:11px;font-weight:bold;cursor:pointer;letter-spacing:1px;">
+        🏰 MI GYM
+      </button>
+    </div>
+
+    <!-- ── TAB: DESCUBRIR ── -->
+    <div id="gym-panel-discover">
+      <div style="color:#6b7280;font-size:10px;letter-spacing:2px;margin-bottom:12px;">▸ GYMS CERCANOS</div>
+
+      <div id="gym-nearby-list" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="text-align:center;padding:30px;color:#374151;font-size:12px;">
+          <div style="font-size:24px;margin-bottom:8px;">📡</div>
+          Escaneando zona...<br>
+          <span style="font-size:10px;color:#1f2937;">Activa GPS para ver gyms cercanos</span>
+        </div>
+      </div>
+
+      <div id="gym-global-list" style="margin-top:20px;">
+        <div style="color:#6b7280;font-size:10px;letter-spacing:2px;margin-bottom:12px;">▸ TODOS LOS GYMS VBC</div>
+        <div id="gym-all-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: RECLAMAR ── -->
+    <div id="gym-panel-claim" style="display:none;">
+      <div style="color:#6b7280;font-size:10px;letter-spacing:2px;margin-bottom:16px;">▸ RECLAMAR UN GYM</div>
+
+      <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:14px;margin-bottom:16px;font-size:11px;color:#9ca3af;line-height:1.7;">
+        🏰 Al reclamar un gym, se convierte en tu <strong style="color:#10b981">Guild Base</strong> en el Mapa Mundial.<br>
+        📍 Tu posición GPS actual se registra como ubicación del gym.<br>
+        💎 Costo: <strong style="color:#f59e0b">200 VBC coins</strong>
+      </div>
+
+      <!-- Form -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <div style="color:#9ca3af;font-size:10px;margin-bottom:6px;letter-spacing:1px;">NOMBRE DEL GYM</div>
+          <input id="gym-claim-name" type="text" placeholder="ej: CrossFit Santiago Centro"
+            style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.4);border:1px solid #374151;border-radius:8px;padding:10px 12px;color:#fff;font-size:13px;outline:none;">
+        </div>
+
+        <div>
+          <div style="color:#9ca3af;font-size:10px;margin-bottom:6px;letter-spacing:1px;">TIPO DE GYM</div>
+          <select id="gym-claim-type"
+            style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.7);border:1px solid #374151;border-radius:8px;padding:10px 12px;color:#fff;font-size:13px;outline:none;">
+            <option value="powerlifting">🏋 Powerlifting</option>
+            <option value="crossfit">⚡ CrossFit</option>
+            <option value="functional">🔥 Functional</option>
+            <option value="commercial">🏢 Gym Comercial</option>
+            <option value="garage">🔧 Garage Gym</option>
+          </select>
+        </div>
+
+        <div style="background:rgba(0,0,0,0.3);border:1px solid #1f2937;border-radius:8px;padding:12px;">
+          <div style="color:#9ca3af;font-size:10px;margin-bottom:6px;letter-spacing:1px;">📍 TU UBICACIÓN ACTUAL</div>
+          <div id="gym-claim-loc" style="color:#6b7280;font-size:12px;font-family:monospace;">Esperando GPS...</div>
+        </div>
+
+        <button onclick="gymClaimSubmit()"
+          style="width:100%;background:linear-gradient(135deg,#065f46,#10b981);border:none;color:#fff;padding:14px;border-radius:10px;font-size:13px;font-weight:bold;cursor:pointer;letter-spacing:2px;">
+          🏴 RECLAMAR TERRITORIO
+        </button>
+      </div>
+
+      <div id="gym-claim-msg" style="margin-top:14px;text-align:center;font-size:12px;"></div>
+    </div>
+
+    <!-- ── TAB: MI GYM ── -->
+    <div id="gym-panel-mine" style="display:none;">
+      <div style="color:#6b7280;font-size:10px;letter-spacing:2px;margin-bottom:16px;">▸ MI GYM / CHECK-IN</div>
+
+      <div id="gym-mine-content">
+        <div style="text-align:center;padding:30px;color:#374151;">
+          <div style="font-size:32px;margin-bottom:10px;">🏰</div>
+          <div style="font-size:13px;color:#6b7280;">No tienes un gym reclamado</div>
+          <div style="font-size:11px;color:#374151;margin-top:6px;">Ve a RECLAMAR para conquistar tu territorio</div>
+        </div>
+      </div>
+
+      <!-- Check-in section -->
+      <div id="gym-checkin-section" style="display:none;margin-top:16px;">
+        <div style="color:#6b7280;font-size:10px;letter-spacing:2px;margin-bottom:12px;">▸ CHECK-IN EN GYM CERCANO</div>
+        <div id="gym-checkin-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<!-- ── END GYM CLAIM SYSTEM ── -->
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  🏋 GYM CLAIM SYSTEM — VBC Protocol
+// ═══════════════════════════════════════════════════════
+
+let gymGPS = null;
+let gymWatchId = null;
+let gymCurrentTab = 'discover';
+
+const GYM_TYPES = {
+  powerlifting: '🏋 Powerlifting',
+  crossfit:     '⚡ CrossFit',
+  functional:   '🔥 Functional',
+  commercial:   '🏢 Gym Comercial',
+  garage:       '🔧 Garage Gym'
+};
+
+const GYM_CLAIM_COST = 200;
+const GYM_CHECKIN_RADIUS = 300; // metres
+const GYM_CHECKIN_COINS  = 50;
+const GYM_CHECKIN_COOLDOWN_H = 20; // hours
+
+// ── Init ──────────────────────────────────────────────
+function vbcInitGym() {
+  gymTab('discover');
+  gymStartGPS();
+  gymLoadAll();
+  gymCheckMyGym();
+}
+
+// ── GPS ───────────────────────────────────────────────
+function gymStartGPS() {
+  if (!navigator.geolocation) {
+    gymSetGPS(null, 'GPS no disponible');
+    return;
+  }
+  gymSetGPS(null, 'Obteniendo posición...');
+  if (gymWatchId) navigator.geolocation.clearWatch(gymWatchId);
+  gymWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      gymGPS = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
+      gymSetGPS(true, `Precisión ±${Math.round(gymGPS.acc)}m`);
+      const coordEl = document.getElementById('gym-gps-coords');
+      if (coordEl) coordEl.textContent = `${gymGPS.lat.toFixed(4)}, ${gymGPS.lng.toFixed(4)}`;
+      const locEl = document.getElementById('gym-claim-loc');
+      if (locEl) locEl.textContent = `${gymGPS.lat.toFixed(5)}, ${gymGPS.lng.toFixed(5)} (±${Math.round(gymGPS.acc)}m)`;
+    },
+    err => gymSetGPS(false, 'GPS sin señal — activa ubicación'),
+    { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 }
+  );
+}
+
+function gymSetGPS(ok, msg) {
+  const dot = document.getElementById('gym-gps-dot');
+  const txt = document.getElementById('gym-gps-text');
+  if (!dot || !txt) return;
+  if (ok === true)  { dot.style.background = '#10b981'; txt.style.color = '#10b981'; }
+  if (ok === false) { dot.style.background = '#ef4444'; txt.style.color = '#ef4444'; }
+  if (ok === null)  { dot.style.background = '#f59e0b'; txt.style.color = '#f59e0b'; }
+  txt.textContent = 'GPS · ' + msg;
+}
+
+// ── Distance (Haversine) ──────────────────────────────
+function gymDist(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function gymDistStr(m) {
+  return m < 1000 ? `${Math.round(m)}m` : `${(m/1000).toFixed(1)}km`;
+}
+
+// ── Inner Tabs ────────────────────────────────────────
+function gymTab(tab) {
+  gymCurrentTab = tab;
+  ['discover','claim','mine'].forEach(t => {
+    const btn   = document.getElementById('gym-tab-' + t);
+    const panel = document.getElementById('gym-panel-' + t);
+    const active = t === tab;
+    if (btn) {
+      btn.style.borderColor  = active ? '#10b981' : '#374151';
+      btn.style.background   = active ? 'rgba(16,185,129,0.15)' : 'rgba(0,0,0,0.3)';
+      btn.style.color        = active ? '#10b981' : '#6b7280';
+    }
+    if (panel) panel.style.display = active ? 'block' : 'none';
+  });
+  if (tab === 'discover') gymLoadAll();
+  if (tab === 'mine') gymCheckMyGym();
+}
+
+// ── Load All Gyms ─────────────────────────────────────
+async function gymLoadAll() {
+  const el = document.getElementById('gym-all-list');
+  if (!el) return;
+  el.innerHTML = '<div style="color:#374151;font-size:11px;text-align:center;padding:10px;">Cargando...</div>';
+  try {
+    const snap = await db.collection('vbc_gyms').orderBy('claimedAt','desc').limit(30).get();
+    if (snap.empty) {
+      el.innerHTML = '<div style="color:#374151;font-size:11px;text-align:center;padding:14px;">Ningún gym reclamado aún. ¡Sé el primero!</div>';
+      return;
+    }
+    el.innerHTML = '';
+    snap.forEach(doc => {
+      const g = doc.data();
+      const dist = gymGPS ? gymDist(gymGPS.lat, gymGPS.lng, g.lat, g.lng) : null;
+      el.innerHTML += gymCard(doc.id, g, dist);
+    });
+    // Also update nearby
+    gymRenderNearby(snap);
+  } catch(e) {
+    el.innerHTML = '<div style="color:#ef4444;font-size:11px;text-align:center;padding:10px;">Error al cargar gyms</div>';
+  }
+}
+
+function gymCard(id, g, dist) {
+  const estirpeColors = { oni:'#dc2626', tempest:'#0ea5e9', undead:'#a78bfa', arcane:'#7c3aed', dragon:'#f59e0b' };
+  const ec = estirpeColors[g.ownerEstirpe] || '#10b981';
+  const distBadge = dist != null ? `<span style="font-size:10px;color:#6b7280;float:right;">${gymDistStr(dist)}</span>` : '';
+  const nearBadge = dist != null && dist <= GYM_CHECKIN_RADIUS
+    ? '<span style="font-size:9px;background:rgba(16,185,129,0.2);color:#10b981;border-radius:4px;padding:1px 5px;margin-left:6px;">CERCA</span>'
+    : '';
+  return `
+    <div style="background:rgba(0,0,0,0.4);border:1px solid #1f2937;border-radius:10px;padding:12px;border-left:3px solid ${ec};">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="font-size:14px;">${GYM_TYPES[g.type]?.split(' ')[0] || '🏋'}</span>
+        <span style="font-weight:bold;color:#e5e7eb;font-size:13px;">${g.name}</span>
+        ${nearBadge}
+        ${distBadge}
+      </div>
+      <div style="display:flex;gap:12px;font-size:10px;color:#6b7280;">
+        <span>${GYM_TYPES[g.type] || g.type}</span>
+        <span>•</span>
+        <span style="color:${ec};">${g.ownerName || 'Atleta'}</span>
+        <span>•</span>
+        <span>👥 ${g.memberCount || 0}</span>
+      </div>
+      ${dist != null && dist <= GYM_CHECKIN_RADIUS
+        ? `<button onclick="gymDoCheckin('${id}')" style="width:100%;margin-top:10px;background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#10b981;padding:8px;border-radius:7px;font-size:11px;font-weight:bold;cursor:pointer;letter-spacing:1px;">⚡ CHECK-IN → +${GYM_CHECKIN_COINS} VBC</button>`
+        : ''}
+    </div>`;
+}
+
+function gymRenderNearby(snap) {
+  if (!gymGPS) return;
+  const el = document.getElementById('gym-nearby-list');
+  if (!el) return;
+  const nearby = [];
+  snap.forEach(doc => {
+    const g = doc.data();
+    const d = gymDist(gymGPS.lat, gymGPS.lng, g.lat, g.lng);
+    if (d <= 5000) nearby.push({id: doc.id, g, d});
+  });
+  nearby.sort((a,b) => a.d - b.d);
+  if (nearby.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:#374151;font-size:12px;">Sin gyms en 5km. ¡Reclama el tuyo!</div>';
+    return;
+  }
+  el.innerHTML = nearby.map(({id, g, d}) => gymCard(id, g, d)).join('');
+}
+
+// ── Claim a Gym ───────────────────────────────────────
+async function gymClaimSubmit() {
+  const msg = document.getElementById('gym-claim-msg');
+  if (!currentUser) { msg.innerHTML = '<span style="color:#ef4444;">⚠ Debes iniciar sesión</span>'; return; }
+  if (!gymGPS) { msg.innerHTML = '<span style="color:#ef4444;">⚠ GPS no disponible — activa tu ubicación</span>'; return; }
+  if (gymGPS.acc > 100) { msg.innerHTML = '<span style="color:#f59e0b;">⚠ Precisión GPS baja (±' + Math.round(gymGPS.acc) + 'm). Espera...</span>'; return; }
+
+  const name = document.getElementById('gym-claim-name').value.trim();
+  const type = document.getElementById('gym-claim-type').value;
+  if (!name) { msg.innerHTML = '<span style="color:#ef4444;">⚠ Ingresa el nombre del gym</span>'; return; }
+
+  // Check cost
+  if ((userData.coins || 0) < GYM_CLAIM_COST) {
+    msg.innerHTML = `<span style="color:#ef4444;">⚠ Necesitas ${GYM_CLAIM_COST} VBC coins (tienes ${userData.coins || 0})</span>`;
+    return;
+  }
+
+  // Check if user already owns a gym
+  const existing = await db.collection('vbc_gyms').where('ownerId','==',currentUser.uid).limit(1).get();
+  if (!existing.empty) {
+    msg.innerHTML = '<span style="color:#f59e0b;">⚠ Ya tienes un gym reclamado. Ve a MI GYM.</span>';
+    return;
+  }
+
+  // Check if location already claimed (within 100m)
+  const allGyms = await db.collection('vbc_gyms').get();
+  let tooClose = false;
+  allGyms.forEach(doc => {
+    const g = doc.data();
+    if (gymDist(gymGPS.lat, gymGPS.lng, g.lat, g.lng) < 100) tooClose = true;
+  });
+  if (tooClose) {
+    msg.innerHTML = '<span style="color:#ef4444;">⚠ Ya hay un gym reclamado en esa ubicación (radio 100m)</span>';
+    return;
+  }
+
+  msg.innerHTML = '<span style="color:#f59e0b;">⚙ Procesando reclamo...</span>';
+
+  try {
+    const gymRef = await db.collection('vbc_gyms').add({
+      name,
+      type,
+      lat:          gymGPS.lat,
+      lng:          gymGPS.lng,
+      ownerId:      currentUser.uid,
+      ownerName:    userData.name || currentUser.displayName || 'Atleta',
+      ownerEstirpe: userData.estirpe || 'none',
+      guildId:      userData.guildId || null,
+      territory:    500,
+      memberCount:  1,
+      totalCheckins:0,
+      claimedAt:    firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Deduct coins
+    userData.coins = (userData.coins || 0) - GYM_CLAIM_COST;
+    userData.gymId = gymRef.id;
+    await saveUserState();
+
+    msg.innerHTML = `<span style="color:#10b981;">🏴 ¡Gym reclamado! Ahora aparece en el Mapa Mundial como Guild Base.</span>`;
+    document.getElementById('gym-claim-name').value = '';
+    setTimeout(() => gymTab('mine'), 1500);
+  } catch(e) {
+    msg.innerHTML = `<span style="color:#ef4444;">Error: ${e.message}</span>`;
+  }
+}
+
+// ── Check-in ──────────────────────────────────────────
+async function gymDoCheckin(gymId) {
+  if (!currentUser) return;
+  if (!gymGPS) { alert('Activa el GPS para hacer check-in'); return; }
+
+  // Cooldown check
+  const lastKey = 'gym_checkin_' + gymId;
+  const last = localStorage.getItem(lastKey);
+  if (last) {
+    const diff = (Date.now() - parseInt(last)) / 3600000;
+    if (diff < GYM_CHECKIN_COOLDOWN_H) {
+      const rem = Math.ceil(GYM_CHECKIN_COOLDOWN_H - diff);
+      alert(`⏱ Check-in en ${rem}h (máx 1 por día por gym)`);
+      return;
+    }
+  }
+
+  // Verify distance
+  const gymSnap = await db.collection('vbc_gyms').doc(gymId).get();
+  if (!gymSnap.exists) { alert('Gym no encontrado'); return; }
+  const g = gymSnap.data();
+  const dist = gymDist(gymGPS.lat, gymGPS.lng, g.lat, g.lng);
+  if (dist > GYM_CHECKIN_RADIUS) {
+    alert(`📍 Debes estar a menos de ${GYM_CHECKIN_RADIUS}m del gym (estás a ${gymDistStr(dist)})`);
+    return;
+  }
+
+  try {
+    // Record check-in
+    await db.collection('vbc_checkins').add({
+      gymId,
+      gymName:  g.name,
+      userId:   currentUser.uid,
+      userName: userData.name || currentUser.displayName || 'Atleta',
+      lat:      gymGPS.lat,
+      lng:      gymGPS.lng,
+      timestamp:firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Update gym member count
+    await db.collection('vbc_gyms').doc(gymId).update({
+      totalCheckins: firebase.firestore.FieldValue.increment(1)
+    });
+
+    // Reward user
+    userData.coins = (userData.coins || 0) + GYM_CHECKIN_COINS;
+    await saveUserState();
+    localStorage.setItem(lastKey, Date.now().toString());
+
+    // Refresh UI
+    gymLoadAll();
+    showToast && showToast(`⚡ Check-in en ${g.name} — +${GYM_CHECKIN_COINS} VBC coins!`);
+    alert(`⚡ Check-in exitoso en ${g.name}!
++${GYM_CHECKIN_COINS} VBC coins`);
+  } catch(e) {
+    alert('Error en check-in: ' + e.message);
+  }
+}
+
+// ── My Gym ────────────────────────────────────────────
+async function gymCheckMyGym() {
+  const el = document.getElementById('gym-mine-content');
+  if (!el || !currentUser) return;
+
+  if (!userData.gymId) {
+    el.innerHTML = `
+      <div style="text-align:center;padding:30px;color:#374151;">
+        <div style="font-size:32px;margin-bottom:10px;">🏰</div>
+        <div style="font-size:13px;color:#6b7280;">No tienes un gym reclamado</div>
+        <div style="font-size:11px;color:#374151;margin-top:6px;">Ve a <strong style="color:#10b981">RECLAMAR</strong> para conquistar tu territorio</div>
+      </div>`;
+    return;
+  }
+
+  try {
+    const snap = await db.collection('vbc_gyms').doc(userData.gymId).get();
+    if (!snap.exists) {
+      el.innerHTML = '<div style="color:#ef4444;font-size:12px;text-align:center;padding:20px;">Gym no encontrado en base de datos</div>';
+      return;
+    }
+    const g = snap.data();
+    const estirpeColors = { oni:'#dc2626', tempest:'#0ea5e9', undead:'#a78bfa', arcane:'#7c3aed', dragon:'#f59e0b' };
+    const ec = estirpeColors[g.ownerEstirpe] || '#10b981';
+
+    el.innerHTML = `
+      <div style="background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(0,0,0,0.4));border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:16px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+          <div style="font-size:28px;">${GYM_TYPES[g.type]?.split(' ')[0] || '🏋'}</div>
+          <div>
+            <div style="font-weight:bold;color:#e5e7eb;font-size:15px;">${g.name}</div>
+            <div style="font-size:11px;color:#6b7280;">${GYM_TYPES[g.type] || g.type} · <span style="color:${ec};">${g.ownerEstirpe?.toUpperCase() || ''}</span></div>
+          </div>
+          <div style="margin-left:auto;text-align:right;">
+            <div style="color:#10b981;font-size:18px;font-weight:bold;">${g.totalCheckins || 0}</div>
+            <div style="color:#374151;font-size:9px;">CHECK-INS</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;">
+          <div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:10px;text-align:center;">
+            <div style="color:#10b981;font-size:16px;font-weight:bold;">${g.territory}m</div>
+            <div style="color:#6b7280;font-size:9px;">TERRITORIO</div>
+          </div>
+          <div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:10px;text-align:center;">
+            <div style="color:#f59e0b;font-size:16px;font-weight:bold;">${g.memberCount || 0}</div>
+            <div style="color:#6b7280;font-size:9px;">MIEMBROS</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;font-size:10px;color:#374151;font-family:monospace;">
+          📍 ${g.lat?.toFixed(5)}, ${g.lng?.toFixed(5)}
+        </div>
+        <div style="margin-top:12px;">
+          <div style="color:#6b7280;font-size:9px;letter-spacing:1px;margin-bottom:6px;">STATUS EN MAPA MUNDIAL</div>
+          <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:8px;font-size:11px;color:#10b981;">
+            🗺 Tu gym aparece como <strong>Guild Base</strong> en el Mapa Mundial. Atrae atletas de tu zona.
+          </div>
+        </div>
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<div style="color:#ef4444;font-size:12px;padding:20px;text-align:center;">Error: ${e.message}</div>`;
+  }
+}
+</script>
+
 </body>
 </html>
