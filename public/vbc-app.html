@@ -1289,6 +1289,7 @@ body::after{
     <button class="nav-tab" onclick="goScreen('dungeon')">🔥 Dungeon</button>
         <button class="nav-tab" onclick="goScreen('aiboss')">🤖 AI Boss</button>
         <button class="nav-tab" onclick="goScreen('gym')">🏋 Gym</button>
+      <button class="nav-tab" onclick="goScreen('federation')">🌐 Fed</button>
     </div>
     <div class="nav-right">
       <!-- 💎 Diamond sprite — moneda VBC */-->
@@ -2646,7 +2647,8 @@ function goScreen(id) {
        (id==='world'&&t.textContent.includes('Mundo'))||
        (id==='dungeon'&&t.textContent.includes('Dungeon'))||
        (id==='aiboss'&&t.textContent.includes('AI Boss'))||
-       (id==='gym'&&t.textContent.includes('Gym'))) t.classList.add('active');
+       (id==='gym'&&t.textContent.includes('Gym'))||
+       (id==='federation'&&t.textContent.includes('Fed'))) t.classList.add('active');
   });
   if(id==='skills') renderSkills();
   if(id==='wallet') renderWallet();
@@ -2658,8 +2660,9 @@ function goScreen(id) {
   if(id==='season') { vbcInitSeason && vbcInitSeason(); }
   if(id==='world') { initWorldMap && initWorldMap(); }
   if(id==='dungeon') { initDungeon && initDungeon(); }
-  if(id==='aiboss')
-  if(id==='gym') { vbcInitGym && vbcInitGym(); } { initAIBoss && initAIBoss(); }
+  if(id==='aiboss') { initAIBoss && initAIBoss(); }
+  if(id==='gym') { vbcInitGym && vbcInitGym(); }
+  if(id==='federation') { initFederation && initFederation(); }
 }
 
 
@@ -7476,6 +7479,149 @@ function renderAIBossHistory() {
 </div>
 <!-- ── END GYM CLAIM SYSTEM ── -->
 
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- FEDERATION LAYER                                       -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div id="s-federation" class="screen" style="display:none;">
+  <div style="padding:16px;max-width:520px;margin:0 auto;">
+
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:32px;margin-bottom:6px;">🌐</div>
+      <div style="font-size:18px;font-weight:bold;color:#818cf8;letter-spacing:2px;">FEDERATION LAYER</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px;">UNIFICA · COMPITE · DOMINA LA REGIÓN</div>
+    </div>
+
+    <!-- My Federation Status -->
+    <div id="fed-my-status" style="display:none;background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #818cf8;border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:12px;color:#818cf8;letter-spacing:2px;margin-bottom:8px;">MI FEDERACIÓN</div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="font-size:36px;" id="fed-badge-icon">🌐</div>
+        <div>
+          <div style="font-size:16px;font-weight:bold;color:#fff;" id="fed-my-name">—</div>
+          <div style="font-size:12px;color:#818cf8;" id="fed-my-role">Miembro</div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:2px;" id="fed-my-region">—</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;">
+        <div style="text-align:center;background:rgba(129,140,248,0.1);border-radius:8px;padding:8px;">
+          <div style="font-size:18px;font-weight:bold;color:#818cf8;" id="fed-my-gyms">0</div>
+          <div style="font-size:10px;color:#94a3b8;">GYMS</div>
+        </div>
+        <div style="text-align:center;background:rgba(129,140,248,0.1);border-radius:8px;padding:8px;">
+          <div style="font-size:18px;font-weight:bold;color:#818cf8;" id="fed-my-members">0</div>
+          <div style="font-size:10px;color:#94a3b8;">ATLETAS</div>
+        </div>
+        <div style="text-align:center;background:rgba(129,140,248,0.1);border-radius:8px;padding:8px;">
+          <div style="font-size:18px;font-weight:bold;color:#818cf8;" id="fed-my-rank">—</div>
+          <div style="font-size:10px;color:#94a3b8;">RANKING</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        <button onclick="openFedTournament()" style="background:linear-gradient(135deg,#818cf8,#6366f1);border:none;color:#fff;padding:8px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;">⚔️ TORNEO</button>
+        <button onclick="openFedManage()" style="background:rgba(129,140,248,0.2);border:1px solid #818cf8;color:#818cf8;padding:8px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;">⚙️ GESTIONAR</button>
+      </div>
+    </div>
+
+    <!-- No Federation -->
+    <div id="fed-no-fed" style="background:rgba(129,140,248,0.05);border:1px dashed #818cf8;border-radius:12px;padding:20px;text-align:center;margin-bottom:16px;">
+      <div style="font-size:24px;margin-bottom:8px;">🌐</div>
+      <div style="font-size:14px;font-weight:bold;color:#818cf8;margin-bottom:6px;">Sin Federación</div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:12px;">Únete o crea una federación para<br>competir a nivel regional</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button onclick="showCreateFed()" style="background:linear-gradient(135deg,#818cf8,#6366f1);border:none;color:#fff;padding:10px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;">+ CREAR</button>
+        <button onclick="showJoinFed()" style="background:rgba(129,140,248,0.2);border:1px solid #818cf8;color:#818cf8;padding:10px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;">UNIRSE</button>
+      </div>
+    </div>
+
+    <!-- Create Federation Panel -->
+    <div id="fed-create-panel" style="display:none;background:rgba(129,140,248,0.05);border:1px solid #818cf8;border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:bold;color:#818cf8;margin-bottom:12px;">⚡ CREAR FEDERACIÓN</div>
+      <div style="font-size:11px;color:#f59e0b;background:rgba(245,158,11,0.1);border-radius:6px;padding:8px;margin-bottom:10px;">
+        ⚠️ Necesitas un Gym reclamado para crear una federación. Costo: 500 VBC coins.
+      </div>
+      <input id="fed-name-input" placeholder="Nombre de la federación..." maxlength="40"
+        style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.05);border:1px solid #818cf8;color:#fff;padding:10px;border-radius:8px;font-size:13px;margin-bottom:8px;">
+      <input id="fed-region-input" placeholder="Región (ciudad o área)..." maxlength="40"
+        style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.05);border:1px solid #818cf8;color:#fff;padding:10px;border-radius:8px;font-size:13px;margin-bottom:8px;">
+      <select id="fed-emblem-select"
+        style="width:100%;box-sizing:border-box;background:#1e293b;border:1px solid #818cf8;color:#fff;padding:10px;border-radius:8px;font-size:13px;margin-bottom:12px;">
+        <option value="🌐">🌐 Globe — Dominio Total</option>
+        <option value="🔱">🔱 Trident — Poseidón</option>
+        <option value="⚜️">⚜️ Fleur — Nobleza</option>
+        <option value="🦅">🦅 Eagle — Supremacía</option>
+        <option value="🏰">🏰 Castle — Fortaleza</option>
+        <option value="⚡">⚡ Thunder — Poder</option>
+        <option value="🌊">🌊 Wave — Expansión</option>
+      </select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button onclick="createFederation()" style="background:linear-gradient(135deg,#818cf8,#6366f1);border:none;color:#fff;padding:10px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;">CREAR — 500 💎</button>
+        <button onclick="document.getElementById('fed-create-panel').style.display='none'" style="background:rgba(255,255,255,0.05);border:1px solid #475569;color:#94a3b8;padding:10px;border-radius:8px;font-size:12px;cursor:pointer;">CANCELAR</button>
+      </div>
+    </div>
+
+    <!-- Join Federation Panel -->
+    <div id="fed-join-panel" style="display:none;background:rgba(129,140,248,0.05);border:1px solid #818cf8;border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:bold;color:#818cf8;margin-bottom:12px;">🔗 UNIRSE A FEDERACIÓN</div>
+      <input id="fed-code-input" placeholder="Código de invitación..." maxlength="10"
+        style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.05);border:1px solid #818cf8;color:#fff;padding:10px;border-radius:8px;font-size:13px;margin-bottom:8px;text-transform:uppercase;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button onclick="joinFederation()" style="background:linear-gradient(135deg,#818cf8,#6366f1);border:none;color:#fff;padding:10px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;">UNIRSE</button>
+        <button onclick="document.getElementById('fed-join-panel').style.display='none'" style="background:rgba(255,255,255,0.05);border:1px solid #475569;color:#94a3b8;padding:10px;border-radius:8px;font-size:12px;cursor:pointer;">CANCELAR</button>
+      </div>
+    </div>
+
+    <!-- Manage Federation Panel -->
+    <div id="fed-manage-panel" style="display:none;background:rgba(129,140,248,0.05);border:1px solid #818cf8;border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:bold;color:#818cf8;">⚙️ GESTIÓN</div>
+        <button onclick="document.getElementById('fed-manage-panel').style.display='none'" style="background:none;border:none;color:#64748b;font-size:16px;cursor:pointer;">✕</button>
+      </div>
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;">CÓDIGO DE INVITACIÓN</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div id="fed-invite-code" style="font-size:16px;font-weight:bold;color:#818cf8;letter-spacing:4px;background:rgba(129,140,248,0.1);padding:8px 12px;border-radius:8px;flex:1;text-align:center;">——</div>
+          <button onclick="copyFedCode()" style="background:rgba(129,140,248,0.2);border:1px solid #818cf8;color:#818cf8;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;">COPIAR</button>
+        </div>
+      </div>
+      <button onclick="leaveFederation()" style="width:100%;background:rgba(239,68,68,0.1);border:1px solid #ef4444;color:#ef4444;padding:10px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;margin-top:8px;">ABANDONAR FEDERACIÓN</button>
+    </div>
+
+    <!-- Federation Ranking -->
+    <div style="background:rgba(129,140,248,0.05);border:1px solid #334155;border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:bold;color:#818cf8;">🏆 RANKING FEDERACIONES</div>
+        <button onclick="loadFedRanking()" style="background:rgba(129,140,248,0.1);border:1px solid #818cf8;color:#818cf8;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;">↻</button>
+      </div>
+      <div id="fed-ranking-list">
+        <div style="text-align:center;color:#475569;font-size:12px;padding:20px;">Cargando ranking...</div>
+      </div>
+    </div>
+
+    <!-- Active Federation Tournaments -->
+    <div style="background:rgba(129,140,248,0.05);border:1px solid #334155;border-radius:12px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:bold;color:#818cf8;margin-bottom:12px;">⚔️ TORNEOS ACTIVOS</div>
+      <div id="fed-tournaments-list">
+        <div style="text-align:center;color:#475569;font-size:12px;padding:16px;">Sin torneos activos</div>
+      </div>
+    </div>
+
+    <!-- Region Map Preview -->
+    <div style="background:rgba(129,140,248,0.05);border:1px solid #334155;border-radius:12px;padding:16px;margin-bottom:80px;">
+      <div style="font-size:13px;font-weight:bold;color:#818cf8;margin-bottom:8px;">🗺️ CONTROL REGIONAL</div>
+      <div id="fed-region-map" style="height:200px;border-radius:8px;overflow:hidden;background:#0f172a;display:flex;align-items:center;justify-content:center;">
+        <div style="text-align:center;color:#475569;">
+          <div style="font-size:32px;margin-bottom:8px;">🗺️</div>
+          <div style="font-size:12px;">Únete a una federación para ver<br>el control regional</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<!-- ── END FEDERATION LAYER ── -->
+
+
 <script>
 // ═══════════════════════════════════════════════════════
 //  🏋 GYM CLAIM SYSTEM — VBC Protocol
@@ -7827,6 +7973,248 @@ async function gymCheckMyGym() {
     el.innerHTML = `<div style="color:#ef4444;font-size:12px;padding:20px;text-align:center;">Error: ${e.message}</div>`;
   }
 }
+
+// ════════════════════════════════════════════════════════════
+// FEDERATION LAYER — Módulo 15
+// ════════════════════════════════════════════════════════════
+
+async function initFederation() {
+  if (!state.uid) return;
+  try {
+    // Load user's federation
+    const userFedSnap = await db.collection('vbc_users').doc(state.uid).get();
+    const userData = userFedSnap.data() || {};
+    const fedId = userData.federationId || null;
+
+    if (fedId) {
+      const fedSnap = await db.collection('vbc_federations').doc(fedId).get();
+      if (fedSnap.exists) {
+        const fed = fedSnap.data();
+        document.getElementById('fed-no-fed').style.display = 'none';
+        document.getElementById('fed-my-status').style.display = 'block';
+        document.getElementById('fed-badge-icon').textContent = fed.emblem || '🌐';
+        document.getElementById('fed-my-name').textContent = fed.name || 'Federación';
+        document.getElementById('fed-my-role').textContent = fed.founderId === state.uid ? '⭐ Fundador' : 'Miembro';
+        document.getElementById('fed-my-region').textContent = fed.region || '';
+        document.getElementById('fed-my-gyms').textContent = fed.gymCount || 0;
+        document.getElementById('fed-my-members').textContent = fed.memberCount || 0;
+        document.getElementById('fed-invite-code').textContent = fed.inviteCode || '——';
+
+        // Load ranking position
+        loadFedRanking(fedId);
+        return;
+      }
+    }
+    document.getElementById('fed-no-fed').style.display = 'block';
+    document.getElementById('fed-my-status').style.display = 'none';
+    loadFedRanking();
+  } catch(e) {
+    console.error('initFederation error:', e);
+  }
+}
+
+function showCreateFed() {
+  document.getElementById('fed-create-panel').style.display = 'block';
+  document.getElementById('fed-join-panel').style.display = 'none';
+  document.getElementById('fed-create-panel').scrollIntoView({behavior:'smooth'});
+}
+
+function showJoinFed() {
+  document.getElementById('fed-join-panel').style.display = 'block';
+  document.getElementById('fed-create-panel').style.display = 'none';
+  document.getElementById('fed-join-panel').scrollIntoView({behavior:'smooth'});
+}
+
+function generateFedCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+async function createFederation() {
+  if (!state.uid) return;
+  const name = document.getElementById('fed-name-input').value.trim();
+  const region = document.getElementById('fed-region-input').value.trim();
+  const emblem = document.getElementById('fed-emblem-select').value;
+
+  if (!name || !region) { showToast('❌ Completa nombre y región'); return; }
+  if ((state.vbcCoins || 0) < 500) { showToast('❌ Necesitas 500 💎 VBC coins'); return; }
+
+  // Check user has a gym claimed
+  const gymSnap = await db.collection('vbc_gyms').where('ownerId','==',state.uid).limit(1).get();
+  if (gymSnap.empty) { showToast('❌ Necesitas un Gym reclamado para crear una federación'); return; }
+
+  // Check user not already in a federation
+  const userSnap = await db.collection('vbc_users').doc(state.uid).get();
+  if ((userSnap.data() || {}).federationId) { showToast('❌ Ya perteneces a una federación'); return; }
+
+  try {
+    showToast('⚡ Creando federación...');
+    const inviteCode = generateFedCode();
+    const fedRef = await db.collection('vbc_federations').add({
+      name, region, emblem,
+      founderId: state.uid,
+      founderName: state.displayName || 'Atleta',
+      inviteCode,
+      memberCount: 1,
+      gymCount: gymSnap.size,
+      totalScore: state.score || 0,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      members: [state.uid]
+    });
+
+    // Update user
+    await db.collection('vbc_users').doc(state.uid).update({ federationId: fedRef.id });
+    state.vbcCoins = (state.vbcCoins || 0) - 500;
+    await saveUserState();
+
+    document.getElementById('fed-create-panel').style.display = 'none';
+    showToast('✅ Federación creada — Código: ' + inviteCode);
+    setTimeout(() => initFederation(), 800);
+  } catch(e) {
+    showToast('❌ Error: ' + e.message);
+  }
+}
+
+async function joinFederation() {
+  if (!state.uid) return;
+  const code = (document.getElementById('fed-code-input').value || '').trim().toUpperCase();
+  if (!code || code.length < 4) { showToast('❌ Ingresa un código válido'); return; }
+
+  // Check user not already in a federation
+  const userSnap = await db.collection('vbc_users').doc(state.uid).get();
+  if ((userSnap.data() || {}).federationId) { showToast('❌ Ya perteneces a una federación'); return; }
+
+  try {
+    showToast('🔍 Buscando federación...');
+    const snap = await db.collection('vbc_federations').where('inviteCode','==',code).limit(1).get();
+    if (snap.empty) { showToast('❌ Código no encontrado'); return; }
+
+    const fedDoc = snap.docs[0];
+    await fedDoc.ref.update({
+      memberCount: firebase.firestore.FieldValue.increment(1),
+      members: firebase.firestore.FieldValue.arrayUnion(state.uid)
+    });
+    await db.collection('vbc_users').doc(state.uid).update({ federationId: fedDoc.id });
+
+    document.getElementById('fed-join-panel').style.display = 'none';
+    showToast('✅ Te uniste a ' + fedDoc.data().name + '!');
+    setTimeout(() => initFederation(), 800);
+  } catch(e) {
+    showToast('❌ Error: ' + e.message);
+  }
+}
+
+async function leaveFederation() {
+  if (!state.uid) return;
+  if (!confirm('¿Seguro que quieres abandonar la federación?')) return;
+  try {
+    const userSnap = await db.collection('vbc_users').doc(state.uid).get();
+    const fedId = (userSnap.data() || {}).federationId;
+    if (!fedId) return;
+
+    const fedSnap = await db.collection('vbc_federations').doc(fedId).get();
+    if (fedSnap.data().founderId === state.uid) {
+      showToast('❌ El fundador no puede abandonar — transfiere o disuelve la federación');
+      return;
+    }
+
+    await db.collection('vbc_federations').doc(fedId).update({
+      memberCount: firebase.firestore.FieldValue.increment(-1),
+      members: firebase.firestore.FieldValue.arrayRemove(state.uid)
+    });
+    await db.collection('vbc_users').doc(state.uid).update({ federationId: firebase.firestore.FieldValue.delete() });
+
+    showToast('✅ Saliste de la federación');
+    document.getElementById('fed-manage-panel').style.display = 'none';
+    setTimeout(() => initFederation(), 800);
+  } catch(e) {
+    showToast('❌ Error: ' + e.message);
+  }
+}
+
+async function loadFedRanking(myFedId) {
+  const container = document.getElementById('fed-ranking-list');
+  try {
+    const snap = await db.collection('vbc_federations')
+      .orderBy('totalScore', 'desc')
+      .limit(10).get();
+
+    if (snap.empty) {
+      container.innerHTML = '<div style="text-align:center;color:#475569;font-size:12px;padding:16px;">Sin federaciones registradas</div>';
+      return;
+    }
+
+    const medals = ['🥇','🥈','🥉'];
+    let html = '';
+    snap.docs.forEach((doc, i) => {
+      const f = doc.data();
+      const isMe = doc.id === myFedId;
+      const medal = medals[i] || `<span style="color:#64748b">${i+1}</span>`;
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;margin-bottom:4px;background:${isMe?'rgba(129,140,248,0.15)':'rgba(255,255,255,0.02)'};border:1px solid ${isMe?'#818cf8':'transparent'};">
+        <div style="font-size:16px;width:24px;text-align:center;">${medal}</div>
+        <div style="font-size:18px;">${f.emblem||'🌐'}</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:bold;color:${isMe?'#818cf8':'#e2e8f0'};">${f.name}</div>
+          <div style="font-size:11px;color:#64748b;">${f.region||''} · ${f.memberCount||0} atletas</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:13px;font-weight:bold;color:#f59e0b;">${(f.totalScore||0).toLocaleString()}</div>
+          <div style="font-size:10px;color:#64748b;">SCORE</div>
+        </div>
+      </div>`;
+    });
+    container.innerHTML = html;
+
+    // Update my rank
+    if (myFedId) {
+      const myIdx = snap.docs.findIndex(d => d.id === myFedId);
+      document.getElementById('fed-my-rank').textContent = myIdx >= 0 ? `#${myIdx+1}` : '—';
+    }
+  } catch(e) {
+    container.innerHTML = '<div style="color:#ef4444;font-size:12px;text-align:center;padding:12px;">Error cargando ranking</div>';
+  }
+}
+
+function openFedTournament() {
+  showToast('⚔️ Torneos inter-federación — Próximamente en Season Pass');
+}
+
+function openFedManage() {
+  const p = document.getElementById('fed-manage-panel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
+function copyFedCode() {
+  const code = document.getElementById('fed-invite-code').textContent;
+  if (navigator.clipboard) navigator.clipboard.writeText(code).then(() => showToast('✅ Código copiado: ' + code));
+  else showToast('Código: ' + code);
+}
+
+// Auto-update federation score when user score changes
+async function syncFederationScore() {
+  if (!state.uid) return;
+  try {
+    const userSnap = await db.collection('vbc_users').doc(state.uid).get();
+    const fedId = (userSnap.data() || {}).federationId;
+    if (!fedId) return;
+    // Recalculate federation total score from all members
+    const fedSnap = await db.collection('vbc_federations').doc(fedId).get();
+    const members = (fedSnap.data() || {}).members || [];
+    let total = 0;
+    for (const uid of members) {
+      const ms = await db.collection('vbc_users').doc(uid).get();
+      total += (ms.data() || {}).score || 0;
+    }
+    await db.collection('vbc_federations').doc(fedId).update({ totalScore: total, memberCount: members.length });
+  } catch(e) {
+    console.error('syncFederationScore:', e);
+  }
+}
+
+// ── END FEDERATION LAYER ──
+
 </script>
 
 </body>
